@@ -1,0 +1,1 @@
+# VentaFlow POS — Python 3.11+ standard library only (zero external pip dependencies)

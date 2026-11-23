@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seguimiento de Pedido</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { background: linear-gradient(135deg, #F5F3FF 0%, #FDF4FF 50%, #F3E8FF 100%); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4">
+  <div class="w-full max-w-md bg-white rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-5">
+    <div id="loading-box" class="text-center py-8 text-sm text-purple-600 font-bold">Buscando tu pedido... ⏳</div>
+
+    <div id="error-box" class="hidden text-center py-6 space-y-2">
+      <span class="text-3xl block">🔍</span>
+      <h2 class="font-bold text-slate-800">Pedido no encontrado</h2>
+      <p class="text-xs text-slate-500">Verifica el código de seguimiento o consulta con la tienda.</p>
+      <div class="flex gap-2 pt-2">
+        <input type="text" id="manual-code" placeholder="Ej: PED-A1B2C3" class="flex-1 px-3 py-2 border border-purple-200 rounded-xl text-xs uppercase">
+        <button onclick="searchManual()" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl text-xs">Buscar</button>
+      </div>
+    </div>
+
+    <div id="order-box" class="hidden space-y-4">
+      <div class="text-center space-y-1 border-b border-purple-100 pb-4">
+        <img id="store-logo" src="" class="h-12 mx-auto object-contain hidden mb-1 rounded-xl">
+        <span id="store-icon" class="text-3xl block">🛍️</span>
+        <h1 id="store-name" class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">Mi Comercio</h1>
+        <p id="store-contact" class="text-[11px] text-slate-400"></p>
+      </div>
+
+      <div class="flex items-center justify-between bg-purple-50/70 p-3.5 rounded-2xl border border-purple-100">
+        <div>
+          <span class="text-[10px] font-bold uppercase text-purple-600 block">Pedido</span>
+          <span id="ord-folio" class="font-mono font-black text-base text-purple-900">#001001</span>
+          <span id="ord-code" class="text-[10px] font-mono text-slate-500 block"></span>
+        </div>
+        <div class="text-right">
+          <span id="ord-pay-badge" class="text-xs font-extrabold px-3 py-1 rounded-full"></span>
+        </div>
+      </div>
+
+      <div class="space-y-2">
+        <span class="text-xs font-bold text-slate-700 block">Estado del Despacho</span>
+        <div class="grid grid-cols-4 gap-1 text-center text-[10px] font-bold">
+          <div id="step-to_prepare" class="p-2 rounded-xl border">📦<br>Preparando</div>
+          <div id="step-packed" class="p-2 rounded-xl border">🎁<br>Empacado</div>
+          <div id="step-dispatched" class="p-2 rounded-xl border">🚚<br>En Camino</div>
+          <div id="step-delivered" class="p-2 rounded-xl border">✅<br>Entregado</div>
+        </div>
+        <div id="shipping-info" class="hidden p-3 bg-sky-50 border border-sky-200 rounded-2xl text-xs text-sky-900">
+          <strong class="block">Datos del Envío:</strong>
+          <span id="shipping-detail"></span>
+        </div>
+      </div>
+
+      <div class="space-y-1.5 border-t border-purple-100 pt-3 text-xs">
+        <span class="font-bold text-slate-700 block">Productos:</span>
+        <div id="ord-items" class="space-y-1 text-slate-600"></div>
+        <div class="flex justify-between items-baseline pt-2 border-t border-purple-50 font-black text-base text-purple-800">
+          <span>TOTAL</span>
+          <span id="ord-total">$ 0</span>
+        </div>
+      </div>
+
+      <a id="btn-pay-mp" href="#" target="_blank" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-center text-sm shadow-lg block">
+        💳 ABONAR CON MERCADO PAGO
+      </a>
+    </div>
+  </div>
+
+  <script>
+    const STEPS = ['to_prepare', 'packed', 'dispatched', 'delivered'];
+
+    function searchManual() {
+      const code = document.getElementById('manual-code').value.trim();
+      if (code) window.location.href = `/seguimiento.html?code=${encodeURIComponent(code)}`;
+    }
+
+    async function loadOrder() {
+      const code = new URLSearchParams(window.location.search).get('code');
+      if (!code) {
+        document.getElementById('loading-box').classList.add('hidden');
+        document.getElementById('error-box').classList.remove('hidden');
+        return;
+      }
+      try {
+        const resp = await fetch(`/api/public/track/${encodeURIComponent(code)}`);
+        if (!resp.ok) throw new Error('Not found');
+        const data = await resp.json();
+        const o = data.order;
+        const s = data.store;
+        const sym = s.currency_symbol || '$';
+
+        if (s.logo_data_url) {
+          document.getElementById('store-logo').src = s.logo_data_url;
+          document.getElementById('store-logo').classList.remove('hidden');
+          document.getElementById('store-icon').classList.add('hidden');
+        } else {
+          document.getElementById('store-icon').innerText = s.store_icon || '🛍️';
+        }
+        document.getElementById('store-name').innerText = s.name || 'Comercio';
+        document.getElementById('store-contact').innerText = [s.phone, s.instagram].filter(Boolean).join(' • ');
+        document.getElementById('ord-folio').innerText = o.folio_number;
+        document.getElementById('ord-code').innerText = o.tracking_code;
+
+        const badge = document.getElementById('ord-pay-badge');
+        if (o.payment_status === 'paid') {
+          badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800';
+          badge.innerText = 'Abonado ✅';
+        } else {
+          badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-amber-100 text-amber-800';
+          badge.innerText = 'Pendiente ⏳';
+        }
+
+        const currIdx = Math.max(0, STEPS.indexOf(o.dispatch_status));
+        STEPS.forEach((st, idx) => {
+          const el = document.getElementById(`step-${st}`);
+          if (idx <= currIdx) el.className = 'p-2 rounded-xl border-2 border-purple-600 bg-purple-100 text-purple-900';
+          else el.className = 'p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400';
+        });
+
+        if (o.shipping_carrier || o.shipping_tracking) {
+          document.getElementById('shipping-info').classList.remove('hidden');
+          document.getElementById('shipping-detail').innerText = `${o.shipping_carrier || ''} ${o.shipping_tracking ? '— Guía: ' + o.shipping_tracking : ''}`;
+        }
+
+        document.getElementById('ord-items').innerHTML = o.items.map(i => `
+          <div class="flex justify-between"><span>${i.quantity}x ${i.productName}</span><span class="font-bold">${sym} ${Number(i.subtotal).toLocaleString('es-AR')}</span></div>
+        `).join('');
+        document.getElementById('ord-total').innerText = `${sym} ${Number(o.total).toLocaleString('es-AR')}`;
+
+        if (o.mp_payment_link && o.payment_status !== 'paid') {
+          const btn = document.getElementById('btn-pay-mp');
+          btn.href = o.mp_payment_link;
+          btn.classList.remove('hidden');
+        }
+
+        document.getElementById('loading-box').classList.add('hidden');
+        document.getElementById('order-box').classList.remove('hidden');
+      } catch (e) {
+        document.getElementById('loading-box').classList.add('hidden');
+        document.getElementById('error-box').classList.remove('hidden');
+      }
+    }
+    loadOrder();
+  </script>
+</body>
+</html>

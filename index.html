@@ -1,0 +1,2693 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="VentaFlow">
+  <meta name="theme-color" content="#7C3AED" id="meta-theme-color">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <title>VentaFlow POS</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            serif: ['"Playfair Display"', 'serif'],
+            script: ['"Great Vibes"', 'cursive']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --vf-bg: linear-gradient(135deg, #F5F3FF 0%, #FDF4FF 50%, #F3E8FF 100%);
+      --vf-grad: linear-gradient(135deg, #7C3AED 0%, #C026D3 60%, #6D28D9 100%);
+      --vf-accent: #7C3AED;
+    }
+    body {
+      background: var(--vf-bg);
+      color: #2E1065;
+      min-height: 100vh;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .vf-brand-grad {
+      background: var(--vf-grad) !important;
+    }
+    .vf-brand-text {
+      color: var(--vf-accent) !important;
+    }
+    .receipt-dash {
+      background-image: linear-gradient(to right, #D8B4FE 50%, transparent 50%);
+      background-position: bottom;
+      background-size: 10px 1px;
+      background-repeat: repeat-x;
+    }
+    @media print {
+      @page { margin: 4mm; size: auto; }
+      body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+      }
+      #auth-screen, #paywall-screen, #app-container, #live-alert-toast,
+      #modal-barcode-scanner, #modal-customers, #modal-custom-discount,
+      #modal-catalog, #modal-product-form, #modal-voice-studio,
+      #modal-mp-guide, #modal-admin, .no-print {
+        display: none !important;
+      }
+      #modal-receipt {
+        position: static !important;
+        display: block !important;
+        background: #ffffff !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      #modal-receipt > div {
+        max-width: 100% !important;
+        margin: 0 !important;
+        display: block !important;
+      }
+      .printable-active {
+        display: block !important;
+        position: static !important;
+        width: 100% !important;
+        max-width: 85mm !important;
+        margin: 0 auto !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
+      }
+    }
+  </style>
+</head>
+<body class="antialiased flex flex-col items-center">
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="live-alert-toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[70] w-[92%] max-w-md pointer-events-none transition-all duration-500 transform -translate-y-36 opacity-0">
+    <div class="bg-gradient-to-r from-violet-700 via-fuchsia-600 to-purple-800 border-2 border-purple-200/80 text-white p-4 rounded-3xl shadow-2xl flex items-center gap-3.5">
+      <div class="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center shrink-0">
+        <i data-lucide="bell-ring" class="w-6 h-6 text-amber-300"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center justify-between">
+          <span class="text-[10px] font-black uppercase tracking-wider text-purple-200">MERCADO PAGO CONFIRMADO</span>
+          <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold" id="toast-time">Ahora</span>
+        </div>
+        <p class="font-extrabold text-sm truncate mt-0.5" id="toast-buyer">Cliente</p>
+        <p class="text-xs text-purple-100 font-medium" id="toast-amount">$ 0 recibidos ✨</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= AUTH SCREEN (LOGIN / REGISTER) ================= -->
+  <div id="auth-screen" class="w-full max-w-md min-h-screen flex flex-col justify-center p-5 hidden">
+    <div class="bg-white/95 backdrop-blur-xl rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-5">
+      <div class="text-center space-y-1.5">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-500/30">
+          🛍️
+        </div>
+        <h1 class="font-serif font-black text-xl text-slate-900">VentaFlow POS</h1>
+        <p class="text-xs text-slate-500">Pedidos, despachos, ganancias y cobros automáticos con Mercado Pago para tu comercio.</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-1.5 bg-purple-50 p-1 rounded-2xl text-xs">
+        <button type="button" onclick="toggleAuthMode('login')" id="auth-tab-login" class="py-2 rounded-xl font-bold bg-white text-purple-900 shadow-sm">Iniciar Sesión</button>
+        <button type="button" onclick="toggleAuthMode('register')" id="auth-tab-register" class="py-2 rounded-xl font-bold text-slate-500">Crear Comercio</button>
+      </div>
+
+      <form id="auth-form" onsubmit="submitAuthForm(event)" class="space-y-3 text-xs">
+        <div id="auth-store-wrap" class="hidden">
+          <label class="font-bold text-slate-700 block mb-1">Nombre de tu Tienda / Comercio</label>
+          <input type="text" id="auth-store-name" placeholder="Ej: Glow Cosméticos, Tienda Norte..." class="w-full px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Correo Electrónico</label>
+          <input type="email" id="auth-email" required placeholder="tu@correo.com" class="w-full px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Contraseña</label>
+          <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+        </div>
+
+        <div id="auth-error" class="hidden p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-semibold"></div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full py-3.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-purple-700 text-white font-extrabold rounded-2xl shadow-lg shadow-purple-500/25 text-xs active:scale-[0.98] transition-all">
+          Ingresar a mi Comercio
+        </button>
+      </form>
+
+      <div class="text-center pt-2 border-t border-purple-50 text-[11px] text-slate-400">
+        Plan Trimestral: <strong class="text-purple-700">$10.000 pesos cada 3 meses</strong> • Activación inmediata con Mercado Pago.
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SUBSCRIPTION PAYWALL SCREEN ================= -->
+  <div id="paywall-screen" class="w-full max-w-md min-h-screen flex flex-col justify-center p-5 hidden">
+    <div class="bg-white/95 backdrop-blur-xl rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-black uppercase tracking-wider text-purple-600 bg-purple-100 px-2.5 py-1 rounded-full">Activación de Cuenta</span>
+          <h2 class="font-serif font-black text-lg text-slate-900 mt-1.5" id="paywall-store-name">Mi Comercio</h2>
+          <p class="text-[11px] text-slate-500" id="paywall-email"></p>
+        </div>
+        <button onclick="logoutUser()" class="text-xs font-bold text-slate-400 hover:text-rose-600 flex items-center gap-1">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+          <span>Salir</span>
+        </button>
+      </div>
+
+      <div class="bg-gradient-to-br from-violet-600 via-fuchsia-600 to-purple-800 rounded-3xl p-5 text-white shadow-xl space-y-2 relative overflow-hidden">
+        <span class="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-0.5 rounded-full">Plan Trimestral Completo</span>
+        <div class="flex items-baseline gap-1.5 pt-1">
+          <span class="text-3xl font-black">$ 10.000</span>
+          <span class="text-xs text-purple-200 font-semibold">/ cada 3 meses (90 días)</span>
+        </div>
+        <p class="text-[11px] text-purple-100 leading-relaxed">
+          Abona directo por Mercado Pago y la app se activa de forma <strong>automática e inmediata</strong> al acreditarse tu pago.
+        </p>
+      </div>
+
+      <ul class="space-y-2 text-xs text-slate-700">
+        <li class="flex items-center gap-2"><span class="text-emerald-600 font-bold">✅</span> Gestión de pedidos, clientes y estado de despachos</li>
+        <li class="flex items-center gap-2"><span class="text-emerald-600 font-bold">✅</span> Boletas PDF con tu logo + Pegatina térmica 58mm</li>
+        <li class="flex items-center gap-2"><span class="text-emerald-600 font-bold">✅</span> Link de pago Mercado Pago por pedido + Seguimiento web</li>
+        <li class="flex items-center gap-2"><span class="text-emerald-600 font-bold">✅</span> Escáner de códigos, stock en vivo y promos 2x1 / 3x2</li>
+      </ul>
+
+      <div id="paywall-msg" class="hidden p-3 rounded-2xl text-xs font-semibold"></div>
+
+      <div class="space-y-2.5">
+        <button onclick="startSubscriptionCheckout()" id="btn-pay-subscription" class="w-full py-4 bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-95 text-white font-extrabold rounded-2xl shadow-xl flex items-center justify-center gap-2 text-sm active:scale-[0.98] transition-all">
+          <i data-lucide="credit-card" class="w-5 h-5"></i>
+          <span>ABONAR $10.000 EN MERCADO PAGO</span>
+        </button>
+
+        <button onclick="simulateSubscriptionDemo()" id="btn-demo-activate" class="hidden w-full py-2.5 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold rounded-2xl text-xs border border-purple-200">
+          🧪 Simular Abono $10.000 (Modo Pruebas Local)
+        </button>
+
+        <button onclick="refreshAuthStatus()" class="w-full py-2.5 bg-white border border-purple-200 text-slate-600 font-bold rounded-2xl text-xs hover:bg-purple-50">
+          🔄 Ya aboné — Verificar Activación
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MAIN APP CONTAINER ================= -->
+  <div id="app-container" class="w-full max-w-md min-h-screen flex flex-col relative pb-20 hidden">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-lg border-b border-purple-100 px-4 py-3 flex items-center justify-between no-print">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div id="header-logo-wrap" class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white shadow-md shadow-purple-500/25 overflow-hidden shrink-0">
+          <img id="header-logo-img" src="" class="w-full h-full object-cover hidden">
+          <span id="header-store-emoji">🛍️</span>
+        </div>
+        <div class="min-w-0">
+          <h1 id="header-store-title" class="font-black text-sm text-slate-800 leading-tight font-serif tracking-tight truncate">
+            Mi Comercio
+          </h1>
+          <p class="text-[10px] text-emerald-700 font-bold" id="header-sub-badge">Plan Activo • 90d</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button onclick="openAdminModal()" id="btn-open-admin" class="hidden px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 text-white shadow-sm">
+          Admin
+        </button>
+        <button onclick="openVoiceStudioModal()" class="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-bold bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-200" title="Voz de avisos">
+          <i data-lucide="volume-2" class="w-3.5 h-3.5 text-purple-600"></i>
+        </button>
+        <button onclick="openMPGuideModal()" id="mp-status-pill" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-violet-100 hover:bg-violet-200 text-violet-800 border border-violet-200">
+          <i data-lucide="key" class="w-3.5 h-3.5 text-violet-600"></i>
+          <span id="mp-status-text">Cobros MP</span>
+        </button>
+        <button onclick="logoutUser()" class="p-1.5 rounded-xl text-slate-400 hover:text-rose-600" title="Cerrar sesión">
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- APP CONTENT BODY -->
+    <main id="app-body" class="flex-1 px-4 pt-3 pb-6 space-y-3.5">
+
+      <!-- Banner Instalar como App Nativa (Oculto si ya está en modo standalone) -->
+      <div id="install-app-banner" class="hidden bg-gradient-to-r from-slate-900 to-purple-950 text-white rounded-2xl p-3 flex items-center justify-between gap-2 shadow-md no-print">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="text-xl shrink-0">📲</span>
+          <div class="min-w-0">
+            <p class="font-bold text-xs truncate">Instalar como App en tu Celular</p>
+            <p class="text-[10px] text-purple-200 truncate">Sin barras de navegador, acceso directo</p>
+          </div>
+        </div>
+        <button onclick="installAsApp()" class="px-3 py-1.5 bg-white text-purple-950 font-extrabold rounded-xl text-[11px] shrink-0 shadow">
+          Instalar
+        </button>
+      </div>
+
+      <!-- TAB 1: NUEVO PEDIDO / DESPACHO -->
+      <div id="tab-sale" class="space-y-3.5">
+
+        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg shadow-purple-600/25 flex items-center justify-between">
+          <div>
+            <span id="label-business-mode" class="text-[10px] font-black uppercase tracking-wider text-white/80">NUEVO PEDIDO PARA DESPACHO</span>
+            <p id="label-next-folio" class="text-xl font-black font-mono mt-0.5 tracking-tight">Pedido #001001</p>
+          </div>
+          <button onclick="switchTab('dispatches')" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-xs font-bold border border-white/30">
+            Ver Despachos →
+          </button>
+        </div>
+
+        <!-- 1. Cliente & Datos de Envío -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <i data-lucide="user" class="w-4 h-4 text-purple-600"></i>
+              1. Cliente &amp; Envío
+            </h3>
+            <button type="button" onclick="openCustomerPickerModal()" class="text-[11px] font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
+              <i data-lucide="users" class="w-3 h-3"></i>
+              <span>Clientes Guardados</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <input type="text" id="client-name" placeholder="Nombre del cliente *" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
+            <input type="tel" id="client-phone" placeholder="WhatsApp (ej. 54911...)" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <input type="text" id="client-address" placeholder="Dirección / Localidad de entrega" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+            <input type="text" id="client-handle" placeholder="Referencia / @usuario (opc.)" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+          </div>
+        </div>
+
+        <!-- 2. Productos a Despachar -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <i data-lucide="package" class="w-4 h-4 text-purple-600"></i>
+              2. Productos a Despachar
+            </h3>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="openBarcodeScannerModal()" class="text-xs font-bold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:opacity-90 flex items-center gap-1 px-2.5 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all">
+                <i data-lucide="scan" class="w-3.5 h-3.5 text-amber-300"></i>
+                <span>Escanear</span>
+              </button>
+              <button type="button" onclick="openCatalogModal()" class="text-xs font-bold text-purple-700 flex items-center gap-1 bg-purple-100 px-2.5 py-1.5 rounded-xl">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                <span>Catálogo</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Carga rápida manual -->
+          <div class="p-2.5 bg-purple-50/70 rounded-2xl border border-purple-100 flex gap-2">
+            <input type="text" id="quick-live-name" placeholder="Agregar producto rápido..." class="flex-1 px-3 py-1.5 text-xs bg-white border border-purple-200 rounded-xl focus:outline-none">
+            <input type="number" id="quick-live-price" placeholder="Precio" class="w-20 px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-xl focus:outline-none text-right font-bold">
+            <button onclick="addQuickLiveItem()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-sm">
+              + Sumar
+            </button>
+          </div>
+
+          <div id="cart-items-container" class="space-y-2 min-h-[70px] flex flex-col justify-center"></div>
+
+          <!-- Promociones & Descuentos -->
+          <div class="pt-2 border-t border-purple-100 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                <i data-lucide="percent" class="w-3.5 h-3.5 text-fuchsia-600"></i>
+                Promociones &amp; Descuentos:
+              </span>
+              <span id="active-discount-badge" class="text-[10px] font-extrabold text-fuchsia-700 bg-fuchsia-100 px-2 py-0.5 rounded-full hidden"></span>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="applyPromoOrDiscount('2x1')" id="btn-promo-2x1" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">🎁 2x1</button>
+              <button type="button" onclick="applyPromoOrDiscount('3x2')" id="btn-promo-3x2" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">🎉 3x2</button>
+              <button type="button" onclick="applyPromoOrDiscount('pct10')" id="btn-promo-pct10" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">-10%</button>
+              <button type="button" onclick="applyPromoOrDiscount('pct15')" id="btn-promo-pct15" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">-15%</button>
+              <button type="button" onclick="applyPromoOrDiscount('pct20')" id="btn-promo-pct20" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">-20%</button>
+              <button type="button" onclick="openCustomDiscountModal()" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-white text-slate-700 flex items-center gap-1">
+                <i data-lucide="edit-3" class="w-3 h-3 text-purple-600"></i>
+                <span>Otro</span>
+              </button>
+              <button type="button" onclick="clearDiscount()" id="btn-clear-discount" class="px-2 py-1 rounded-xl text-[11px] font-bold text-rose-500 hidden">✕ Quitar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Estado de Pago & Notas de Despacho -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5 text-xs">
+          <span class="font-bold text-slate-700 block">3. Estado del Abono &amp; Notas de Empaque</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="setInitialPaymentStatus('pending')" id="btn-pay-status-pending" class="py-2 px-3 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold text-center">
+              ⏳ Pendiente de Abono
+            </button>
+            <button type="button" onclick="setInitialPaymentStatus('paid')" id="btn-pay-status-paid" class="py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center">
+              ✅ Ya Abonado
+            </button>
+          </div>
+          <input type="text" id="sale-notes" placeholder="Indicaciones para el despacho (ej. Frágil, entregar de 14 a 18hs...)" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none">
+        </div>
+
+        <!-- Total & Crear Pedido -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5">
+          <div class="flex justify-between items-center text-xs text-slate-500">
+            <span>Subtotal productos:</span>
+            <span id="subtotal-display" class="font-bold text-slate-700">$ 0</span>
+          </div>
+          <div id="row-discount-display" class="flex justify-between items-center text-xs text-fuchsia-600 font-bold hidden">
+            <span id="discount-label-display">Descuento:</span>
+            <span id="discount-amount-display">-$ 0</span>
+          </div>
+          <div class="flex justify-between items-baseline pt-1 border-t border-purple-50">
+            <span class="text-sm font-bold text-slate-800 font-serif">TOTAL PEDIDO:</span>
+            <span id="total-grand" class="text-2xl font-black text-purple-700 tracking-tight">$ 0</span>
+          </div>
+
+          <button onclick="emitAndOpenReceipt()" id="btn-emit" disabled class="w-full py-4 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-purple-700 hover:opacity-95 disabled:from-slate-200 disabled:to-slate-200 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-purple-500/25 transition-all active:scale-[0.98]">
+            <i data-lucide="file-check" class="w-5 h-5 text-amber-300"></i>
+            <span>CREAR PEDIDO Y VER COMPROBANTE</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 2: DESPACHOS Y COBROS -->
+      <div id="tab-dispatches" class="space-y-3.5 hidden text-xs">
+        <div class="bg-gradient-to-r from-violet-700 via-purple-800 to-fuchsia-800 rounded-3xl p-4 text-white shadow-xl flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-sm font-serif">Despachos &amp; Cobros</h3>
+            <p class="text-[11px] text-purple-200">Controla quién abonó y prepara los envíos</p>
+          </div>
+          <span class="text-2xl">🚚</span>
+        </div>
+
+        <div class="relative">
+          <i data-lucide="search" class="w-4 h-4 text-purple-400 absolute left-3.5 top-3"></i>
+          <input type="text" id="dispatch-search" oninput="renderDispatchesList()" placeholder="Buscar por folio, código PED- o cliente..." class="w-full pl-9 pr-3 py-2.5 text-xs bg-white border border-purple-100 rounded-2xl shadow-sm focus:outline-none">
+        </div>
+
+        <div class="flex gap-1.5 overflow-x-auto pb-1">
+          <button onclick="setDispatchFilter('all')" id="df-all" class="px-2.5 py-1.5 rounded-xl font-bold bg-purple-600 text-white shrink-0">Todos</button>
+          <button onclick="setDispatchFilter('pending_pay')" id="df-pending_pay" class="px-2.5 py-1.5 rounded-xl font-bold bg-amber-100 text-amber-800 shrink-0">⏳ Pend. Abono</button>
+          <button onclick="setDispatchFilter('to_prepare')" id="df-to_prepare" class="px-2.5 py-1.5 rounded-xl font-bold bg-purple-100 text-purple-800 shrink-0">📦 Por Preparar</button>
+          <button onclick="setDispatchFilter('packed')" id="df-packed" class="px-2.5 py-1.5 rounded-xl font-bold bg-sky-100 text-sky-800 shrink-0">🎁 Empacado</button>
+          <button onclick="setDispatchFilter('dispatched')" id="df-dispatched" class="px-2.5 py-1.5 rounded-xl font-bold bg-emerald-100 text-emerald-800 shrink-0">🚚 Despachado</button>
+        </div>
+
+        <div id="dispatches-list" class="space-y-2.5"></div>
+      </div>
+
+      <!-- TAB 3: CATÁLOGO DE PRODUCTOS -->
+      <div id="tab-catalog" class="space-y-3.5 hidden text-xs">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-bold text-slate-800 font-serif">Mis Productos</h2>
+            <p class="text-[11px] text-slate-400">Stock sincronizado en la nube</p>
+          </div>
+          <button onclick="openNewProductModal()" class="text-xs font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-3 py-2 rounded-2xl flex items-center gap-1 shadow-md">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Nuevo Producto</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="shareCatalogToWhatsApp()" class="py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs">
+            <i data-lucide="share-2" class="w-4 h-4"></i>
+            <span>Catálogo WhatsApp</span>
+          </button>
+          <button type="button" onclick="loadSampleProducts()" class="py-2.5 px-3 bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold rounded-2xl border border-purple-200 flex items-center justify-center gap-1.5 text-xs">
+            <i data-lucide="sparkles" class="w-4 h-4 text-purple-600"></i>
+            <span>Cargar Ejemplos</span>
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-purple-400 absolute left-3.5 top-3"></i>
+            <input type="text" id="catalog-search" oninput="renderCatalogList()" placeholder="Buscar por nombre, código o categoría..." class="w-full pl-9 pr-3 py-2.5 text-xs bg-white border border-purple-100 rounded-2xl shadow-sm focus:outline-none">
+          </div>
+
+          <div class="flex gap-1.5 overflow-x-auto pb-1">
+            <button type="button" onclick="filterCatalogByStock('all')" id="filter-stock-all" class="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-purple-600 text-white">Todos</button>
+            <button type="button" onclick="filterCatalogByStock('low')" id="filter-stock-low" class="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-amber-100 text-amber-800">⚠️ Por Agotarse</button>
+            <button type="button" onclick="filterCatalogByStock('out')" id="filter-stock-out" class="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-rose-100 text-rose-800">🔴 Agotados</button>
+          </div>
+        </div>
+
+        <div id="catalog-products-list" class="space-y-2"></div>
+      </div>
+
+      <!-- TAB 4: AUDITORÍA, GANANCIAS & REPOSICIÓN -->
+      <div id="tab-audit" class="space-y-3.5 hidden text-xs">
+        <div class="bg-gradient-to-r from-violet-700 via-purple-800 to-fuchsia-800 rounded-3xl p-4 text-white shadow-xl flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-xl">📊</div>
+          <div>
+            <h3 class="font-bold text-sm font-serif">Balance, Costos &amp; Ganancia Propia</h3>
+            <p class="text-[11px] text-purple-200">Total Vendido = Costo de Reposición + Ganancia Neta</p>
+          </div>
+        </div>
+
+        <!-- Balance de Hoy -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
+          <div class="flex items-center justify-between border-b border-purple-50 pb-2">
+            <span class="font-bold text-slate-800 uppercase tracking-wide text-[11px]">📅 Balance de Hoy</span>
+            <span id="audit-today-pending" class="text-[10px] text-amber-600 font-bold">Pendiente cobro: $ 0</span>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="p-2.5 bg-purple-50/70 rounded-2xl border border-purple-100">
+              <span class="text-[9px] font-bold text-slate-500 uppercase block">Total Vendido</span>
+              <span id="audit-today-total" class="text-sm font-black text-purple-800">$ 0</span>
+            </div>
+            <div class="p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
+              <span class="text-[9px] font-bold text-slate-500 uppercase block">Costo Mercadería</span>
+              <span id="audit-today-cost" class="text-sm font-black text-slate-700">$ 0</span>
+            </div>
+            <div class="p-2.5 bg-emerald-50 rounded-2xl border border-emerald-200">
+              <span class="text-[9px] font-bold text-emerald-700 uppercase block">Ganancia Propia</span>
+              <span id="audit-today-profit" class="text-sm font-black text-emerald-700">$ 0</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between text-[11px] bg-purple-50/40 px-3 py-2 rounded-xl">
+            <span class="text-slate-600 font-semibold">Abonado confirmado hoy: <strong id="audit-today-paid" class="text-emerald-700">$ 0</strong></span>
+            <span id="audit-items-sold" class="font-bold text-purple-700">0 unid.</span>
+          </div>
+        </div>
+
+        <!-- Balance Histórico Acumulado -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-800 uppercase tracking-wide text-[11px]">🏦 Acumulado Total</span>
+            <span id="audit-all-margin" class="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Margen: 0%</span>
+          </div>
+          <div class="space-y-1.5 text-xs">
+            <div class="flex justify-between items-center py-1 border-b border-purple-50">
+              <span class="text-slate-500">Total Facturado (Ventas):</span>
+              <span id="audit-all-total" class="font-black text-purple-900">$ 0</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-purple-50">
+              <span class="text-slate-500">Total Costo (Capital / Reposición):</span>
+              <span id="audit-all-cost" class="font-bold text-slate-700">$ 0</span>
+            </div>
+            <div class="flex justify-between items-center pt-1">
+              <span class="font-extrabold text-emerald-800">Ganancia Propia Total (Neta):</span>
+              <span id="audit-all-profit" class="text-base font-black text-emerald-600">$ 0</span>
+            </div>
+          </div>
+          <p id="audit-ticket-avg" class="text-[10px] text-slate-400 text-right"></p>
+        </div>
+
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-bold text-xs text-slate-800 uppercase flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
+                Stock &amp; Faltantes
+              </h4>
+              <p class="text-[10px] text-slate-400">Artículos por reponer</p>
+            </div>
+            <button type="button" onclick="sendRestockOrderToSupplier()" class="px-2.5 py-1.5 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-[10px] rounded-xl flex items-center gap-1 shadow-sm">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>Pedir a Proveedor</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-3 gap-1.5 text-center">
+            <div class="p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
+              <span class="text-[10px] font-bold text-emerald-800 block">En Stock</span>
+              <span id="stock-count-good" class="font-black text-base text-emerald-700">0</span>
+            </div>
+            <div class="p-2 bg-amber-50 border border-amber-200 rounded-xl">
+              <span class="text-[10px] font-bold text-amber-800 block">Por Agotarse</span>
+              <span id="stock-count-low" class="font-black text-base text-amber-700">0</span>
+            </div>
+            <div class="p-2 bg-rose-50 border border-rose-200 rounded-xl">
+              <span class="text-[10px] font-bold text-rose-800 block">Agotados</span>
+              <span id="stock-count-out" class="font-black text-base text-rose-700">0</span>
+            </div>
+          </div>
+
+          <div id="restock-needed-list" class="space-y-1.5 max-h-48 overflow-y-auto pt-1"></div>
+        </div>
+      </div>
+
+      <!-- TAB 5: CONFIGURACIÓN DE COMPROBANTE & MI TIENDA -->
+      <div id="tab-settings" class="space-y-3.5 hidden text-xs pb-6">
+        <div class="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-purple-700 rounded-3xl p-4 text-white shadow-lg space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🧾</span>
+            <h3 class="font-extrabold text-sm font-serif">Mi Tienda &amp; Comprobante</h3>
+          </div>
+          <p class="text-[11px] text-purple-100">Personaliza tu marca, logo y diseño de boletas PDF.</p>
+        </div>
+
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Nombre de tu Tienda</label>
+            <input type="text" id="setting-name" oninput="updateReceiptLivePreview()" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-950">
+          </div>
+
+          <div class="p-3 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-2">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="font-bold text-slate-700 block">Logo Real de tu Tienda</label>
+                <span class="text-[10px] text-slate-400">Aparece en boletas PDF y seguimiento</span>
+              </div>
+              <button type="button" onclick="document.getElementById('setting-logo-file').click()" class="px-2.5 py-1.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl font-bold text-[11px] flex items-center gap-1">
+                <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                <span>Subir Logo</span>
+              </button>
+              <input type="file" id="setting-logo-file" accept="image/*" class="hidden" onchange="handleLogoUpload(event)">
+            </div>
+            <div class="flex items-center gap-3">
+              <img id="setting-logo-preview" src="" class="h-10 w-10 object-contain rounded-xl border border-purple-200 bg-white p-1 hidden">
+              <button type="button" id="btn-remove-logo" onclick="removeStoreLogo()" class="text-rose-600 text-[10px] font-bold hover:underline hidden">✕ Quitar Logo</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Ícono alternativo</label>
+            <div class="flex gap-2">
+              <button type="button" onclick="selectStoreEmoji('🛍️')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">🛍️</button>
+              <button type="button" onclick="selectStoreEmoji('✨')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">✨</button>
+              <button type="button" onclick="selectStoreEmoji('📦')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">📦</button>
+              <button type="button" onclick="selectStoreEmoji('💄')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">💄</button>
+              <button type="button" onclick="selectStoreEmoji('🌸')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">🌸</button>
+              <button type="button" onclick="selectStoreEmoji('👑')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">👑</button>
+            </div>
+            <input type="hidden" id="setting-store-icon" value="🛍️">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">WhatsApp Tienda</label>
+              <input type="text" id="setting-phone" oninput="updateReceiptLivePreview()" placeholder="+54 9 11..." class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Instagram / Web</label>
+              <input type="text" id="setting-instagram" oninput="updateReceiptLivePreview()" placeholder="@mitienda" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Ciudad / Despachos</label>
+              <input type="text" id="setting-address" oninput="updateReceiptLivePreview()" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Próximo Folio</label>
+              <input type="number" id="setting-folio" oninput="updateReceiptLivePreview()" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold text-purple-700">
+            </div>
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Moneda</label>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="setCurrencySymbol('$')" class="currency-btn px-3 py-1.5 rounded-xl border border-purple-300 bg-purple-100 text-purple-900 font-bold">$ Pesos</button>
+              <button type="button" onclick="setCurrencySymbol('US$')" class="currency-btn px-3 py-1.5 rounded-xl border border-purple-200 bg-white text-slate-700 font-bold">US$</button>
+              <button type="button" onclick="setCurrencySymbol('S/.')" class="currency-btn px-3 py-1.5 rounded-xl border border-purple-200 bg-white text-slate-700 font-bold">S/.</button>
+            </div>
+            <input type="hidden" id="setting-currency" value="$">
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Mensaje al pie de la boleta</label>
+            <textarea id="setting-footer" oninput="updateReceiptLivePreview()" rows="2" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl"></textarea>
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Estilo Visual del Comprobante</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" onclick="applyReceiptTheme('coquette')" class="theme-btn p-2.5 rounded-2xl border-2 border-purple-600 bg-purple-50 text-left" data-theme="coquette">🌸 <strong class="text-xs">Lila Coquette</strong></button>
+              <button type="button" onclick="applyReceiptTheme('glam')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="glam">💖 <strong class="text-xs">Rosa Glam</strong></button>
+              <button type="button" onclick="applyReceiptTheme('minimal')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="minimal">🤍 <strong class="text-xs">Minimalista</strong></button>
+              <button type="button" onclick="applyReceiptTheme('neon')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="neon">🔮 <strong class="text-xs">Neón</strong></button>
+            </div>
+          </div>
+
+          <!-- Personalización Total de la App (Marca Blanca) -->
+          <div class="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
+            <div>
+              <span class="font-bold text-slate-800 block">🎨 Color de Toda Tu App (Marca Blanca)</span>
+              <span class="text-[10px] text-slate-500">Adapta toda la aplicación a los colores de tu marca</span>
+            </div>
+            <div class="grid grid-cols-3 gap-1.5 text-[11px]">
+              <button type="button" onclick="applyAppPalette('violet')" class="palette-btn p-2 rounded-xl border border-purple-300 bg-violet-600 text-white font-bold" data-palette="violet">Violeta</button>
+              <button type="button" onclick="applyAppPalette('rose')" class="palette-btn p-2 rounded-xl border border-pink-300 bg-rose-500 text-white font-bold" data-palette="rose">Rosa</button>
+              <button type="button" onclick="applyAppPalette('emerald')" class="palette-btn p-2 rounded-xl border border-emerald-300 bg-emerald-600 text-white font-bold" data-palette="emerald">Esmeralda</button>
+              <button type="button" onclick="applyAppPalette('blue')" class="palette-btn p-2 rounded-xl border border-blue-300 bg-blue-600 text-white font-bold" data-palette="blue">Azul Pro</button>
+              <button type="button" onclick="applyAppPalette('dark')" class="palette-btn p-2 rounded-xl border border-slate-500 bg-slate-900 text-white font-bold" data-palette="dark">Negro</button>
+              <label class="p-1.5 rounded-xl border border-purple-200 bg-white flex items-center justify-center gap-1 cursor-pointer font-bold text-slate-700">
+                <input type="color" id="setting-custom-color" value="#7C3AED" oninput="applyAppPalette('custom', this.value)" class="w-5 h-5 rounded border-0 p-0 bg-transparent cursor-pointer">
+                <span>Libre</span>
+              </label>
+            </div>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Modo de Uso / Rubro</label>
+              <select id="setting-business-mode" class="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-bold text-slate-700">
+                <option value="NUEVO PEDIDO PARA DESPACHO">📦 Pedidos &amp; Despachos</option>
+                <option value="NUEVA VENTA DE MOSTRADOR">🏪 Tienda Física / Mostrador</option>
+                <option value="VENTA SHOWROOM / EMPRENDIMIENTO">✨ Showroom / Emprendimiento</option>
+                <option value="ORDEN DE SERVICIO">🛠️ Servicios / Turnos</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Vista Previa en Vivo del Encabezado del Comprobante -->
+          <div class="p-4 rounded-2xl border border-purple-200 bg-gradient-to-b from-purple-50/60 to-white text-center space-y-1.5">
+            <span class="text-[9px] font-black uppercase tracking-widest text-purple-500 block">VISTA PREVIA EN VIVO DEL COMPROBANTE</span>
+            <div class="pt-1">
+              <img id="preview-logo-img" src="" class="max-h-14 max-w-[140px] mx-auto object-contain hidden rounded-xl mb-1">
+              <span id="preview-store-icon" class="text-2xl inline-block">🛍️</span>
+            </div>
+            <p id="preview-biz-name" class="font-serif font-black text-sm uppercase tracking-wider text-slate-900">MI TIENDA</p>
+            <p id="preview-biz-contact" class="text-[10px] text-slate-500"></p>
+            <p id="preview-footer-msg" class="text-[10px] italic text-purple-700 pt-1 border-t border-dashed border-purple-200"></p>
+          </div>
+
+          <button onclick="saveBusinessSettings()" class="w-full py-3.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-purple-700 text-white font-extrabold rounded-2xl shadow-xl">
+            GUARDAR CAMBIOS EN LA NUBE 💖
+          </button>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 max-w-md w-full h-16 bg-white/95 backdrop-blur-lg border-t border-purple-100 px-2 flex justify-around items-center text-center z-40 shadow-lg no-print">
+      <button onclick="switchTab('sale')" id="nav-btn-sale" class="flex flex-col items-center gap-1 text-purple-600 flex-1 py-1">
+        <i data-lucide="shopping-bag" class="w-5 h-5"></i>
+        <span class="text-[9px] font-bold">Pedido</span>
+      </button>
+      <button onclick="switchTab('dispatches')" id="nav-btn-dispatches" class="flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+        <i data-lucide="truck" class="w-5 h-5"></i>
+        <span class="text-[9px] font-bold">Despachos</span>
+      </button>
+      <button onclick="switchTab('catalog')" id="nav-btn-catalog" class="flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+        <i data-lucide="tag" class="w-5 h-5"></i>
+        <span class="text-[9px] font-semibold">Catálogo</span>
+      </button>
+      <button onclick="switchTab('audit')" id="nav-btn-audit" class="flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+        <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+        <span class="text-[9px] font-semibold">Resumen</span>
+      </button>
+      <button onclick="switchTab('settings')" id="nav-btn-settings" class="flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+        <i data-lucide="receipt" class="w-5 h-5"></i>
+        <span class="text-[9px] font-semibold">Tienda</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ================= MODALS ================= -->
+
+  <!-- MODAL: COMPROBANTE PDF / PEGATINA & COBRO -->
+  <div id="modal-receipt" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start justify-center p-3 py-6 hidden overflow-y-auto">
+    <div class="w-full max-w-sm mx-auto flex flex-col items-center">
+      <div class="w-full flex items-center justify-between mb-3 px-1 no-print text-white">
+        <div class="flex bg-white/20 p-1 rounded-2xl border border-white/20 text-xs">
+          <button onclick="switchReceiptFormat('full')" id="btn-format-full" class="px-3 py-1.5 rounded-xl font-bold bg-white text-purple-900 shadow">Boleta</button>
+          <button onclick="switchReceiptFormat('sticker')" id="btn-format-sticker" class="px-3 py-1.5 rounded-xl font-bold text-white">🏷️ Pegatina 58mm</button>
+        </div>
+        <button onclick="closeReceiptModal()" class="text-white/80 hover:text-white bg-white/10 p-1.5 rounded-full">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="w-full space-y-2 mb-3 no-print">
+        <button id="btn-master-whatsapp" onclick="sendReceiptImageToWhatsApp()" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold rounded-2xl shadow-xl flex items-center justify-center gap-2 text-sm active:scale-[0.98] transition-all">
+          <i data-lucide="image" class="w-5 h-5"></i>
+          <span id="btn-master-whatsapp-label">ENVIAR SOLO IMAGEN A WHATSAPP</span>
+        </button>
+
+        <div class="grid grid-cols-4 gap-1.5 text-[11px]">
+          <button onclick="downloadReceiptImage()" class="py-2.5 px-1.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-xl font-bold flex items-center justify-center gap-1 shadow">
+            <i data-lucide="image" class="w-3.5 h-3.5"></i>
+            <span>Imagen</span>
+          </button>
+          <button onclick="downloadActiveView()" class="py-2.5 px-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold flex items-center justify-center gap-1 shadow">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>PDF</span>
+          </button>
+          <button onclick="printActiveView()" class="py-2.5 px-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center gap-1 shadow">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            <span>Imprimir</span>
+          </button>
+          <button onclick="generateOrderMPLinkFromModal()" id="btn-modal-mp-link" class="py-2.5 px-1.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold flex items-center justify-center gap-1 shadow">
+            <i data-lucide="link" class="w-3.5 h-3.5"></i>
+            <span>Link MP</span>
+          </button>
+        </div>
+
+        <button onclick="printThermalBluetooth()" class="w-full py-2 px-3 bg-white/15 hover:bg-white/25 text-white border border-white/25 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5">
+          <i data-lucide="bluetooth" class="w-3.5 h-3.5 text-sky-300"></i>
+          <span>Impresora Térmica Bluetooth (58mm)</span>
+        </button>
+      </div>
+
+      <!-- BOLETA COMPLETA (ESTÉTICA PROFESIONAL Y ORDENADA) -->
+      <div id="printable-receipt" class="printable-active w-full bg-white text-slate-900 rounded-[28px] shadow-2xl relative font-sans border border-purple-200">
+        <!-- Barra superior decorativa según tema -->
+        <div id="receipt-top-bar" class="h-2.5 w-full rounded-t-[26px] bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-700"></div>
+
+        <div class="p-6 space-y-4">
+          <!-- Encabezado de Marca & Logo -->
+          <div class="text-center space-y-1.5 pb-3 border-b border-slate-100">
+            <div id="receipt-logo-wrap" class="flex justify-center">
+              <img id="receipt-logo-img" src="" class="max-h-20 max-w-[180px] object-contain hidden rounded-xl">
+              <div id="receipt-store-icon-box" class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-purple-100 text-purple-600">
+                <span class="text-2xl" id="receipt-store-icon">🛍️</span>
+              </div>
+            </div>
+            <h2 id="receipt-biz-name" class="font-extrabold text-lg tracking-wide uppercase font-serif text-slate-900">MI TIENDA</h2>
+            <p id="receipt-biz-contact" class="text-[10px] text-slate-500 leading-snug"></p>
+          </div>
+
+          <!-- Folio & Fecha -->
+          <div class="flex justify-between items-center bg-slate-50 rounded-2xl px-3.5 py-2.5 border border-slate-100 text-xs">
+            <div>
+              <span class="text-[9px] uppercase text-slate-400 font-bold tracking-wider block">COMPROBANTE</span>
+              <span id="receipt-folio" class="font-mono font-black text-sm text-purple-800">#001001</span>
+              <span id="receipt-tracking-code" class="text-[10px] font-mono text-slate-500 block">PED-000000</span>
+            </div>
+            <div class="text-right">
+              <span class="text-[9px] uppercase text-slate-400 font-bold tracking-wider block">FECHA</span>
+              <span id="receipt-date" class="font-bold text-slate-700 text-xs"></span>
+            </div>
+          </div>
+
+          <!-- Datos del Cliente & Envío (sin solapamientos) -->
+          <div class="p-3.5 bg-purple-50/40 rounded-2xl border border-purple-100 space-y-1 text-xs">
+            <span class="text-[9px] uppercase text-purple-600 font-extrabold tracking-wider block">CLIENTE &amp; DESPACHO</span>
+            <p id="receipt-client-name" class="font-extrabold text-slate-900 text-sm leading-tight"></p>
+            <p id="receipt-client-phone" class="text-[11px] text-slate-600 hidden"></p>
+            <p id="receipt-client-handle" class="text-[11px] font-semibold text-purple-700 hidden"></p>
+            <p id="receipt-client-address" class="text-[11px] text-slate-600 hidden"></p>
+          </div>
+
+          <!-- Detalle de Productos -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-center text-[10px] uppercase font-extrabold text-slate-400 tracking-wider pb-1.5 border-b border-slate-200">
+              <span>CANT. / DESCRIPCIÓN</span>
+              <span>IMPORTE</span>
+            </div>
+            <div id="receipt-items-list" class="divide-y divide-slate-100"></div>
+          </div>
+
+          <!-- Totales & Estado -->
+          <div class="pt-3 border-t-2 border-slate-100 space-y-2 text-xs">
+            <div class="flex justify-between text-slate-500 text-[11px]">
+              <span>Subtotal</span>
+              <span id="receipt-subtotal" class="font-semibold text-slate-700">$ 0</span>
+            </div>
+            <div class="flex justify-between text-fuchsia-600 text-[11px] font-bold hidden" id="receipt-discount-row">
+              <span id="receipt-discount-label">Descuento</span>
+              <span id="receipt-discount-amount">-$ 0</span>
+            </div>
+            <div class="flex justify-between items-center bg-purple-50/70 px-3.5 py-2.5 rounded-2xl border border-purple-100">
+              <span class="font-extrabold text-sm font-serif text-slate-900">TOTAL</span>
+              <span id="receipt-total" class="text-xl font-black text-purple-800">$ 0</span>
+            </div>
+            <div class="flex justify-between items-center text-[11px] text-slate-500 pt-0.5">
+              <span>Estado del Abono:</span>
+              <span id="receipt-payment-badge" class="font-bold px-2.5 py-0.5 rounded-full"></span>
+            </div>
+          </div>
+
+          <div id="receipt-notes-box" class="p-3 bg-amber-50/60 rounded-2xl text-[11px] text-amber-900 border border-amber-200 hidden">
+            <span class="font-bold block text-[10px] uppercase tracking-wider">Observaciones:</span>
+            <span id="receipt-notes"></span>
+          </div>
+
+          <!-- Pie de Comprobante -->
+          <div class="pt-3 border-t border-dashed border-slate-200 text-center space-y-1">
+            <p class="font-script text-2xl text-purple-700 leading-tight">¡Muchas gracias por tu compra!</p>
+            <p id="receipt-footer-msg" class="text-[10px] text-slate-500 leading-relaxed px-2"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- PEGATINA 58mm -->
+      <div id="printable-sticker" class="hidden w-[58mm] max-w-full bg-white text-slate-900 p-3 shadow-2xl relative font-sans border-2 border-dashed border-purple-300 rounded-2xl text-[11px]">
+        <div class="text-center pb-2 border-b-2 border-slate-900">
+          <img id="sticker-logo-img" src="" class="max-h-8 max-w-[100px] mx-auto object-contain hidden mb-1 rounded">
+          <span class="text-[9px] font-black uppercase block text-slate-600">ETIQUETA DE DESPACHO</span>
+          <h2 id="sticker-folio" class="text-xl font-black font-mono leading-tight">#001001</h2>
+          <span id="sticker-tracking" class="text-[10px] font-mono font-bold block">PED-000000</span>
+        </div>
+        <div class="py-2 border-b border-dashed border-slate-400 space-y-0.5">
+          <p class="font-extrabold text-xs" id="sticker-client-name"></p>
+          <p class="text-[10px] text-slate-700" id="sticker-phone"></p>
+          <p class="text-[10px] text-slate-700 font-medium" id="sticker-address"></p>
+        </div>
+        <div class="py-2 space-y-1.5 border-b-2 border-slate-900">
+          <p class="text-[9px] font-black uppercase text-slate-500">PRODUCTOS A DESPACHAR:</p>
+          <div id="sticker-checklist" class="space-y-1"></div>
+        </div>
+        <div class="pt-2 text-center">
+          <span id="sticker-pay-badge" class="inline-block font-extrabold text-[9px] px-2 py-0.5 rounded border"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ESCÁNER -->
+  <div id="modal-barcode-scanner" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden">
+    <div class="bg-white w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl flex flex-col border border-purple-100">
+      <div class="p-4 bg-gradient-to-r from-violet-600 to-purple-700 text-white flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="scan" class="w-5 h-5 text-amber-300"></i>
+          <h3 class="font-bold text-sm font-serif">Escáner de Productos</h3>
+        </div>
+        <button onclick="closeBarcodeScannerModal()" class="text-white/80 hover:text-white bg-white/10 p-1.5 rounded-full"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="relative bg-black flex items-center justify-center overflow-hidden min-h-[240px]">
+        <div id="scanner-reader" class="w-full h-full"></div>
+        <div id="scanner-feedback-badge" class="absolute top-2 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full hidden">¡Detectado! ✅</div>
+      </div>
+      <div class="p-4 bg-purple-50/40 space-y-3 text-xs">
+        <div class="flex items-center justify-between">
+          <label class="flex items-center gap-2 font-bold text-slate-700"><input type="checkbox" id="scanner-continuous-mode" checked><span>Modo continuo</span></label>
+          <button type="button" onclick="switchCameraScanner()" class="p-1.5 text-purple-700 bg-white border border-purple-200 rounded-xl font-bold text-[10px]">🔄 Girar cámara</button>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="scanner-manual-code" placeholder="Escribir código manual..." class="flex-1 px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-xs">
+          <button type="button" onclick="submitManualBarcode()" class="px-3 py-1.5 bg-purple-600 text-white font-bold rounded-xl text-xs">Agregar</button>
+        </div>
+        <button type="button" onclick="closeBarcodeScannerModal()" class="w-full py-2 bg-white border border-purple-200 text-slate-700 font-bold rounded-xl text-xs">Cerrar Escáner</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CLIENTES CRM -->
+  <div id="modal-customers" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] max-h-[80vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-purple-50 flex items-center justify-between">
+        <h3 class="font-bold text-sm text-slate-800 font-serif">👥 Clientes Guardados</h3>
+        <button onclick="closeCustomerPickerModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-3 border-b border-purple-50">
+        <input type="text" id="customer-picker-search" oninput="renderCustomerPickerList()" placeholder="Buscar por nombre o WhatsApp..." class="w-full px-3 py-2 text-xs bg-purple-50/30 border border-purple-100 rounded-xl">
+      </div>
+      <div id="customer-picker-list" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: DESCUENTO PERSONALIZADO -->
+  <div id="modal-custom-discount" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-4 border border-purple-100 text-xs">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2">
+        <h3 class="font-bold text-sm text-slate-800 font-serif">Descuento Personalizado</h3>
+        <button onclick="closeCustomDiscountModal()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="font-bold text-slate-700 block mb-1">Motivo</label>
+        <input type="text" id="custom-discount-name" placeholder="Ej: Cliente frecuente" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="selectDiscountType('percent')" id="btn-type-percent" class="p-2.5 rounded-xl border-2 border-purple-600 bg-purple-50 font-bold text-purple-900">% Porcentaje</button>
+        <button type="button" onclick="selectDiscountType('fixed')" id="btn-type-fixed" class="p-2.5 rounded-xl border border-purple-200 bg-white font-bold text-slate-700">$ Monto Fijo</button>
+      </div>
+      <input type="hidden" id="custom-discount-type" value="percent">
+      <div>
+        <label class="font-bold text-slate-700 block mb-1" id="label-discount-value">Valor (%)</label>
+        <input type="number" id="custom-discount-val" placeholder="25" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
+      </div>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeCustomDiscountModal()" class="flex-1 py-2.5 border border-purple-200 rounded-xl font-semibold">Cancelar</button>
+        <button type="button" onclick="applyCustomDiscountFromModal()" class="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold rounded-xl">Aplicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CATÁLOGO SELECTOR -->
+  <div id="modal-catalog" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white w-full max-w-lg rounded-t-[32px] sm:rounded-[32px] max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
+      <div class="p-4 border-b border-purple-50 flex items-center justify-between">
+        <h3 class="font-bold text-sm text-slate-800 font-serif">🛍️ Seleccionar Productos</h3>
+        <button onclick="closeCatalogModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="p-3 border-b border-purple-50">
+        <input type="text" id="picker-search" oninput="renderPickerList()" placeholder="Buscar producto o código..." class="w-full px-3 py-2 text-xs bg-purple-50/30 border border-purple-100 rounded-xl">
+      </div>
+      <div id="picker-products-list" class="flex-1 overflow-y-auto p-4 space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: CREAR PRODUCTO -->
+  <div id="modal-product-form" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-3.5 border border-purple-100 text-xs">
+      <div class="flex items-center justify-between border-b border-purple-50 pb-2">
+        <h3 class="font-bold text-sm text-slate-800 font-serif">Añadir Producto</h3>
+        <button onclick="closeProductFormModal()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="font-bold text-slate-700 block">Nombre del Producto *</label>
+        <input type="text" id="prod-name" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="font-bold text-slate-700 block">Precio Costo</label>
+          <input type="number" id="prod-cost" oninput="updateProductProfitPreview()" placeholder="0" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-purple-200 rounded-xl font-bold text-slate-700">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block">Precio Venta *</label>
+          <input type="number" id="prod-price" oninput="updateProductProfitPreview()" placeholder="0" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-800">
+        </div>
+      </div>
+      <div id="prod-profit-preview" class="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800 text-center">
+        Ganancia por unidad: $ 0 (0%)
+      </div>
+      <div>
+        <label class="font-bold text-slate-700 block">Categoría</label>
+        <input type="text" id="prod-category" placeholder="General" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="font-medium text-slate-600 block">Stock Inicial</label>
+          <input type="number" id="prod-stock" value="10" class="w-full mt-1 px-3 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
+        </div>
+        <div>
+          <label class="font-medium text-slate-600 block">Stock Mínimo</label>
+          <input type="number" id="prod-min-stock" value="3" class="w-full mt-1 px-3 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
+        </div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between">
+          <label class="font-bold text-slate-700 block">Código de Barras / SKU</label>
+          <button type="button" onclick="scanBarcodeForProductField()" class="text-purple-600 text-[10px] font-bold">📷 Escanear</button>
+        </div>
+        <input type="text" id="prod-barcode" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono">
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeProductFormModal()" class="flex-1 py-2.5 border border-purple-200 rounded-xl font-semibold">Cancelar</button>
+        <button onclick="saveProductFromModal()" class="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold rounded-xl">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VOZ POS -->
+  <div id="modal-voice-studio" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl space-y-4 text-xs">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-3">
+        <h3 class="font-bold text-sm text-slate-800 font-serif">Voz de Confirmación de Pagos</h3>
+        <button onclick="closeVoiceStudioModal()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="applyVoicePreset('argentina')" id="preset-btn-argentina" class="p-3 rounded-2xl border-2 border-purple-600 bg-purple-50 text-left">🇦🇷 <strong class="block">Argentina</strong></button>
+        <button type="button" onclick="applyVoicePreset('mexico')" id="preset-btn-mexico" class="p-3 rounded-2xl border border-purple-200 bg-white text-left">🇲🇽 <strong class="block">Mexicana</strong></button>
+      </div>
+      <div>
+        <label class="font-bold text-slate-700 block mb-1">Texto que anunciará:</label>
+        <textarea id="voice-template-input" rows="3" class="w-full p-2.5 bg-purple-50/50 border border-purple-200 rounded-xl"></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="previewCustomVoice()" class="py-2.5 px-4 bg-purple-100 text-purple-800 font-bold rounded-xl">▶ Demo</button>
+        <button onclick="saveVoiceSettings()" class="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold rounded-xl">Guardar Voz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TOKEN MP DEL COMERCIO (PARA COBRAR A SUS CLIENTES) -->
+  <div id="modal-mp-guide" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white w-full max-w-lg rounded-[32px] p-6 shadow-2xl space-y-4 text-xs">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-3">
+        <h3 class="font-bold text-sm text-slate-800 font-serif">Conectar Mercado Pago de tu Tienda</h3>
+        <button onclick="closeMPGuideModal()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <p class="text-slate-600 leading-relaxed">
+        Con tu <strong>Access Token de Producción</strong> podrás generar Links de Pago directos para cada pedido y verificar automáticamente cuando tu cliente abone.
+      </p>
+      <div>
+        <label class="font-bold text-slate-800 block mb-1">Tu Access Token de Producción:</label>
+        <input type="password" id="guide-mp-token-input" placeholder="APP_USR-xxxxxxxxxxxxxxxxxxxx" class="w-full px-3 py-2.5 bg-slate-50 border border-purple-300 rounded-xl font-mono text-xs">
+      </div>
+      <div id="token-test-feedback" class="hidden p-2.5 rounded-xl"></div>
+      <div class="flex gap-2">
+        <button onclick="testAndSaveToken()" class="flex-1 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-extrabold rounded-2xl">Guardar y Verificar</button>
+        <button onclick="closeMPGuideModal()" class="py-3 px-4 border border-purple-200 rounded-2xl font-bold">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PANEL ADMIN (SUSCRIPCIONES $10.000/3M & CONFIG PLATAFORMA) -->
+  <div id="modal-admin" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto">
+    <div class="bg-white w-full max-w-lg rounded-[32px] p-5 shadow-2xl space-y-4 my-auto text-xs max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">⚙️ Panel Administrador SaaS</h3>
+          <p class="text-[10px] text-slate-500">Cobro de suscripciones ($10.000 / 3 meses) y comercios activos</p>
+        </div>
+        <button onclick="closeAdminModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+        <span class="font-bold text-slate-800 block">1. Tu Cuenta Receptora de Suscripciones (Mercado Pago)</span>
+        <input type="password" id="admin-mp-token" placeholder="Pega aquí tu PLATFORM_MP_ACCESS_TOKEN (APP_USR-...)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-[11px]">
+        <input type="text" id="admin-base-url" placeholder="URL pública (ej. https://mi-pos.onrender.com)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
+        <button onclick="saveAdminConfig()" class="w-full py-2 bg-slate-900 text-white font-bold rounded-xl">Guardar Configuración de Cobros</button>
+      </div>
+
+      <div class="space-y-2">
+        <span class="font-bold text-slate-800 block">2. Comercios Registrados</span>
+        <div id="admin-users-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= APPLICATION JAVASCRIPT ================= -->
+  <script>
+    const SESSION_KEY = 'comprobantes_pos_session_v1';
+
+    const VOICE_PRESETS = {
+      argentina: {
+        template: "¡Pago confirmado! {nombre} abonó {monto} por Mercado Pago. Pedido listo para preparar.",
+        pitch: 1.05, rate: 1.02
+      },
+      mexico: {
+        template: "¡Pago confirmado! {nombre} abonó {monto} con Mercado Pago. Pedido listo para envío.",
+        pitch: 1.1, rate: 1.0
+      }
+    };
+
+    let authMode = 'login';
+    let sessionToken = localStorage.getItem(SESSION_KEY) || '';
+    let currentUser = null;
+
+    let state = {
+      profile: {},
+      products: [],
+      customers: [],
+      orders: [],
+      currentCart: [],
+      activeDiscount: null,
+      initialPaymentStatus: 'pending',
+      dispatchFilter: 'all',
+      stockFilter: 'all',
+      scannerTarget: 'sale',
+      html5QrScanner: null,
+      scannerFacingMode: 'environment',
+      lastScannedCode: '',
+      lastScannedTime: 0,
+      activeTab: 'sale',
+      activeSaleForReceipt: null,
+      currentReceiptView: 'full'
+    };
+
+    async function api(path, options = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+      if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+      const resp = await fetch(path, { ...options, headers });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const err = new Error(data.error || `Error ${resp.status}`);
+        err.status = resp.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    }
+
+    function formatCurrency(amount) {
+      const sym = state.profile.currency_symbol || '$';
+      const num = Number(amount) || 0;
+      return `${sym} ${num.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      return new Date(dateStr).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    // ================= AUTH & PAYWALL =================
+
+    function toggleAuthMode(mode) {
+      authMode = mode;
+      const storeWrap = document.getElementById('auth-store-wrap');
+      const btn = document.getElementById('auth-submit-btn');
+      const tLogin = document.getElementById('auth-tab-login');
+      const tReg = document.getElementById('auth-tab-register');
+      document.getElementById('auth-error').classList.add('hidden');
+
+      if (mode === 'register') {
+        storeWrap.classList.remove('hidden');
+        btn.innerText = 'Crear Cuenta y Activar Plan ($10.000 / 3 meses)';
+        tReg.className = 'py-2 rounded-xl font-bold bg-white text-purple-900 shadow-sm';
+        tLogin.className = 'py-2 rounded-xl font-bold text-slate-500';
+      } else {
+        storeWrap.classList.add('hidden');
+        btn.innerText = 'Ingresar a mi Comercio';
+        tLogin.className = 'py-2 rounded-xl font-bold bg-white text-purple-900 shadow-sm';
+        tReg.className = 'py-2 rounded-xl font-bold text-slate-500';
+      }
+    }
+
+    async function submitAuthForm(e) {
+      e.preventDefault();
+      const errBox = document.getElementById('auth-error');
+      errBox.classList.add('hidden');
+
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const store_name = document.getElementById('auth-store-name').value.trim();
+
+      try {
+        const endpoint = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
+        const data = await api(endpoint, {
+          method: 'POST',
+          body: JSON.stringify({ email, password, store_name })
+        });
+        sessionToken = data.token;
+        localStorage.setItem(SESSION_KEY, sessionToken);
+        currentUser = data.user;
+        await routeAfterAuth();
+      } catch (err) {
+        errBox.innerText = err.message;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    async function logoutUser() {
+      try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+      sessionToken = '';
+      currentUser = null;
+      localStorage.removeItem(SESSION_KEY);
+      showScreen('auth');
+    }
+
+    function showScreen(screen) {
+      document.getElementById('auth-screen').classList.toggle('hidden', screen !== 'auth');
+      document.getElementById('paywall-screen').classList.toggle('hidden', screen !== 'paywall');
+      document.getElementById('app-container').classList.toggle('hidden', screen !== 'app');
+      lucide.createIcons();
+    }
+
+    async function refreshAuthStatus() {
+      if (!sessionToken) { showScreen('auth'); return; }
+      try {
+        const me = await api('/api/auth/me');
+        currentUser = me.user;
+        await routeAfterAuth();
+      } catch (err) {
+        sessionToken = '';
+        localStorage.removeItem(SESSION_KEY);
+        showScreen('auth');
+      }
+    }
+
+    async function routeAfterAuth() {
+      if (!currentUser) { showScreen('auth'); return; }
+      if (currentUser.subscription_status !== 'active') {
+        document.getElementById('paywall-store-name').innerText = currentUser.store_name;
+        document.getElementById('paywall-email').innerText = currentUser.email;
+        try {
+          const health = await api('/api/health');
+          document.getElementById('btn-demo-activate').classList.toggle('hidden', health.mp_platform_configured);
+        } catch (e) {}
+        showScreen('paywall');
+        return;
+      }
+
+      // Active subscription -> load workspace data
+      const boot = await api('/api/store/bootstrap');
+      state.profile = boot.profile || {};
+      state.products = boot.products || [];
+      state.customers = boot.customers || [];
+      state.orders = boot.orders || [];
+
+      document.getElementById('header-store-title').innerText = state.profile.name || currentUser.store_name;
+      document.title = (state.profile.name || 'VentaFlow POS') + ' — App';
+      document.getElementById('header-sub-badge').innerText = currentUser.role === 'admin'
+        ? 'Administrador'
+        : `Plan Activo • ${currentUser.days_left}d`;
+      document.getElementById('btn-open-admin').classList.toggle('hidden', currentUser.role !== 'admin');
+      document.getElementById('label-next-folio').innerText = 'Pedido #' + String(state.profile.next_folio_number || 1001).padStart(6, '0');
+      const modeLbl = document.getElementById('label-business-mode');
+      if (modeLbl && state.profile.business_mode) modeLbl.innerText = state.profile.business_mode;
+
+      applyAppPalette(state.profile.app_palette || 'violet', state.profile.custom_color || '#7C3AED');
+      updateHeaderLogo();
+      updateMPUIStatus();
+      renderCart();
+      updateTotals();
+      showScreen('app');
+    }
+
+    async function startSubscriptionCheckout() {
+      const msg = document.getElementById('paywall-msg');
+      const btn = document.getElementById('btn-pay-subscription');
+      msg.classList.add('hidden');
+      btn.disabled = true;
+      btn.innerHTML = 'Conectando con Mercado Pago... ⏳';
+
+      try {
+        const data = await api('/api/subscription/create-checkout', { method: 'POST' });
+        if (data.init_point) {
+          window.location.href = data.init_point;
+          return;
+        }
+      } catch (err) {
+        msg.className = 'p-3 rounded-2xl text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-900';
+        msg.innerText = err.message;
+        msg.classList.remove('hidden');
+        if (err.data && err.data.demo_available) {
+          document.getElementById('btn-demo-activate').classList.remove('hidden');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="credit-card" class="w-5 h-5"></i><span>ABONAR $10.000 EN MERCADO PAGO</span>';
+        lucide.createIcons();
+      }
+    }
+
+    async function simulateSubscriptionDemo() {
+      try {
+        await api('/api/subscription/simulate-pay', { method: 'POST' });
+        if (typeof confetti === 'function') confetti({ particleCount: 90, spread: 75 });
+        await refreshAuthStatus();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // ================= AUDIO & VOZ =================
+
+    function playChimeSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(784, ctx.currentTime);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+      } catch (e) {}
+    }
+
+    function playScannerBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.setValueAtTime(1850, ctx.currentTime);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.08);
+      } catch (e) {}
+    }
+
+    function speakPOSVoice(name, amount) {
+      if (!('speechSynthesis' in window)) return;
+      let text = state.profile.voice_template || "¡Pago confirmado! {nombre} abonó {monto} por Mercado Pago.";
+      text = text.replace(/{nombre}/g, name || 'Cliente').replace(/{monto}/g, formatCurrency(amount));
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = (state.profile.voice_accent === 'mexico') ? 'es-MX' : 'es-AR';
+      window.speechSynthesis.speak(u);
+    }
+
+    function triggerPaymentToast(name, amount) {
+      playChimeSound();
+      speakPOSVoice(name, amount);
+      if (typeof confetti === 'function') confetti({ particleCount: 70, spread: 70, origin: { y: 0.2 } });
+      const toast = document.getElementById('live-alert-toast');
+      document.getElementById('toast-buyer').innerText = name;
+      document.getElementById('toast-amount').innerText = `${formatCurrency(amount)} abonados ✨`;
+      toast.classList.remove('-translate-y-36', 'opacity-0');
+      setTimeout(() => toast.classList.add('-translate-y-36', 'opacity-0'), 5500);
+    }
+
+    // ================= BARCODE SCANNER =================
+
+    function openBarcodeScannerModal(target = 'sale') {
+      state.scannerTarget = target;
+      document.getElementById('scanner-feedback-badge').classList.add('hidden');
+      document.getElementById('scanner-manual-code').value = '';
+      document.getElementById('modal-barcode-scanner').classList.remove('hidden');
+      startCameraScanner();
+    }
+
+    function closeBarcodeScannerModal() {
+      stopCameraScanner();
+      document.getElementById('modal-barcode-scanner').classList.add('hidden');
+    }
+
+    function switchCameraScanner() {
+      state.scannerFacingMode = state.scannerFacingMode === 'environment' ? 'user' : 'environment';
+      stopCameraScanner();
+      setTimeout(startCameraScanner, 300);
+    }
+
+    function startCameraScanner() {
+      if (typeof Html5Qrcode === 'undefined') return;
+      if (state.html5QrScanner) try { state.html5QrScanner.stop().catch(() => {}); } catch (e) {}
+      try {
+        state.html5QrScanner = new Html5Qrcode("scanner-reader");
+        state.html5QrScanner.start(
+          { facingMode: state.scannerFacingMode },
+          { fps: 15, qrbox: { width: 220, height: 150 } },
+          onBarcodeScanSuccess,
+          () => {}
+        ).catch(() => {});
+      } catch (e) {}
+    }
+
+    function stopCameraScanner() {
+      if (state.html5QrScanner) {
+        try { state.html5QrScanner.stop().then(() => { state.html5QrScanner.clear(); state.html5QrScanner = null; }).catch(() => { state.html5QrScanner = null; }); } catch (e) { state.html5QrScanner = null; }
+      }
+    }
+
+    function onBarcodeScanSuccess(code) {
+      const now = Date.now();
+      if (code === state.lastScannedCode && now - state.lastScannedTime < 1800) return;
+      state.lastScannedCode = code;
+      state.lastScannedTime = now;
+      playScannerBeep();
+      const b = document.getElementById('scanner-feedback-badge');
+      b.innerText = `¡${code} leído! ✅`;
+      b.classList.remove('hidden');
+      setTimeout(() => b.classList.add('hidden'), 1200);
+
+      if (state.scannerTarget === 'product-field') {
+        document.getElementById('prod-barcode').value = code;
+        closeBarcodeScannerModal();
+        return;
+      }
+      handleScannedBarcode(code);
+      if (!document.getElementById('scanner-continuous-mode').checked) closeBarcodeScannerModal();
+    }
+
+    function submitManualBarcode() {
+      const code = document.getElementById('scanner-manual-code').value.trim();
+      if (!code) return;
+      playScannerBeep();
+      if (state.scannerTarget === 'product-field') {
+        document.getElementById('prod-barcode').value = code;
+        closeBarcodeScannerModal();
+        return;
+      }
+      handleScannedBarcode(code);
+      document.getElementById('scanner-manual-code').value = '';
+    }
+
+    function scanBarcodeForProductField() { openBarcodeScannerModal('product-field'); }
+
+    function handleScannedBarcode(code) {
+      const clean = String(code).trim().toLowerCase();
+      const prod = state.products.find(p =>
+        (p.barcode && String(p.barcode).toLowerCase() === clean) ||
+        (p.sku && String(p.sku).toLowerCase() === clean) ||
+        p.name.toLowerCase() === clean
+      );
+      if (prod) {
+        addProductToCart(prod);
+      } else {
+        document.getElementById('quick-live-name').value = `Art. ${code}`;
+        document.getElementById('quick-live-price').focus();
+        alert(`Código "${code}" no registrado. Se cargó arriba para ingresar precio.`);
+      }
+    }
+
+    // ================= CART & PROMOS =================
+
+    function setInitialPaymentStatus(status) {
+      state.initialPaymentStatus = status;
+      const bP = document.getElementById('btn-pay-status-pending');
+      const bA = document.getElementById('btn-pay-status-paid');
+      if (status === 'paid') {
+        bA.className = 'py-2 px-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-900 font-bold text-center';
+        bP.className = 'py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center';
+      } else {
+        bP.className = 'py-2 px-3 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold text-center';
+        bA.className = 'py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center';
+      }
+    }
+
+    function addProductToCart(prod) {
+      const existing = state.currentCart.find(i => i.productName.toLowerCase() === prod.name.toLowerCase());
+      if (existing) existing.quantity += 1;
+      else state.currentCart.push({
+        id: 'c_' + Date.now(),
+        productName: prod.name,
+        unitPrice: Number(prod.price),
+        unitCost: Number(prod.cost_price) || 0,
+        quantity: 1
+      });
+      renderCart();
+      updateTotals();
+    }
+
+    function addQuickLiveItem() {
+      const name = document.getElementById('quick-live-name').value.trim();
+      const price = parseFloat(document.getElementById('quick-live-price').value);
+      if (!name || isNaN(price) || price <= 0) { alert('Completa nombre y precio válidos.'); return; }
+      addProductToCart({ name, price });
+      document.getElementById('quick-live-name').value = '';
+      document.getElementById('quick-live-price').value = '';
+    }
+
+    function changeCartQty(idx, delta) {
+      state.currentCart[idx].quantity += delta;
+      if (state.currentCart[idx].quantity <= 0) state.currentCart.splice(idx, 1);
+      renderCart();
+      updateTotals();
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cart-items-container');
+      if (state.currentCart.length === 0) {
+        container.innerHTML = '<div class="text-center py-4 text-purple-400"><span class="text-2xl block mb-1">📦</span><p class="text-xs font-medium">Aún no agregas productos para despachar</p></div>';
+        document.getElementById('btn-emit').disabled = true;
+        return;
+      }
+      container.innerHTML = state.currentCart.map((item, idx) => `
+        <div class="flex items-center justify-between py-1.5 border-b border-purple-50 last:border-0 text-xs">
+          <div class="flex-1 pr-2">
+            <p class="font-bold text-slate-800">${item.productName}</p>
+            <p class="text-[11px] text-purple-500">${formatCurrency(item.unitPrice)} c/u</p>
+          </div>
+          <div class="flex items-center gap-2 bg-purple-50/80 px-2.5 py-1 rounded-xl border border-purple-100">
+            <button onclick="changeCartQty(${idx}, -1)" class="w-5 h-5 font-bold text-slate-600">-</button>
+            <span class="font-bold w-4 text-center">${item.quantity}</span>
+            <button onclick="changeCartQty(${idx}, 1)" class="w-5 h-5 font-bold text-purple-600">+</button>
+          </div>
+          <div class="w-20 text-right font-black text-slate-800">${formatCurrency(item.unitPrice * item.quantity)}</div>
+        </div>
+      `).join('');
+      document.getElementById('btn-emit').disabled = false;
+    }
+
+    function applyPromoOrDiscount(type) {
+      if (type === '2x1') state.activeDiscount = { type: '2x1', label: 'Promo 2x1 🎁', value: 0 };
+      else if (type === '3x2') state.activeDiscount = { type: '3x2', label: 'Promo 3x2 🎉', value: 0 };
+      else if (type === 'pct10') state.activeDiscount = { type: 'percent', label: 'Desc. -10%', value: 10 };
+      else if (type === 'pct15') state.activeDiscount = { type: 'percent', label: 'Desc. -15%', value: 15 };
+      else if (type === 'pct20') state.activeDiscount = { type: 'percent', label: 'Desc. -20%', value: 20 };
+      updateTotals();
+    }
+
+    function clearDiscount() { state.activeDiscount = null; updateTotals(); }
+
+    function openCustomDiscountModal() { document.getElementById('modal-custom-discount').classList.remove('hidden'); }
+    function closeCustomDiscountModal() { document.getElementById('modal-custom-discount').classList.add('hidden'); }
+
+    function selectDiscountType(type) {
+      document.getElementById('custom-discount-type').value = type;
+      document.getElementById('label-discount-value').innerText = type === 'percent' ? 'Valor (%)' : 'Monto ($)';
+    }
+
+    function applyCustomDiscountFromModal() {
+      const name = document.getElementById('custom-discount-name').value.trim() || 'Descuento';
+      const type = document.getElementById('custom-discount-type').value;
+      const val = parseFloat(document.getElementById('custom-discount-val').value);
+      if (isNaN(val) || val <= 0) { alert('Valor inválido'); return; }
+      state.activeDiscount = { type, label: `${name} (${type === 'percent' ? '-' + val + '%' : '-' + formatCurrency(val)})`, value: val };
+      closeCustomDiscountModal();
+      updateTotals();
+    }
+
+    function calculateDiscount(subtotal, cart) {
+      if (!state.activeDiscount || !cart.length || subtotal <= 0) return { amount: 0, label: '' };
+      const d = state.activeDiscount;
+      if (d.type === '2x1' || d.type === '3x2') {
+        const units = [];
+        cart.forEach(i => { for (let k = 0; k < i.quantity; k++) units.push(i.unitPrice); });
+        units.sort((a, b) => a - b);
+        const div = d.type === '2x1' ? 2 : 3;
+        const free = Math.floor(units.length / div);
+        let amount = 0;
+        for (let i = 0; i < free; i++) amount += units[i];
+        return { amount, label: `${d.label} (${free} s/cargo)` };
+      }
+      if (d.type === 'percent') return { amount: Math.round(subtotal * (Math.min(100, d.value) / 100)), label: d.label };
+      if (d.type === 'fixed') return { amount: Math.min(subtotal, d.value), label: d.label };
+      return { amount: 0, label: '' };
+    }
+
+    function updateTotals() {
+      const subtotal = state.currentCart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+      const disc = calculateDiscount(subtotal, state.currentCart);
+      const total = Math.max(0, subtotal - disc.amount);
+      document.getElementById('subtotal-display').innerText = formatCurrency(subtotal);
+      document.getElementById('row-discount-display').classList.toggle('hidden', disc.amount <= 0);
+      document.getElementById('discount-label-display').innerText = disc.label;
+      document.getElementById('discount-amount-display').innerText = `-${formatCurrency(disc.amount)}`;
+      document.getElementById('active-discount-badge').innerText = disc.label;
+      document.getElementById('active-discount-badge').classList.toggle('hidden', disc.amount <= 0);
+      document.getElementById('btn-clear-discount').classList.toggle('hidden', disc.amount <= 0);
+      document.getElementById('total-grand').innerText = formatCurrency(total);
+    }
+
+    // ================= CREAR PEDIDO & COMPROBANTE =================
+
+    async function emitAndOpenReceipt() {
+      if (state.currentCart.length === 0) return;
+      const subtotal = state.currentCart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+      const disc = calculateDiscount(subtotal, state.currentCart);
+      const total = Math.max(0, subtotal - disc.amount);
+
+      const payload = {
+        customer_name: document.getElementById('client-name').value.trim() || 'Cliente',
+        customer_phone: document.getElementById('client-phone').value.trim(),
+        customer_address: document.getElementById('client-address').value.trim(),
+        customer_handle: document.getElementById('client-handle').value.trim(),
+        items: state.currentCart.map(i => ({
+          productName: i.productName,
+          unitPrice: i.unitPrice,
+          unitCost: i.unitCost || 0,
+          quantity: i.quantity,
+          subtotal: i.unitPrice * i.quantity
+        })),
+        subtotal,
+        discount_amount: disc.amount,
+        discount_label: disc.label,
+        total,
+        payment_status: state.initialPaymentStatus,
+        dispatch_status: 'to_prepare',
+        notes: document.getElementById('sale-notes').value.trim()
+      };
+
+      try {
+        const res = await api('/api/orders', { method: 'POST', body: JSON.stringify(payload) });
+        const order = res.order;
+        state.orders.unshift(order);
+        state.profile.next_folio_number = res.next_folio_number;
+
+        // Refresh products & customers from server silently
+        const boot = await api('/api/store/bootstrap');
+        state.products = boot.products;
+        state.customers = boot.customers;
+
+        playChimeSound();
+        state.currentCart = [];
+        state.activeDiscount = null;
+        ['client-name', 'client-phone', 'client-address', 'client-handle', 'sale-notes'].forEach(id => {
+          document.getElementById(id).value = '';
+        });
+        setInitialPaymentStatus('pending');
+        renderCart();
+        updateTotals();
+        document.getElementById('label-next-folio').innerText = 'Pedido #' + String(state.profile.next_folio_number).padStart(6, '0');
+        openReceiptModal(order);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function openReceiptModal(order) {
+      state.activeSaleForReceipt = order;
+      const items = typeof order.items_json === 'string' ? JSON.parse(order.items_json) : (order.items || []);
+
+      const logoImg = document.getElementById('receipt-logo-img');
+      const iconBox = document.getElementById('receipt-store-icon-box');
+      const stickerLogo = document.getElementById('sticker-logo-img');
+      if (state.profile.logo_data_url) {
+        logoImg.src = state.profile.logo_data_url;
+        logoImg.classList.remove('hidden');
+        iconBox.classList.add('hidden');
+        stickerLogo.src = state.profile.logo_data_url;
+        stickerLogo.classList.remove('hidden');
+      } else {
+        logoImg.classList.add('hidden');
+        iconBox.classList.remove('hidden');
+        document.getElementById('receipt-store-icon').innerText = state.profile.store_icon || '🛍️';
+        stickerLogo.classList.add('hidden');
+      }
+
+      applyReceiptTheme(state.profile.receipt_theme || 'coquette', false);
+      document.getElementById('receipt-biz-name').innerText = state.profile.name || 'Mi Tienda';
+      document.getElementById('receipt-biz-contact').innerText = [state.profile.phone, state.profile.instagram, state.profile.address].filter(Boolean).join(' • ');
+      document.getElementById('receipt-folio').innerText = order.folio_number;
+      document.getElementById('receipt-tracking-code').innerText = order.tracking_code;
+      document.getElementById('receipt-date').innerText = formatDate(order.created_at);
+      document.getElementById('receipt-client-name').innerText = order.customer_name;
+
+      const phoneEl = document.getElementById('receipt-client-phone');
+      if (phoneEl) {
+        phoneEl.innerText = order.customer_phone ? 'WhatsApp: ' + order.customer_phone : '';
+        phoneEl.classList.toggle('hidden', !order.customer_phone);
+      }
+
+      const handleEl = document.getElementById('receipt-client-handle');
+      handleEl.innerText = order.customer_handle ? 'Ref: ' + order.customer_handle : '';
+      handleEl.classList.toggle('hidden', !order.customer_handle);
+
+      const addrEl = document.getElementById('receipt-client-address');
+      addrEl.innerText = order.customer_address ? 'Envío: ' + order.customer_address : '';
+      addrEl.classList.toggle('hidden', !order.customer_address);
+
+      document.getElementById('receipt-items-list').innerHTML = items.map(i => `
+        <div class="flex justify-between items-center py-2 text-xs">
+          <div class="flex items-start gap-2.5 pr-2">
+            <span class="font-extrabold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-md text-[11px] shrink-0">${i.quantity}x</span>
+            <div>
+              <p class="font-bold text-slate-800 leading-snug">${i.productName}</p>
+              <p class="text-[10px] text-slate-400">${formatCurrency(i.unitPrice)} c/u</p>
+            </div>
+          </div>
+          <span class="font-extrabold text-slate-900 shrink-0">${formatCurrency(i.subtotal)}</span>
+        </div>
+      `).join('');
+
+      document.getElementById('receipt-subtotal').innerText = formatCurrency(order.subtotal);
+      const discRow = document.getElementById('receipt-discount-row');
+      if (order.discount_amount > 0) {
+        discRow.classList.remove('hidden');
+        document.getElementById('receipt-discount-label').innerText = order.discount_label || 'Descuento:';
+        document.getElementById('receipt-discount-amount').innerText = `-${formatCurrency(order.discount_amount)}`;
+      } else {
+        discRow.classList.add('hidden');
+      }
+      document.getElementById('receipt-total').innerText = formatCurrency(order.total);
+
+      const pBadge = document.getElementById('receipt-payment-badge');
+      const sBadge = document.getElementById('sticker-pay-badge');
+      if (order.payment_status === 'paid') {
+        pBadge.className = 'font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800';
+        pBadge.innerText = 'Abonado ✅';
+        sBadge.className = 'inline-block font-extrabold text-[9px] px-2 py-0.5 rounded border bg-emerald-100 text-emerald-900 border-emerald-300';
+        sBadge.innerText = '✅ ABONADO';
+      } else {
+        pBadge.className = 'font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800';
+        pBadge.innerText = 'Pendiente de Abono ⏳';
+        sBadge.className = 'inline-block font-extrabold text-[9px] px-2 py-0.5 rounded border bg-amber-100 text-amber-900 border-amber-300';
+        sBadge.innerText = '⏳ PENDIENTE DE ABONO';
+      }
+
+      const notesBox = document.getElementById('receipt-notes-box');
+      notesBox.classList.toggle('hidden', !order.notes);
+      document.getElementById('receipt-notes').innerText = order.notes || '';
+      document.getElementById('receipt-footer-msg').innerText = state.profile.receipt_footer_message || '';
+
+      document.getElementById('sticker-folio').innerText = order.folio_number;
+      document.getElementById('sticker-tracking').innerText = order.tracking_code;
+      document.getElementById('sticker-client-name').innerText = order.customer_name;
+      document.getElementById('sticker-phone').innerText = order.customer_phone ? 'WhatsApp: ' + order.customer_phone : '';
+      document.getElementById('sticker-address').innerText = order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar';
+      document.getElementById('sticker-checklist').innerHTML = items.map(i => `
+        <div class="flex items-center gap-1.5 font-bold text-slate-900">
+          <span class="w-3.5 h-3.5 border-2 border-slate-900 rounded inline-block"></span>
+          <span>${i.quantity}x ${i.productName}</span>
+        </div>
+      `).join('');
+
+      switchReceiptFormat('full');
+      document.getElementById('modal-receipt').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function switchReceiptFormat(format) {
+      state.currentReceiptView = format;
+      const fullEl = document.getElementById('printable-receipt');
+      const stickerEl = document.getElementById('printable-sticker');
+
+      fullEl.classList.toggle('hidden', format === 'sticker');
+      fullEl.classList.toggle('printable-active', format !== 'sticker');
+      stickerEl.classList.toggle('hidden', format !== 'sticker');
+      stickerEl.classList.toggle('printable-active', format === 'sticker');
+
+      document.getElementById('btn-format-full').className = format === 'full' ? 'px-3 py-1.5 rounded-xl font-bold bg-white text-purple-900 shadow' : 'px-3 py-1.5 rounded-xl font-bold text-white';
+      document.getElementById('btn-format-sticker').className = format === 'sticker' ? 'px-3 py-1.5 rounded-xl font-bold bg-white text-purple-900 shadow' : 'px-3 py-1.5 rounded-xl font-bold text-white';
+    }
+
+    function closeReceiptModal() { document.getElementById('modal-receipt').classList.add('hidden'); }
+
+    async function generateOrderMPLinkFromModal() {
+      const order = state.activeSaleForReceipt;
+      if (!order) return;
+      await generatePaymentLinkForOrder(order.id);
+    }
+
+    async function generatePaymentLinkForOrder(orderId) {
+      try {
+        const res = await api(`/api/orders/${orderId}/payment-link`, { method: 'POST' });
+        const idx = state.orders.findIndex(o => o.id === orderId);
+        if (idx >= 0) state.orders[idx].mp_payment_link = res.payment_link;
+        if (state.activeSaleForReceipt && state.activeSaleForReceipt.id === orderId) {
+          state.activeSaleForReceipt.mp_payment_link = res.payment_link;
+        }
+        if (navigator.clipboard) navigator.clipboard.writeText(res.payment_link).catch(() => {});
+        alert('¡Link de Pago Mercado Pago generado y copiado! Al enviar por WhatsApp se incluirá automáticamente.');
+        if (state.activeTab === 'dispatches') renderDispatchesList();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function captureFullReceiptCanvas() {
+      const isSticker = state.currentReceiptView === 'sticker';
+      const sourceEl = isSticker ? document.getElementById('printable-sticker') : document.getElementById('printable-receipt');
+
+      // Clonar fuera de pantalla sin límites de scroll ni overflow para que NUNCA se corte
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'fixed';
+      wrapper.style.left = '-99999px';
+      wrapper.style.top = '0';
+      wrapper.style.width = isSticker ? '260px' : '380px';
+      wrapper.style.background = '#ffffff';
+      wrapper.style.padding = '12px';
+      wrapper.style.zIndex = '-1';
+
+      const clone = sourceEl.cloneNode(true);
+      clone.classList.remove('hidden');
+      clone.style.width = '100%';
+      clone.style.maxWidth = '100%';
+      clone.style.height = 'auto';
+      clone.style.overflow = 'visible';
+      clone.style.boxShadow = 'none';
+
+      wrapper.appendChild(clone);
+      document.body.appendChild(wrapper);
+
+      try {
+        await new Promise(r => setTimeout(r, 120));
+        const canvas = await html2pdf()
+          .set({
+            html2canvas: {
+              scale: 3,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+              scrollX: 0,
+              scrollY: 0,
+              width: wrapper.scrollWidth,
+              height: wrapper.scrollHeight,
+              windowWidth: wrapper.scrollWidth,
+              windowHeight: wrapper.scrollHeight
+            }
+          })
+          .from(wrapper)
+          .toCanvas()
+          .get('canvas');
+        return canvas;
+      } finally {
+        document.body.removeChild(wrapper);
+      }
+    }
+
+    async function sendReceiptImageToWhatsApp() {
+      const order = state.activeSaleForReceipt;
+      if (!order) return;
+
+      const btnLabel = document.getElementById('btn-master-whatsapp-label');
+      const prevText = btnLabel ? btnLabel.innerText : 'ENVIAR SOLO IMAGEN A WHATSAPP';
+      if (btnLabel) btnLabel.innerText = 'Generando imagen completa... ⏳';
+
+      try {
+        const canvas = await captureFullReceiptCanvas();
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
+        const filename = `Comprobante_${order.folio_number}.png`;
+        const file = new File([blob], filename, { type: 'image/png' });
+
+        // Compartir SOLO LA IMAGEN (sin texto) cuando el navegador móvil lo permite
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file] });
+          return;
+        }
+
+        // En PC (Windows): descarga la imagen completa y la copia al portapapeles para pegarla directo en WhatsApp Web (Ctrl+V)
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          }
+        } catch (clipErr) {}
+
+        const phone = (order.customer_phone || '').replace(/\D/g, '');
+        window.open(phone ? `https://wa.me/${phone}` : 'https://wa.me/', '_blank');
+      } catch (err) {
+        console.error(err);
+        alert('No se pudo generar la imagen completa. Intenta con el botón "Imagen" o "PDF".');
+      } finally {
+        if (btnLabel) btnLabel.innerText = prevText;
+      }
+    }
+
+    async function downloadReceiptImage() {
+      const order = state.activeSaleForReceipt;
+      const folio = order ? order.folio_number : '001';
+      try {
+        const canvas = await captureFullReceiptCanvas();
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = state.currentReceiptView === 'sticker' ? `Etiqueta_${folio}.png` : `Comprobante_${folio}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      } catch (err) {
+        alert('Error al generar la imagen.');
+      }
+    }
+
+    async function downloadActiveView() {
+      const isSticker = state.currentReceiptView === 'sticker';
+      const folio = state.activeSaleForReceipt ? state.activeSaleForReceipt.folio_number : '001';
+      const filename = isSticker ? `Etiqueta_${folio}.pdf` : `Comprobante_${folio}.pdf`;
+      try {
+        const canvas = await captureFullReceiptCanvas();
+        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+        const pdfW = isSticker ? 58 : 85;
+        const pdfH = Math.max(80, (canvas.height * pdfW) / canvas.width + 4);
+        const { jsPDF } = window.jspdf || {};
+        if (jsPDF) {
+          const doc = new jsPDF({ unit: 'mm', format: [pdfW, pdfH], orientation: 'portrait' });
+          doc.addImage(imgData, 'JPEG', 2, 2, pdfW - 4, pdfH - 4);
+          doc.save(filename);
+          return;
+        }
+        // Fallback html2pdf
+        const el = isSticker ? document.getElementById('printable-sticker') : document.getElementById('printable-receipt');
+        html2pdf().set({
+          margin: [3, 3, 3, 3], filename,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2.5, useCORS: true },
+          jsPDF: { unit: 'mm', format: [pdfW, pdfH], orientation: 'portrait' }
+        }).from(el).save();
+      } catch (err) {
+        alert('Error al generar PDF.');
+      }
+    }
+
+    function printActiveView() {
+      window.focus();
+      setTimeout(() => window.print(), 100);
+    }
+
+    async function printThermalBluetooth() {
+      const order = state.activeSaleForReceipt;
+      if (!order) return;
+      if (!navigator.bluetooth) {
+        alert('Tu navegador actual no soporta Bluetooth directo (en iPhone usa el botón "Imprimir" con AirPrint o descarga la Imagen para la app de tu impresora térmica). En Android/Windows usa Google Chrome.');
+        return;
+      }
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2']
+        });
+        const server = await device.gatt.connect();
+        const services = await server.getPrimaryServices();
+        let writeChar = null;
+        for (const svc of services) {
+          const chars = await svc.getCharacteristics();
+          writeChar = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
+          if (writeChar) break;
+        }
+        if (!writeChar) { alert('No se encontró canal de impresión en este dispositivo.'); return; }
+
+        const items = typeof order.items_json === 'string' ? JSON.parse(order.items_json) : [];
+        const lines = [
+          '\x1B\x40', // Init
+          '\x1B\x61\x01', // Center
+          `${(state.profile.name || 'MI COMERCIO').toUpperCase()}\n`,
+          `PEDIDO ${order.folio_number} (${order.tracking_code})\n`,
+          '--------------------------------\n',
+          '\x1B\x61\x00', // Left
+          `Cliente: ${order.customer_name}\n`,
+          order.customer_phone ? `Tel: ${order.customer_phone}\n` : '',
+          order.customer_address ? `Envio: ${order.customer_address}\n` : '',
+          '--------------------------------\n',
+          ...items.map(i => `${i.quantity}x ${i.productName}  ${formatCurrency(i.subtotal)}\n`),
+          '--------------------------------\n',
+          `TOTAL: ${formatCurrency(order.total)}\n`,
+          `Estado: ${order.payment_status === 'paid' ? 'ABONADO' : 'PENDIENTE DE ABONO'}\n\n\n\n`
+        ].join('');
+
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(lines);
+        for (let i = 0; i < bytes.length; i += 100) {
+          await writeChar.writeValue(bytes.slice(i, i + 100));
+        }
+        alert('¡Ticket enviado a la impresora Bluetooth! 🖨️✅');
+      } catch (err) {
+        if (err.name !== 'NotFoundError') {
+          alert('No se pudo conectar a la impresora Bluetooth: ' + err.message);
+        }
+      }
+    }
+
+    // ================= DESPACHOS & COBROS =================
+
+    function setDispatchFilter(f) {
+      state.dispatchFilter = f;
+      ['all', 'pending_pay', 'to_prepare', 'packed', 'dispatched'].forEach(k => {
+        const el = document.getElementById(`df-${k}`);
+        if (el) el.className = k === f ? 'px-2.5 py-1.5 rounded-xl font-bold bg-purple-600 text-white shrink-0' : 'px-2.5 py-1.5 rounded-xl font-bold bg-purple-100 text-purple-800 shrink-0';
+      });
+      renderDispatchesList();
+    }
+
+    function renderDispatchesList() {
+      const container = document.getElementById('dispatches-list');
+      const q = (document.getElementById('dispatch-search')?.value || '').toLowerCase().trim();
+      const filtered = state.orders.filter(o => {
+        if (q && !(o.folio_number.toLowerCase().includes(q) || o.tracking_code.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q))) return false;
+        if (state.dispatchFilter === 'pending_pay') return o.payment_status !== 'paid';
+        if (state.dispatchFilter === 'to_prepare') return o.dispatch_status === 'to_prepare';
+        if (state.dispatchFilter === 'packed') return o.dispatch_status === 'packed';
+        if (state.dispatchFilter === 'dispatched') return o.dispatch_status === 'dispatched' || o.dispatch_status === 'delivered';
+        return true;
+      });
+
+      if (!filtered.length) {
+        container.innerHTML = '<div class="text-center py-8 bg-white rounded-3xl border border-purple-100 text-slate-400">No hay pedidos en esta categoría.</div>';
+        return;
+      }
+
+      const dispatchLabels = {
+        to_prepare: '📦 Por Preparar',
+        packed: '🎁 Empacado',
+        dispatched: '🚚 Despachado',
+        delivered: '✅ Entregado'
+      };
+
+      container.innerHTML = filtered.map(o => {
+        const items = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : [];
+        const isPaid = o.payment_status === 'paid';
+        return `
+          <div class="bg-white rounded-3xl p-4 border border-purple-100 shadow-sm space-y-2.5">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-1.5">
+                  <span class="font-mono font-black text-purple-700">${o.folio_number}</span>
+                  <span class="text-[10px] font-mono bg-purple-50 px-1.5 py-0.5 rounded text-purple-600">${o.tracking_code}</span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
+                    ${isPaid ? 'Abonado ✅' : 'Pend. Abono ⏳'}
+                  </span>
+                </div>
+                <p class="font-bold text-slate-900 mt-1">${o.customer_name} ${o.customer_phone ? '• ' + o.customer_phone : ''}</p>
+                ${o.customer_address ? `<p class="text-[10px] text-slate-500">📍 ${o.customer_address}</p>` : ''}
+              </div>
+              <span class="font-black text-sm text-purple-800">${formatCurrency(o.total)}</span>
+            </div>
+
+            <p class="text-[11px] text-slate-600 bg-purple-50/40 p-2 rounded-xl">${items.map(i => `${i.quantity}x ${i.productName}`).join(', ')}</p>
+
+            <div class="grid grid-cols-2 gap-2">
+              <select onchange="updateOrderStatus('${o.id}', { dispatch_status: this.value })" class="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-xl font-bold text-[11px] text-purple-900">
+                ${Object.entries(dispatchLabels).map(([val, lbl]) => `<option value="${val}" ${o.dispatch_status === val ? 'selected' : ''}>${lbl}</option>`).join('')}
+              </select>
+              <button onclick="openReceiptById('${o.id}')" class="px-2.5 py-1.5 bg-purple-600 text-white font-bold rounded-xl text-[11px]">🧾 Ver Boleta / WhatsApp</button>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5 pt-1 border-t border-purple-50">
+              ${!isPaid ? `
+                <button onclick="generatePaymentLinkForOrder('${o.id}')" class="px-2.5 py-1 bg-sky-100 text-sky-800 font-bold rounded-xl text-[10px]">🔗 ${o.mp_payment_link ? 'Copiar Link MP' : 'Crear Link MP'}</button>
+                <button onclick="verifyOrderPaymentMP('${o.id}')" class="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-xl text-[10px]">🔄 Verificar Pago MP</button>
+                <button onclick="markOrderPaid('${o.id}', '${o.customer_name}', ${o.total})" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-xl text-[10px]">✅ Marcar Abonado</button>
+              ` : ''}
+              <button onclick="editOrderTracking('${o.id}')" class="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold rounded-xl text-[10px]">🚚 ${o.shipping_tracking ? 'Guía: ' + o.shipping_tracking : '+ Cargar Nº Guía'}</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function openReceiptById(id) {
+      const o = state.orders.find(x => x.id === id);
+      if (o) openReceiptModal(o);
+    }
+
+    async function updateOrderStatus(id, patch) {
+      try {
+        const res = await api(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+        const idx = state.orders.findIndex(o => o.id === id);
+        if (idx >= 0 && res.order) state.orders[idx] = res.order;
+        renderDispatchesList();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function markOrderPaid(id, name, total) {
+      await updateOrderStatus(id, { payment_status: 'paid' });
+      triggerPaymentToast(name, total);
+    }
+
+    async function verifyOrderPaymentMP(id) {
+      try {
+        const res = await api(`/api/orders/${id}/check-payment`);
+        if (res.paid) {
+          const idx = state.orders.findIndex(o => o.id === id);
+          if (idx >= 0) state.orders[idx] = res.order;
+          renderDispatchesList();
+          triggerPaymentToast(res.order.customer_name, res.order.total);
+        } else {
+          alert('Mercado Pago aún no registra el abono aprobado para este pedido.');
+        }
+      } catch (err) { alert(err.message); }
+    }
+
+    async function editOrderTracking(id) {
+      const o = state.orders.find(x => x.id === id);
+      const carrier = prompt('Transporte / Correo (ej. Andreani, Correo Argentino, Moto):', o?.shipping_carrier || '');
+      if (carrier === null) return;
+      const tracking = prompt('Código de seguimiento / guía:', o?.shipping_tracking || '');
+      if (tracking === null) return;
+      await updateOrderStatus(id, { shipping_carrier: carrier.trim(), shipping_tracking: tracking.trim(), dispatch_status: 'dispatched' });
+    }
+
+    // ================= CRM CLIENTES =================
+
+    function openCustomerPickerModal() { renderCustomerPickerList(); document.getElementById('modal-customers').classList.remove('hidden'); }
+    function closeCustomerPickerModal() { document.getElementById('modal-customers').classList.add('hidden'); }
+
+    function renderCustomerPickerList() {
+      const q = (document.getElementById('customer-picker-search')?.value || '').toLowerCase().trim();
+      const filtered = state.customers.filter(c => !q || c.name.toLowerCase().includes(q) || (c.phone || '').includes(q));
+      const box = document.getElementById('customer-picker-list');
+      if (!filtered.length) {
+        box.innerHTML = '<p class="text-xs text-slate-400 text-center py-6">Todavía no hay clientes guardados. Se guardan automáticamente al crear un pedido.</p>';
+        return;
+      }
+      box.innerHTML = filtered.map(c => `
+        <div onclick="selectCustomer('${c.id}')" class="p-3 bg-purple-50/50 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer flex justify-between items-center text-xs">
+          <div>
+            <p class="font-bold text-slate-800">${c.name}</p>
+            <p class="text-[10px] text-slate-500">${c.phone || ''} ${c.address ? '• ' + c.address : ''}</p>
+          </div>
+          <span class="text-purple-600 font-bold">Elegir →</span>
+        </div>
+      `).join('');
+    }
+
+    function selectCustomer(id) {
+      const c = state.customers.find(x => x.id === id);
+      if (c) {
+        document.getElementById('client-name').value = c.name || '';
+        document.getElementById('client-phone').value = c.phone || '';
+        document.getElementById('client-address').value = c.address || '';
+        document.getElementById('client-handle').value = c.handle || '';
+        closeCustomerPickerModal();
+      }
+    }
+
+    // ================= CATÁLOGO & STOCK =================
+
+    function filterCatalogByStock(type) {
+      state.stockFilter = type;
+      ['all', 'low', 'out'].forEach(t => {
+        const b = document.getElementById(`filter-stock-${t}`);
+        if (b) b.className = t === type ? 'px-2.5 py-1 rounded-xl text-[10px] font-bold bg-purple-600 text-white' : 'px-2.5 py-1 rounded-xl text-[10px] font-bold bg-purple-100 text-purple-800';
+      });
+      renderCatalogList();
+    }
+
+    function renderCatalogList() {
+      const container = document.getElementById('catalog-products-list');
+      const q = (document.getElementById('catalog-search')?.value || '').toLowerCase().trim();
+      const filtered = state.products.filter(p => {
+        if (q && !(p.name.toLowerCase().includes(q) || (p.barcode || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q))) return false;
+        const st = Number(p.stock) || 0, min = Number(p.min_stock) || 3;
+        if (state.stockFilter === 'low') return st > 0 && st <= min;
+        if (state.stockFilter === 'out') return st <= 0;
+        return true;
+      });
+      if (!filtered.length) {
+        container.innerHTML = '<div class="text-center py-8 bg-white rounded-3xl border border-purple-100 text-slate-400">No hay productos. Agrega uno nuevo o carga ejemplos.</div>';
+        return;
+      }
+      container.innerHTML = filtered.map(p => {
+        const st = Number(p.stock) || 0, min = Number(p.min_stock) || 3;
+        const cost = Number(p.cost_price) || 0;
+        const price = Number(p.price) || 0;
+        const profit = price - cost;
+        const badge = st <= 0 ? '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">🔴 Agotado</span>'
+          : (st <= min ? `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⚠️ Quedan ${st}</span>`
+            : `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">🟢 ${st}</span>`);
+        return `
+          <div class="bg-white rounded-3xl p-3.5 border border-purple-100 shadow-sm flex items-center justify-between text-xs">
+            <div class="min-w-0 pr-2">
+              <div class="flex items-center gap-1.5 flex-wrap"><p class="font-bold text-slate-800">${p.name}</p>${badge}</div>
+              <p class="text-[10px] text-slate-400">${p.category || 'General'} ${p.barcode ? '• ' + p.barcode : ''}</p>
+              <p class="text-[10px] mt-0.5 text-slate-500">
+                Costo: <strong>${formatCurrency(cost)}</strong> • Ganancia: <strong class="text-emerald-700">+${formatCurrency(profit)}</strong>
+              </p>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <div class="flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-xl border border-purple-100">
+                <button onclick="adjustProductStock('${p.id}', -1)" class="w-4 font-bold">-</button>
+                <span class="font-black w-5 text-center">${st}</span>
+                <button onclick="adjustProductStock('${p.id}', 1)" class="w-4 font-bold text-purple-700">+</button>
+              </div>
+              <span class="font-black text-purple-700">${formatCurrency(price)}</span>
+              <button onclick="deleteProduct('${p.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+        `;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    async function adjustProductStock(id, delta) {
+      try {
+        const res = await api(`/api/products/${id}`, { method: 'PATCH', body: JSON.stringify({ stock_delta: delta }) });
+        const idx = state.products.findIndex(p => p.id === id);
+        if (idx >= 0 && res.product) state.products[idx] = res.product;
+        renderCatalogList();
+      } catch (err) { alert(err.message); }
+    }
+
+    function openNewProductModal() {
+      document.getElementById('prod-name').value = '';
+      document.getElementById('prod-cost').value = '';
+      document.getElementById('prod-price').value = '';
+      document.getElementById('prod-category').value = '';
+      document.getElementById('prod-stock').value = '10';
+      document.getElementById('prod-min-stock').value = '3';
+      document.getElementById('prod-barcode').value = '';
+      updateProductProfitPreview();
+      document.getElementById('modal-product-form').classList.remove('hidden');
+    }
+    function closeProductFormModal() { document.getElementById('modal-product-form').classList.add('hidden'); }
+
+    function updateProductProfitPreview() {
+      const cost = parseFloat(document.getElementById('prod-cost').value) || 0;
+      const price = parseFloat(document.getElementById('prod-price').value) || 0;
+      const profit = price - cost;
+      const margin = price > 0 ? Math.round((profit / price) * 100) : 0;
+      const el = document.getElementById('prod-profit-preview');
+      if (el) {
+        el.innerText = `Ganancia por unidad: ${formatCurrency(profit)} (Margen ${margin}%)`;
+        el.className = profit >= 0
+          ? 'p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800 text-center'
+          : 'p-2 bg-rose-50 border border-rose-200 rounded-xl text-[11px] font-bold text-rose-800 text-center';
+      }
+    }
+
+    async function saveProductFromModal() {
+      const name = document.getElementById('prod-name').value.trim();
+      const price = parseFloat(document.getElementById('prod-price').value);
+      const cost_price = parseFloat(document.getElementById('prod-cost').value) || 0;
+      if (!name || isNaN(price) || price < 0) { alert('Completa nombre y precio de venta válidos'); return; }
+      try {
+        const res = await api('/api/products', {
+          method: 'POST',
+          body: JSON.stringify({
+            name, price, cost_price,
+            category: document.getElementById('prod-category').value.trim() || 'General',
+            stock: parseInt(document.getElementById('prod-stock').value) || 0,
+            min_stock: parseInt(document.getElementById('prod-min-stock').value) || 3,
+            barcode: document.getElementById('prod-barcode').value.trim()
+          })
+        });
+        state.products.unshift(res.product);
+        closeProductFormModal();
+        renderCatalogList();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('¿Eliminar este producto?')) return;
+      try {
+        await api(`/api/products/${id}`, { method: 'DELETE' });
+        state.products = state.products.filter(p => p.id !== id);
+        renderCatalogList();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function loadSampleProducts() {
+      try {
+        const res = await api('/api/products/batch-samples', { method: 'POST' });
+        state.products = res.products;
+        renderCatalogList();
+      } catch (err) { alert(err.message); }
+    }
+
+    function openCatalogModal() { renderPickerList(); document.getElementById('modal-catalog').classList.remove('hidden'); }
+    function closeCatalogModal() { document.getElementById('modal-catalog').classList.add('hidden'); }
+
+    function renderPickerList() {
+      const q = (document.getElementById('picker-search')?.value || '').toLowerCase().trim();
+      const filtered = state.products.filter(p => !q || p.name.toLowerCase().includes(q) || (p.barcode || '').toLowerCase().includes(q));
+      const box = document.getElementById('picker-products-list');
+      if (!filtered.length) { box.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Sin productos coincidentes.</p>'; return; }
+      box.innerHTML = filtered.map(p => `
+        <div onclick="selectProductForSale('${p.id}')" class="flex items-center justify-between p-3 bg-purple-50/40 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer text-xs">
+          <div>
+            <p class="font-bold text-slate-800">${p.name}</p>
+            <p class="text-[10px] text-purple-500">${p.category} • Stock: ${p.stock}</p>
+          </div>
+          <span class="font-black text-purple-700">${formatCurrency(p.price)}</span>
+        </div>
+      `).join('');
+    }
+
+    function selectProductForSale(id) {
+      const p = state.products.find(x => x.id === id);
+      if (p) { addProductToCart(p); closeCatalogModal(); }
+    }
+
+    function shareCatalogToWhatsApp() {
+      if (!state.products.length) { alert('Tu catálogo está vacío.'); return; }
+      let msg = `🛍️ *CATÁLOGO - ${(state.profile.name || '').toUpperCase()}*\n\n`;
+      state.products.forEach(p => {
+        msg += `• *${p.name}*: ${formatCurrency(p.price)} (${p.stock > 0 ? 'Disponible' : 'Agotado'})\n`;
+      });
+      msg += `\n💬 Responde con los productos que deseas para armar tu pedido y enviarte el link de pago.`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    // ================= AUDITORÍA & REPOSICIÓN =================
+
+    function renderAuditModule() {
+      const todayStr = new Date().toDateString();
+      const todayOrders = state.orders.filter(o => new Date(o.created_at).toDateString() === todayStr);
+
+      const todayTotal = todayOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+      const todayCost = todayOrders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
+      const todayProfit = todayTotal - todayCost;
+      const paid = todayOrders.filter(o => o.payment_status === 'paid').reduce((s, o) => s + Number(o.total || 0), 0);
+      const pending = todayOrders.filter(o => o.payment_status !== 'paid').reduce((s, o) => s + Number(o.total || 0), 0);
+      const items = todayOrders.reduce((s, o) => {
+        const arr = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : [];
+        return s + arr.reduce((a, i) => a + i.quantity, 0);
+      }, 0);
+
+      document.getElementById('audit-today-total').innerText = formatCurrency(todayTotal);
+      document.getElementById('audit-today-cost').innerText = formatCurrency(todayCost);
+      document.getElementById('audit-today-profit').innerText = formatCurrency(todayProfit);
+      document.getElementById('audit-today-paid').innerText = formatCurrency(paid);
+      document.getElementById('audit-today-pending').innerText = `Pendiente cobro: ${formatCurrency(pending)}`;
+      document.getElementById('audit-items-sold').innerText = `${items} unid.`;
+
+      // Historical Totals
+      const allTotal = state.orders.reduce((s, o) => s + Number(o.total || 0), 0);
+      const allCost = state.orders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
+      const allProfit = allTotal - allCost;
+      const allMargin = allTotal > 0 ? Math.round((allProfit / allTotal) * 100) : 0;
+
+      document.getElementById('audit-all-total').innerText = formatCurrency(allTotal);
+      document.getElementById('audit-all-cost').innerText = formatCurrency(allCost);
+      document.getElementById('audit-all-profit').innerText = formatCurrency(allProfit);
+      document.getElementById('audit-all-margin').innerText = `Margen: ${allMargin}%`;
+      document.getElementById('audit-ticket-avg').innerText = `Total de pedidos registrados: ${state.orders.length}`;
+
+      const good = state.products.filter(p => Number(p.stock) > (Number(p.min_stock) || 3)).length;
+      const low = state.products.filter(p => Number(p.stock) > 0 && Number(p.stock) <= (Number(p.min_stock) || 3)).length;
+      const out = state.products.filter(p => Number(p.stock) <= 0).length;
+      document.getElementById('stock-count-good').innerText = good;
+      document.getElementById('stock-count-low').innerText = low;
+      document.getElementById('stock-count-out').innerText = out;
+
+      const needy = state.products.filter(p => Number(p.stock) <= (Number(p.min_stock) || 3));
+      document.getElementById('restock-needed-list').innerHTML = needy.length
+        ? needy.map(p => `<div class="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 flex justify-between text-xs"><span class="font-bold">${p.name}</span><span class="text-rose-700 font-bold">Stock: ${p.stock}</span></div>`).join('')
+        : '<div class="p-3 bg-emerald-50 rounded-2xl text-emerald-700 font-bold text-center">🎉 Todo el inventario está saludable</div>';
+    }
+
+    function sendRestockOrderToSupplier() {
+      const needy = state.products.filter(p => Number(p.stock) <= (Number(p.min_stock) || 3));
+      if (!needy.length) { alert('No hay productos faltantes.'); return; }
+      let msg = `📦 *PEDIDO DE REPOSICIÓN - ${(state.profile.name || '').toUpperCase()}*\n\n`;
+      needy.forEach((p, i) => { msg += `${i + 1}. *${p.name}* (Stock actual: ${p.stock})\n`; });
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    // ================= CONFIGURACIÓN TIENDA & LOGO =================
+
+    function updateHeaderLogo() {
+      const img = document.getElementById('header-logo-img');
+      const emoji = document.getElementById('header-store-emoji');
+      if (state.profile.logo_data_url) {
+        img.src = state.profile.logo_data_url;
+        img.classList.remove('hidden');
+        emoji.classList.add('hidden');
+      } else {
+        img.classList.add('hidden');
+        emoji.classList.remove('hidden');
+        emoji.innerText = state.profile.store_icon || '🛍️';
+      }
+    }
+
+    function populateSettingsFields() {
+      document.getElementById('setting-name').value = state.profile.name || '';
+      document.getElementById('setting-phone').value = state.profile.phone || '';
+      document.getElementById('setting-instagram').value = state.profile.instagram || '';
+      document.getElementById('setting-address').value = state.profile.address || '';
+      document.getElementById('setting-folio').value = state.profile.next_folio_number || 1001;
+      document.getElementById('setting-footer').value = state.profile.receipt_footer_message || '';
+      selectStoreEmoji(state.profile.store_icon || '🛍️');
+      setCurrencySymbol(state.profile.currency_symbol || '$');
+      applyReceiptTheme(state.profile.receipt_theme || 'coquette', false);
+      if (state.profile.logo_data_url) {
+        document.getElementById('setting-logo-preview').src = state.profile.logo_data_url;
+        document.getElementById('setting-logo-preview').classList.remove('hidden');
+        document.getElementById('btn-remove-logo').classList.remove('hidden');
+      } else {
+        document.getElementById('setting-logo-preview').classList.add('hidden');
+        document.getElementById('btn-remove-logo').classList.add('hidden');
+      }
+      const modeSel = document.getElementById('setting-business-mode');
+      if (modeSel && state.profile.business_mode) modeSel.value = state.profile.business_mode;
+      const colorInp = document.getElementById('setting-custom-color');
+      if (colorInp && state.profile.custom_color) colorInp.value = state.profile.custom_color;
+      updateReceiptLivePreview();
+    }
+
+    function selectStoreEmoji(e) {
+      document.getElementById('setting-store-icon').value = e;
+      const modeSel = document.getElementById('setting-business-mode');
+      if (modeSel && state.profile.business_mode) modeSel.value = state.profile.business_mode;
+      const colorInp = document.getElementById('setting-custom-color');
+      if (colorInp && state.profile.custom_color) colorInp.value = state.profile.custom_color;
+      updateReceiptLivePreview();
+    }
+    function setCurrencySymbol(s) {
+      document.getElementById('setting-currency').value = s;
+      const modeSel = document.getElementById('setting-business-mode');
+      if (modeSel && state.profile.business_mode) modeSel.value = state.profile.business_mode;
+      const colorInp = document.getElementById('setting-custom-color');
+      if (colorInp && state.profile.custom_color) colorInp.value = state.profile.custom_color;
+      updateReceiptLivePreview();
+    }
+
+    function updateReceiptLivePreview() {
+      const name = (document.getElementById('setting-name')?.value || state.profile.name || 'MI TIENDA').trim();
+      const phone = document.getElementById('setting-phone')?.value.trim() || '';
+      const insta = document.getElementById('setting-instagram')?.value.trim() || '';
+      const addr = document.getElementById('setting-address')?.value.trim() || '';
+      const footer = document.getElementById('setting-footer')?.value.trim() || '';
+      const icon = document.getElementById('setting-store-icon')?.value || '🛍️';
+
+      const pName = document.getElementById('preview-biz-name');
+      const pContact = document.getElementById('preview-biz-contact');
+      const pFooter = document.getElementById('preview-footer-msg');
+      const pLogo = document.getElementById('preview-logo-img');
+      const pIcon = document.getElementById('preview-store-icon');
+
+      if (pName) pName.innerText = name.toUpperCase();
+      if (pContact) pContact.innerText = [phone, insta, addr].filter(Boolean).join(' • ');
+      if (pFooter) pFooter.innerText = footer;
+
+      if (state.profile.logo_data_url && pLogo && pIcon) {
+        pLogo.src = state.profile.logo_data_url;
+        pLogo.classList.remove('hidden');
+        pIcon.classList.add('hidden');
+      } else if (pLogo && pIcon) {
+        pLogo.classList.add('hidden');
+        pIcon.classList.remove('hidden');
+        pIcon.innerText = icon;
+      }
+    }
+
+    function handleLogoUpload(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          const maxW = 420;
+          const scale = img.width > maxW ? maxW / img.width : 1;
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const optimized = canvas.toDataURL('image/png');
+          state.profile.logo_data_url = optimized;
+          document.getElementById('setting-logo-preview').src = optimized;
+          document.getElementById('setting-logo-preview').classList.remove('hidden');
+          document.getElementById('btn-remove-logo').classList.remove('hidden');
+          updateReceiptLivePreview();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function removeStoreLogo() {
+      state.profile.logo_data_url = '';
+      document.getElementById('setting-logo-preview').classList.add('hidden');
+      document.getElementById('btn-remove-logo').classList.add('hidden');
+      const modeSel = document.getElementById('setting-business-mode');
+      if (modeSel && state.profile.business_mode) modeSel.value = state.profile.business_mode;
+      const colorInp = document.getElementById('setting-custom-color');
+      if (colorInp && state.profile.custom_color) colorInp.value = state.profile.custom_color;
+      updateReceiptLivePreview();
+    }
+
+    function applyReceiptTheme(theme, save = true) {
+      state.profile.receipt_theme = theme;
+      document.querySelectorAll('.theme-btn').forEach(b => {
+        b.className = b.getAttribute('data-theme') === theme
+          ? 'theme-btn p-2.5 rounded-2xl border-2 border-purple-600 bg-purple-50 text-left'
+          : 'theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left';
+      });
+      const r = document.getElementById('printable-receipt');
+      const bar = document.getElementById('receipt-top-bar');
+      if (r) {
+        r.style.borderColor = theme === 'glam' ? '#F43F5E' : (theme === 'minimal' ? '#0F172A' : (theme === 'neon' ? '#7C3AED' : '#E9D5FF'));
+      }
+      if (bar) {
+        bar.className = theme === 'glam'
+          ? 'h-2.5 w-full rounded-t-[26px] bg-gradient-to-r from-rose-500 via-pink-500 to-fuchsia-600'
+          : (theme === 'minimal'
+            ? 'h-2.5 w-full rounded-t-[26px] bg-slate-900'
+            : (theme === 'neon'
+              ? 'h-2.5 w-full rounded-t-[26px] bg-gradient-to-r from-indigo-600 via-purple-600 to-cyan-500'
+              : 'h-2.5 w-full rounded-t-[26px] bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-700'));
+      }
+    }
+
+    const APP_PALETTES = {
+      violet: { bg: 'linear-gradient(135deg, #F5F3FF 0%, #FDF4FF 50%, #F3E8FF 100%)', grad: 'linear-gradient(135deg, #7C3AED 0%, #C026D3 60%, #6D28D9 100%)', accent: '#7C3AED' },
+      rose:   { bg: 'linear-gradient(135deg, #FFF1F2 0%, #FDF2F8 50%, #FFE4E6 100%)', grad: 'linear-gradient(135deg, #F43F5E 0%, #EC4899 60%, #BE185D 100%)', accent: '#E11D48' },
+      emerald:{ bg: 'linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 50%, #D1FAE5 100%)', grad: 'linear-gradient(135deg, #059669 0%, #10B981 60%, #047857 100%)', accent: '#059669' },
+      blue:   { bg: 'linear-gradient(135deg, #EFF6FF 0%, #F0F9FF 50%, #DBEAFE 100%)', grad: 'linear-gradient(135deg, #2563EB 0%, #0284C7 60%, #1D4ED8 100%)', accent: '#2563EB' },
+      dark:   { bg: 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 50%, #E2E8F0 100%)', grad: 'linear-gradient(135deg, #0F172A 0%, #334155 60%, #1E293B 100%)', accent: '#0F172A' }
+    };
+
+    function applyAppPalette(palette, customHex) {
+      state.profile.app_palette = palette || 'violet';
+      if (customHex) state.profile.custom_color = customHex;
+      const root = document.documentElement;
+
+      if (palette === 'custom' && (customHex || state.profile.custom_color)) {
+        const hex = customHex || state.profile.custom_color;
+        root.style.setProperty('--vf-bg', `linear-gradient(135deg, ${hex}12 0%, #FFFFFF 55%, ${hex}18 100%)`);
+        root.style.setProperty('--vf-grad', `linear-gradient(135deg, ${hex} 0%, ${hex}DD 100%)`);
+        root.style.setProperty('--vf-accent', hex);
+        const meta = document.getElementById('meta-theme-color');
+        if (meta) meta.setAttribute('content', hex);
+      } else {
+        const p = APP_PALETTES[palette] || APP_PALETTES.violet;
+        root.style.setProperty('--vf-bg', p.bg);
+        root.style.setProperty('--vf-grad', p.grad);
+        root.style.setProperty('--vf-accent', p.accent);
+        const meta = document.getElementById('meta-theme-color');
+        if (meta) meta.setAttribute('content', p.accent);
+      }
+
+      document.querySelectorAll('.palette-btn').forEach(b => {
+        b.style.outline = (b.getAttribute('data-palette') === palette) ? '3px solid #0F172A' : 'none';
+      });
+    }
+
+    async function saveBusinessSettings() {
+      try {
+        const res = await api('/api/store/profile', {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: document.getElementById('setting-name').value.trim() || 'Mi Comercio',
+            store_icon: document.getElementById('setting-store-icon').value,
+            logo_data_url: state.profile.logo_data_url || '',
+            receipt_theme: state.profile.receipt_theme || 'coquette',
+            app_palette: state.profile.app_palette || 'violet',
+            custom_color: state.profile.custom_color || '#7C3AED',
+            business_mode: document.getElementById('setting-business-mode')?.value || 'NUEVO PEDIDO PARA DESPACHO',
+            phone: document.getElementById('setting-phone').value.trim(),
+            instagram: document.getElementById('setting-instagram').value.trim(),
+            address: document.getElementById('setting-address').value.trim(),
+            currency_symbol: document.getElementById('setting-currency').value || '$',
+            next_folio_number: parseInt(document.getElementById('setting-folio').value) || 1001,
+            receipt_footer_message: document.getElementById('setting-footer').value.trim()
+          })
+        });
+        state.profile = res.profile;
+        document.getElementById('header-store-title').innerText = state.profile.name;
+        document.title = state.profile.name + ' — App';
+        document.getElementById('label-next-folio').innerText = 'Pedido #' + String(state.profile.next_folio_number).padStart(6, '0');
+        const modeLbl = document.getElementById('label-business-mode');
+        if (modeLbl && state.profile.business_mode) modeLbl.innerText = state.profile.business_mode;
+        applyAppPalette(state.profile.app_palette || 'violet', state.profile.custom_color || '#7C3AED');
+        updateHeaderLogo();
+        alert('¡Configuración guardada en la nube! 💖');
+      } catch (err) { alert(err.message); }
+    }
+
+    // ================= VOICE, MP TOKEN & ADMIN =================
+
+    function openVoiceStudioModal() {
+      document.getElementById('voice-template-input').value = state.profile.voice_template || VOICE_PRESETS.argentina.template;
+      document.getElementById('modal-voice-studio').classList.remove('hidden');
+    }
+    function closeVoiceStudioModal() { document.getElementById('modal-voice-studio').classList.add('hidden'); }
+    function applyVoicePreset(a) { state.profile.voice_accent = a; document.getElementById('voice-template-input').value = VOICE_PRESETS[a].template; }
+    function previewCustomVoice() { speakPOSVoice('Camila Gómez', 15000); }
+    async function saveVoiceSettings() {
+      try {
+        const res = await api('/api/store/profile', {
+          method: 'PUT',
+          body: JSON.stringify({ voice_accent: state.profile.voice_accent || 'argentina', voice_template: document.getElementById('voice-template-input').value.trim() })
+        });
+        state.profile = res.profile;
+        closeVoiceStudioModal();
+      } catch (err) { alert(err.message); }
+    }
+
+    function openMPGuideModal() {
+      document.getElementById('guide-mp-token-input').value = state.profile.mp_access_token || '';
+      document.getElementById('modal-mp-guide').classList.remove('hidden');
+    }
+    function closeMPGuideModal() { document.getElementById('modal-mp-guide').classList.add('hidden'); }
+
+    async function testAndSaveToken() {
+      const token = document.getElementById('guide-mp-token-input').value.trim();
+      const fb = document.getElementById('token-test-feedback');
+      if (!token) { alert('Pega tu Access Token'); return; }
+      try {
+        const res = await api('/api/store/profile', { method: 'PUT', body: JSON.stringify({ mp_access_token: token }) });
+        state.profile = res.profile;
+        updateMPUIStatus();
+        fb.className = 'p-2.5 rounded-xl bg-emerald-50 text-emerald-800 font-bold';
+        fb.innerText = '✅ Token guardado. Ya puedes crear Links de Pago para tus clientes.';
+        fb.classList.remove('hidden');
+      } catch (err) {
+        fb.className = 'p-2.5 rounded-xl bg-rose-50 text-rose-800';
+        fb.innerText = err.message;
+        fb.classList.remove('hidden');
+      }
+    }
+
+    function updateMPUIStatus() {
+      const ok = !!state.profile.mp_access_token;
+      document.getElementById('mp-status-text').innerText = ok ? 'MP Activo ✅' : 'Cobros MP';
+    }
+
+    async function openAdminModal() {
+      document.getElementById('modal-admin').classList.remove('hidden');
+      try {
+        const data = await api('/api/admin/overview');
+        document.getElementById('admin-base-url').value = data.config.public_base_url || window.location.origin;
+        document.getElementById('admin-users-list').innerHTML = data.users.map(u => `
+          <div class="p-3 bg-purple-50/40 rounded-2xl border border-purple-100 flex items-center justify-between">
+            <div>
+              <p class="font-bold text-slate-900">${u.store_name} <span class="text-[10px] text-slate-500">(${u.email})</span></p>
+              <p class="text-[10px] ${u.subscription_status === 'active' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
+                ${u.subscription_status.toUpperCase()} ${u.subscription_expires_at ? '• Vence: ' + formatDate(u.subscription_expires_at) : ''}
+              </p>
+            </div>
+            ${u.role !== 'admin' ? `<button onclick="adminActivateUser(${u.id})" class="px-2.5 py-1 bg-emerald-600 text-white font-bold rounded-xl text-[10px]">+90 días</button>` : ''}
+          </div>
+        `).join('');
+      } catch (err) { alert(err.message); }
+    }
+    function closeAdminModal() { document.getElementById('modal-admin').classList.add('hidden'); }
+    async function saveAdminConfig() {
+      try {
+        await api('/api/admin/config', {
+          method: 'POST',
+          body: JSON.stringify({
+            platform_mp_token: document.getElementById('admin-mp-token').value.trim(),
+            public_base_url: document.getElementById('admin-base-url').value.trim()
+          })
+        });
+        alert('Configuración guardada.');
+      } catch (err) { alert(err.message); }
+    }
+    async function adminActivateUser(uid) {
+      await api('/api/admin/activate-user', { method: 'POST', body: JSON.stringify({ user_id: uid }) });
+      openAdminModal();
+    }
+
+    function switchTab(tab) {
+      state.activeTab = tab;
+      ['sale', 'dispatches', 'catalog', 'audit', 'settings'].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
+        const b = document.getElementById(`nav-btn-${t}`);
+        if (b) { b.classList.toggle('text-purple-600', t === tab); b.classList.toggle('text-slate-400', t !== tab); }
+      });
+      if (tab === 'dispatches') renderDispatchesList();
+      if (tab === 'catalog') renderCatalogList();
+      if (tab === 'audit') renderAuditModule();
+      if (tab === 'settings') populateSettingsFields();
+      lucide.createIcons();
+    }
+
+    let deferredInstallPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      const banner = document.getElementById('install-app-banner');
+      if (banner) banner.classList.remove('hidden');
+    });
+
+    async function installAsApp() {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        const choice = await deferredInstallPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          document.getElementById('install-app-banner')?.classList.add('hidden');
+        }
+        deferredInstallPrompt = null;
+      } else {
+        alert('En iPhone (Safari): toca el botón Compartir (cuadro con flecha arriba) y elige "Agregar a pantalla de inicio". En Android/Chrome: abre el menú ⋮ y toca "Instalar aplicación".');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (!isStandalone && isIOS) {
+        document.getElementById('install-app-banner')?.classList.remove('hidden');
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('sub') === 'activated') {
+        setTimeout(() => { if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 80 }); }, 400);
+        window.history.replaceState({}, '', '/');
+      }
+      refreshAuthStatus();
+    });
+  </script>
+</body>
+</html>

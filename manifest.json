@@ -1,0 +1,19 @@
+{
+  "name": "VentaFlow POS",
+  "short_name": "VentaFlow",
+  "description": "Tu sistema de pedidos, despachos, costos, ganancias y cobros con Mercado Pago.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F3FF",
+  "theme_color": "#7C3AED",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
