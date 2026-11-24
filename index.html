@@ -1063,8 +1063,9 @@
 
       <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
         <span class="font-bold text-slate-800 block">1. Tu Cuenta Receptora de Suscripciones (Mercado Pago)</span>
-        <input type="password" id="admin-mp-token" placeholder="Pega aquí tu PLATFORM_MP_ACCESS_TOKEN (APP_USR-...)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-[11px]">
-        <input type="text" id="admin-base-url" placeholder="URL pública (ej. https://mi-pos.onrender.com)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
+        <input type="password" id="admin-mp-token" placeholder="Access Token de Producción (APP_USR-...)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-[11px]">
+        <input type="url" id="admin-mp-pay-link" placeholder="O Link de Pago directo $10.000 (ej. https://mpago.la/...)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
+        <input type="text" id="admin-base-url" placeholder="URL pública (ej. https://ventaflow-pos.onrender.com)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
         <button onclick="saveAdminConfig()" class="w-full py-2 bg-slate-900 text-white font-bold rounded-xl">Guardar Configuración de Cobros</button>
       </div>
 
@@ -1263,7 +1264,10 @@
       try {
         const data = await api('/api/subscription/create-checkout', { method: 'POST' });
         if (data.init_point) {
-          window.location.href = data.init_point;
+          msg.className = 'p-3 rounded-2xl text-xs font-semibold bg-sky-50 border border-sky-200 text-sky-900';
+          msg.innerText = 'Redirigiendo a Mercado Pago dentro de la app... 💳';
+          msg.classList.remove('hidden');
+          window.location.assign(data.init_point);
           return;
         }
       } catch (err) {
@@ -2603,6 +2607,8 @@
       try {
         const data = await api('/api/admin/overview');
         document.getElementById('admin-base-url').value = data.config.public_base_url || window.location.origin;
+        const linkEl = document.getElementById('admin-mp-pay-link');
+        if (linkEl) linkEl.value = data.config.platform_mp_pay_link || '';
         document.getElementById('admin-users-list').innerHTML = data.users.map(u => `
           <div class="p-3 bg-purple-50/40 rounded-2xl border border-purple-100 flex items-center justify-between">
             <div>
@@ -2623,6 +2629,7 @@
           method: 'POST',
           body: JSON.stringify({
             platform_mp_token: document.getElementById('admin-mp-token').value.trim(),
+            platform_mp_pay_link: document.getElementById('admin-mp-pay-link')?.value.trim() || '',
             public_base_url: document.getElementById('admin-base-url').value.trim()
           })
         });

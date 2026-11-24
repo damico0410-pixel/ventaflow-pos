@@ -33,6 +33,7 @@ def utc_now():
 def load_config():
     cfg = {
         "PLATFORM_MP_ACCESS_TOKEN": os.environ.get("PLATFORM_MP_ACCESS_TOKEN", ""),
+        "PLATFORM_MP_PAY_LINK": os.environ.get("PLATFORM_MP_PAY_LINK", ""),
         "PUBLIC_BASE_URL": os.environ.get("PUBLIC_BASE_URL", ""),
         "ADMIN_EMAIL": os.environ.get("ADMIN_EMAIL", "admin@comprobantespos.com"),
         "ADMIN_PASSWORD": os.environ.get("ADMIN_PASSWORD", "admin1234"),
@@ -578,6 +579,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     'config': {
                         'mp_platform_configured': bool(cfg.get('PLATFORM_MP_ACCESS_TOKEN')),
                         'mp_token_masked': (cfg['PLATFORM_MP_ACCESS_TOKEN'][:12] + '...') if cfg.get('PLATFORM_MP_ACCESS_TOKEN') else '',
+                        'platform_mp_pay_link': cfg.get('PLATFORM_MP_PAY_LINK', ''),
                         'public_base_url': cfg.get('PUBLIC_BASE_URL', '')
                     }
                 })
@@ -698,9 +700,13 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 cfg = load_config()
                 mp_token = cfg.get('PLATFORM_MP_ACCESS_TOKEN', '')
+                mp_pay_link = cfg.get('PLATFORM_MP_PAY_LINK', '')
                 if not mp_token:
+                    if mp_pay_link:
+                        self.send_json(200, {'init_point': mp_pay_link, 'mode': 'direct_link'})
+                        return
                     self.send_json(400, {
-                        'error': 'Falta configurar el Access Token de Mercado Pago de la plataforma en Panel Admin.',
+                        'error': 'Configura tu Access Token (APP_USR-...) o tu Link de Pago de $10.000 en el Panel Admin para activar el botón de Mercado Pago.',
                         'demo_available': True
                     })
                     return
@@ -1050,6 +1056,8 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 updates = {}
                 if 'platform_mp_token' in body and body['platform_mp_token'].strip():
                     updates['PLATFORM_MP_ACCESS_TOKEN'] = body['platform_mp_token'].strip()
+                if 'platform_mp_pay_link' in body:
+                    updates['PLATFORM_MP_PAY_LINK'] = body['platform_mp_pay_link'].strip()
                 if 'public_base_url' in body:
                     updates['PUBLIC_BASE_URL'] = body['public_base_url'].strip()
                 save_config(updates)
