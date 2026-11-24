@@ -36,6 +36,11 @@
   </script>
 
   <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      overflow-x: hidden;
+      max-width: 100%;
+    }
     :root {
       --vf-bg: linear-gradient(135deg, #F5F3FF 0%, #FDF4FF 50%, #F3E8FF 100%);
       --vf-grad: linear-gradient(135deg, #7C3AED 0%, #C026D3 60%, #6D28D9 100%);
@@ -234,8 +239,9 @@
         <button onclick="openAdminModal()" id="btn-open-admin" class="hidden px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 text-white shadow-sm">
           Admin
         </button>
-        <button onclick="openVoiceStudioModal()" class="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[11px] font-bold bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-200" title="Voz de avisos">
-          <i data-lucide="volume-2" class="w-3.5 h-3.5 text-purple-600"></i>
+        <button onclick="openGuideModal()" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200" title="Guía de funciones">
+          <i data-lucide="help-circle" class="w-3.5 h-3.5 text-purple-600"></i>
+          <span>Guía</span>
         </button>
         <button onclick="openMPGuideModal()" id="mp-status-pill" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-violet-100 hover:bg-violet-200 text-violet-800 border border-violet-200">
           <i data-lucide="key" class="w-3.5 h-3.5 text-violet-600"></i>
@@ -279,41 +285,47 @@
 
         <!-- 1. Cliente & Datos de Envío -->
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <i data-lucide="user" class="w-4 h-4 text-purple-600"></i>
-              1. Cliente &amp; Envío
-            </h3>
-            <button type="button" onclick="openCustomerPickerModal()" class="text-[11px] font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <i data-lucide="user" class="w-4 h-4 text-purple-600 shrink-0"></i>
+                1. Cliente &amp; Envío
+              </h3>
+              <p class="text-[10px] text-slate-400 mt-0.5">Se guarda automáticamente para futuros pedidos.</p>
+            </div>
+            <button type="button" onclick="openCustomerPickerModal()" class="text-[11px] font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1 shrink-0">
               <i data-lucide="users" class="w-3 h-3"></i>
-              <span>Clientes Guardados</span>
+              <span>Clientes</span>
             </button>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <input type="text" id="client-name" placeholder="Nombre del cliente *" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
-            <input type="tel" id="client-phone" placeholder="WhatsApp (ej. 54911...)" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800">
+            <input type="text" id="client-name" placeholder="Nombre del cliente *" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
+            <input type="tel" id="client-phone" placeholder="WhatsApp (ej. 54911...)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800">
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <input type="text" id="client-address" placeholder="Dirección / Localidad de entrega" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
-            <input type="text" id="client-handle" placeholder="Referencia / @usuario (opc.)" class="w-full px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+            <input type="text" id="client-address" placeholder="Dirección / Localidad" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+            <input type="text" id="client-handle" placeholder="Referencia / @red (opc.)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
           </div>
         </div>
 
         <!-- 2. Productos a Despachar -->
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <i data-lucide="package" class="w-4 h-4 text-purple-600"></i>
-              2. Productos a Despachar
-            </h3>
-            <div class="flex items-center gap-1.5">
-              <button type="button" onclick="openBarcodeScannerModal()" class="text-xs font-bold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:opacity-90 flex items-center gap-1 px-2.5 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <i data-lucide="package" class="w-4 h-4 text-purple-600 shrink-0"></i>
+                2. Productos a Despachar
+              </h3>
+              <p class="text-[10px] text-slate-400 mt-0.5">Escanea, elige del catálogo o carga uno rápido.</p>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button type="button" onclick="openBarcodeScannerModal()" class="text-[11px] font-bold text-white vf-brand-grad hover:opacity-90 flex items-center gap-1 px-2.5 py-1.5 rounded-xl shadow-sm active:scale-95 transition-all">
                 <i data-lucide="scan" class="w-3.5 h-3.5 text-amber-300"></i>
                 <span>Escanear</span>
               </button>
-              <button type="button" onclick="openCatalogModal()" class="text-xs font-bold text-purple-700 flex items-center gap-1 bg-purple-100 px-2.5 py-1.5 rounded-xl">
+              <button type="button" onclick="openCatalogModal()" class="text-[11px] font-bold text-purple-700 flex items-center gap-1 bg-purple-100 px-2.5 py-1.5 rounded-xl">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                 <span>Catálogo</span>
               </button>
@@ -321,10 +333,10 @@
           </div>
 
           <!-- Carga rápida manual -->
-          <div class="p-2.5 bg-purple-50/70 rounded-2xl border border-purple-100 flex gap-2">
-            <input type="text" id="quick-live-name" placeholder="Agregar producto rápido..." class="flex-1 px-3 py-1.5 text-xs bg-white border border-purple-200 rounded-xl focus:outline-none">
-            <input type="number" id="quick-live-price" placeholder="Precio" class="w-20 px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-xl focus:outline-none text-right font-bold">
-            <button onclick="addQuickLiveItem()" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-sm">
+          <div class="p-2 bg-purple-50/70 rounded-2xl border border-purple-100 flex items-center gap-1.5">
+            <input type="text" id="quick-live-name" placeholder="Producto rápido..." class="flex-1 min-w-0 px-2.5 py-1.5 text-xs bg-white border border-purple-200 rounded-xl focus:outline-none">
+            <input type="number" id="quick-live-price" placeholder="Precio" class="w-20 shrink-0 px-2 py-1.5 text-xs bg-white border border-purple-200 rounded-xl focus:outline-none text-right font-bold">
+            <button onclick="addQuickLiveItem()" class="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-sm shrink-0">
               + Sumar
             </button>
           </div>
@@ -332,15 +344,16 @@
           <div id="cart-items-container" class="space-y-2 min-h-[70px] flex flex-col justify-center"></div>
 
           <!-- Promociones & Descuentos -->
-          <div class="pt-2 border-t border-purple-100 space-y-1.5">
-            <div class="flex items-center justify-between">
+          <div class="pt-2.5 border-t border-purple-100 space-y-1.5">
+            <div class="flex items-center justify-between gap-2">
               <span class="text-[11px] font-bold text-slate-700 flex items-center gap-1">
                 <i data-lucide="percent" class="w-3.5 h-3.5 text-fuchsia-600"></i>
-                Promociones &amp; Descuentos:
+                Promos &amp; Descuentos
               </span>
-              <span id="active-discount-badge" class="text-[10px] font-extrabold text-fuchsia-700 bg-fuchsia-100 px-2 py-0.5 rounded-full hidden"></span>
+              <span id="active-discount-badge" class="text-[10px] font-extrabold text-fuchsia-700 bg-fuchsia-100 px-2 py-0.5 rounded-full hidden truncate max-w-[160px]"></span>
             </div>
-            <div class="flex flex-wrap gap-1.5">
+            <p class="text-[10px] text-slate-400">Se aplican sobre el pedido antes de generar la boleta.</p>
+            <div class="flex flex-wrap gap-1.5 pt-0.5">
               <button type="button" onclick="applyPromoOrDiscount('2x1')" id="btn-promo-2x1" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">🎁 2x1</button>
               <button type="button" onclick="applyPromoOrDiscount('3x2')" id="btn-promo-3x2" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">🎉 3x2</button>
               <button type="button" onclick="applyPromoOrDiscount('pct10')" id="btn-promo-pct10" class="promo-chip px-2.5 py-1 rounded-xl text-[11px] font-bold border border-purple-200 bg-purple-50 text-purple-800">-10%</button>
@@ -357,16 +370,19 @@
 
         <!-- 3. Estado de Pago & Notas de Despacho -->
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5 text-xs">
-          <span class="font-bold text-slate-700 block">3. Estado del Abono &amp; Notas de Empaque</span>
+          <div>
+            <span class="font-bold text-slate-800 block uppercase tracking-wider">3. Estado del Abono &amp; Notas</span>
+            <p class="text-[10px] text-slate-400 mt-0.5">Define si ya abonó o si quedará pendiente para enviar Link de Pago.</p>
+          </div>
           <div class="grid grid-cols-2 gap-2">
-            <button type="button" onclick="setInitialPaymentStatus('pending')" id="btn-pay-status-pending" class="py-2 px-3 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold text-center">
+            <button type="button" onclick="setInitialPaymentStatus('pending')" id="btn-pay-status-pending" class="py-2 px-2 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold text-center text-[11px]">
               ⏳ Pendiente de Abono
             </button>
-            <button type="button" onclick="setInitialPaymentStatus('paid')" id="btn-pay-status-paid" class="py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center">
+            <button type="button" onclick="setInitialPaymentStatus('paid')" id="btn-pay-status-paid" class="py-2 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center text-[11px]">
               ✅ Ya Abonado
             </button>
           </div>
-          <input type="text" id="sale-notes" placeholder="Indicaciones para el despacho (ej. Frágil, entregar de 14 a 18hs...)" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none">
+          <input type="text" id="sale-notes" placeholder="Indicaciones para el despacho (ej. Frágil, horario...)" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none">
         </div>
 
         <!-- Total & Crear Pedido -->
@@ -384,7 +400,7 @@
             <span id="total-grand" class="text-2xl font-black text-purple-700 tracking-tight">$ 0</span>
           </div>
 
-          <button onclick="emitAndOpenReceipt()" id="btn-emit" disabled class="w-full py-4 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-purple-700 hover:opacity-95 disabled:from-slate-200 disabled:to-slate-200 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-purple-500/25 transition-all active:scale-[0.98]">
+          <button onclick="emitAndOpenReceipt()" id="btn-emit" disabled class="w-full py-4 vf-brand-grad hover:opacity-95 disabled:opacity-40 disabled:cursor-not-allowed text-white font-extrabold rounded-2xl flex items-center justify-center gap-2 shadow-xl transition-all active:scale-[0.98]">
             <i data-lucide="file-check" class="w-5 h-5 text-amber-300"></i>
             <span>CREAR PEDIDO Y VER COMPROBANTE</span>
           </button>
@@ -393,10 +409,10 @@
 
       <!-- TAB 2: DESPACHOS Y COBROS -->
       <div id="tab-dispatches" class="space-y-3.5 hidden text-xs">
-        <div class="bg-gradient-to-r from-violet-700 via-purple-800 to-fuchsia-800 rounded-3xl p-4 text-white shadow-xl flex items-center justify-between">
+        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg flex items-center justify-between">
           <div>
             <h3 class="font-bold text-sm font-serif">Despachos &amp; Cobros</h3>
-            <p class="text-[11px] text-purple-200">Controla quién abonó y prepara los envíos</p>
+            <p class="text-[11px] text-white/85">Genera links de pago, verifica abonos y actualiza envíos.</p>
           </div>
           <span class="text-2xl">🚚</span>
         </div>
@@ -419,12 +435,12 @@
 
       <!-- TAB 3: CATÁLOGO DE PRODUCTOS -->
       <div id="tab-catalog" class="space-y-3.5 hidden text-xs">
-        <div class="flex items-center justify-between">
-          <div>
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
             <h2 class="text-base font-bold text-slate-800 font-serif">Mis Productos</h2>
-            <p class="text-[11px] text-slate-400">Stock sincronizado en la nube</p>
+            <p class="text-[11px] text-slate-400">Costos, ganancia por unidad, stock y catálogo WhatsApp.</p>
           </div>
-          <button onclick="openNewProductModal()" class="text-xs font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white px-3 py-2 rounded-2xl flex items-center gap-1 shadow-md">
+          <button onclick="openNewProductModal()" class="text-xs font-bold vf-brand-grad text-white px-3 py-2 rounded-2xl flex items-center gap-1 shadow-md shrink-0">
             <i data-lucide="plus" class="w-4 h-4"></i>
             <span>Nuevo Producto</span>
           </button>
@@ -686,9 +702,20 @@
             <p id="preview-footer-msg" class="text-[10px] italic text-purple-700 pt-1 border-t border-dashed border-purple-200"></p>
           </div>
 
-          <button onclick="saveBusinessSettings()" class="w-full py-3.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-purple-700 text-white font-extrabold rounded-2xl shadow-xl">
+          <button onclick="saveBusinessSettings()" class="w-full py-3.5 vf-brand-grad text-white font-extrabold rounded-2xl shadow-xl">
             GUARDAR CAMBIOS EN LA NUBE 💖
           </button>
+
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button type="button" onclick="openVoiceStudioModal()" class="py-2.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold rounded-xl border border-purple-200 flex items-center justify-center gap-1.5 text-[11px]">
+              <i data-lucide="volume-2" class="w-4 h-4"></i>
+              <span>Voz de Pagos</span>
+            </button>
+            <button type="button" onclick="openGuideModal()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 text-[11px]">
+              <i data-lucide="help-circle" class="w-4 h-4"></i>
+              <span>Guía de la App</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1073,6 +1100,44 @@
         <span class="font-bold text-slate-800 block">2. Comercios Registrados</span>
         <div id="admin-users-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: GUÍA DE FUNCIONES PARA EL CLIENTE -->
+  <div id="modal-guide" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto">
+    <div class="bg-white w-full max-w-md rounded-[32px] p-5 shadow-2xl space-y-3.5 my-auto text-xs max-h-[88vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-3">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">✨ Guía Rápida de Tu App</h3>
+          <p class="text-[10px] text-slate-500">Todo lo que incluye tu suscripción y cómo usarlo</p>
+        </div>
+        <button onclick="closeGuideModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <div class="space-y-2.5">
+        <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
+          <p class="font-bold text-purple-950">1. 🛍️ Pedido</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Carga cliente, escanea o elige productos, aplica promos (2x1, 3x2, % o monto libre) y emite el comprobante en imagen limpia con tu logo.</p>
+        </div>
+        <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
+          <p class="font-bold text-purple-950">2. 🚚 Despachos</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Genera un Link de Pago de Mercado Pago por pedido, verifica si abonaron, carga el Nº de Guía y actualiza el envío (Preparando → Empacado → Despachado).</p>
+        </div>
+        <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
+          <p class="font-bold text-purple-950">3. 🏷️ Catálogo</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Registra Precio Costo, Precio Venta, stock mínimo y código de barras. El stock se descuenta solo y puedes compartir tu catálogo por WhatsApp.</p>
+        </div>
+        <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
+          <p class="font-bold text-purple-950">4. 📊 Resumen</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Ve tu Total Vendido, el Costo de Reposición, tu Ganancia Propia Neta y pide mercadería faltante al proveedor por WhatsApp.</p>
+        </div>
+        <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
+          <p class="font-bold text-purple-950">5. 🧾 Tienda (100% Personalizable)</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Sube tu logo, cambia el color completo de toda la app, elige tu rubro, diseña tus boletas y conecta tu Mercado Pago en "Cobros MP".</p>
+        </div>
+      </div>
+
+      <button onclick="closeGuideModal()" class="w-full py-3 vf-brand-grad text-white font-bold rounded-2xl shadow">¡Entendido!</button>
     </div>
   </div>
 
@@ -2560,6 +2625,8 @@
       document.getElementById('modal-voice-studio').classList.remove('hidden');
     }
     function closeVoiceStudioModal() { document.getElementById('modal-voice-studio').classList.add('hidden'); }
+    function openGuideModal() { document.getElementById('modal-guide').classList.remove('hidden'); }
+    function closeGuideModal() { document.getElementById('modal-guide').classList.add('hidden'); }
     function applyVoicePreset(a) { state.profile.voice_accent = a; document.getElementById('voice-template-input').value = VOICE_PRESETS[a].template; }
     function previewCustomVoice() { speakPOSVoice('Camila Gómez', 15000); }
     async function saveVoiceSettings() {
