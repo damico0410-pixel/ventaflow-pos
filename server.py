@@ -252,6 +252,7 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
     ''')
+    conn.commit()
 
     # Safe migrations for existing databases
     for alter_sql in [
