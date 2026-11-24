@@ -71,7 +71,70 @@ def verify_password(password, stored_hash):
         return False
 
 
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+IS_POSTGRES = bool(DATABASE_URL)
+
+
+class PgCursorWrapper:
+    def __init__(self, cur):
+        self._cur = cur
+        self.lastrowid = None
+
+    def execute(self, sql, params=()):
+        q = sql.replace('?', '%s')
+        if 'INSERT OR IGNORE INTO' in q:
+            q = q.replace('INSERT OR IGNORE INTO', 'INSERT INTO') + ' ON CONFLICT DO NOTHING'
+        want_id = q.lstrip().upper().startswith('INSERT INTO USERS ')
+        if want_id and 'RETURNING' not in q.upper():
+            q = q.rstrip().rstrip(';') + ' RETURNING id'
+        self._cur.execute(q, params)
+        if want_id:
+            row = self._cur.fetchone()
+            if row:
+                self.lastrowid = row['id'] if isinstance(row, dict) else row[0]
+        return self
+
+    def executescript(self, script):
+        pg_sql = script.replace('INTEGER PRIMARY KEY AUTOINCREMENT', 'SERIAL PRIMARY KEY')
+        for stmt in pg_sql.split(';'):
+            s = stmt.strip()
+            if s:
+                self._cur.execute(s)
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+
+class PgConnWrapper:
+    def __init__(self, dsn):
+        import psycopg2
+        import psycopg2.extras
+        self._conn = psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
+
+    def cursor(self):
+        return PgCursorWrapper(self._conn.cursor())
+
+    def execute(self, sql, params=()):
+        cur = self.cursor()
+        cur.execute(sql, params)
+        return cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
+
+
 def get_db():
+    if IS_POSTGRES:
+        return PgConnWrapper(DATABASE_URL)
     conn = sqlite3.connect(DB_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
     return conn
@@ -201,8 +264,10 @@ def init_db():
     ]:
         try:
             c.execute(alter_sql)
+            conn.commit()
         except Exception:
-            pass
+            if IS_POSTGRES:
+                conn.rollback()
 
     # Ensure default admin user exists
     cfg = load_config()
@@ -1099,6 +1164,36 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     conn.commit()
                 profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
                 self.send_json(200, {'profile': dict(profile)})
+            finally:
+                conn.close()
+            return
+
+        if path.startswith('/api/products/'):
+            pid = path.split('/')[-1]
+            conn = get_db()
+            try:
+                user = self.require_active_user(conn)
+                if not user:
+                    return
+                conn.execute(
+                    '''UPDATE products
+                       SET name = ?, price = ?, cost_price = ?, category = ?, stock = ?, min_stock = ?, barcode = ?, sku = ?
+                       WHERE id = ? AND user_id = ?''',
+                    (
+                        (body.get('name') or '').strip(),
+                        float(body.get('price') or 0),
+                        float(body.get('cost_price') or 0),
+                        (body.get('category') or 'General').strip(),
+                        int(body.get('stock') or 0),
+                        int(body.get('min_stock') or 3),
+                        (body.get('barcode') or '').strip(),
+                        (body.get('barcode') or '').strip(),
+                        pid, user['id']
+                    )
+                )
+                conn.commit()
+                prod = conn.execute('SELECT * FROM products WHERE id = ? AND user_id = ?', (pid, user['id'])).fetchone()
+                self.send_json(200, {'product': dict(prod) if prod else None})
             finally:
                 conn.close()
             return

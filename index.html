@@ -15,7 +15,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -1435,7 +1435,11 @@
     }
 
     function startCameraScanner() {
-      if (typeof Html5Qrcode === 'undefined') return;
+      const readerEl = document.getElementById('scanner-reader');
+      if (typeof Html5Qrcode === 'undefined') {
+        if (readerEl) readerEl.innerHTML = '<p class="text-white text-xs p-6 text-center">Escáner no disponible. Ingresa el código manualmente abajo.</p>';
+        return;
+      }
       if (state.html5QrScanner) try { state.html5QrScanner.stop().catch(() => {}); } catch (e) {}
       try {
         state.html5QrScanner = new Html5Qrcode("scanner-reader");
@@ -1444,8 +1448,12 @@
           { fps: 15, qrbox: { width: 220, height: 150 } },
           onBarcodeScanSuccess,
           () => {}
-        ).catch(() => {});
-      } catch (e) {}
+        ).catch(() => {
+          if (readerEl) readerEl.innerHTML = '<p class="text-white text-xs p-6 text-center">📷 No se pudo abrir la cámara (requiere HTTPS y permiso de cámara). Puedes escribir el código abajo.</p>';
+        });
+      } catch (e) {
+        if (readerEl) readerEl.innerHTML = '<p class="text-white text-xs p-6 text-center">📷 Cámara no disponible. Escribe el código abajo.</p>';
+      }
     }
 
     function stopCameraScanner() {
@@ -1824,61 +1832,450 @@
           state.activeSaleForReceipt.mp_payment_link = res.payment_link;
         }
         if (navigator.clipboard) navigator.clipboard.writeText(res.payment_link).catch(() => {});
-        alert('¡Link de Pago Mercado Pago generado y copiado! Al enviar por WhatsApp se incluirá automáticamente.');
+        alert('¡Link de Pago Mercado Pago generado y copiado! ✅');
         if (state.activeTab === 'dispatches') renderDispatchesList();
       } catch (err) {
-        alert(err.message);
+        if (err.status === 400 && confirm(err.message + '\n\n¿Quieres ir a configurar tu Token de Mercado Pago ahora?')) {
+          openMPGuideModal();
+        } else {
+          alert(err.message);
+        }
       }
     }
 
-    async function captureFullReceiptCanvas() {
-      const isSticker = state.currentReceiptView === 'sticker';
-      const sourceEl = isSticker ? document.getElementById('printable-sticker') : document.getElementById('printable-receipt');
-
-      // Clonar fuera de pantalla sin límites de scroll ni overflow para que NUNCA se corte
-      const wrapper = document.createElement('div');
-      wrapper.style.position = 'fixed';
-      wrapper.style.left = '-99999px';
-      wrapper.style.top = '0';
-      wrapper.style.width = isSticker ? '260px' : '380px';
-      wrapper.style.background = '#ffffff';
-      wrapper.style.padding = '12px';
-      wrapper.style.zIndex = '-1';
-
-      const clone = sourceEl.cloneNode(true);
-      clone.classList.remove('hidden');
-      clone.style.width = '100%';
-      clone.style.maxWidth = '100%';
-      clone.style.height = 'auto';
-      clone.style.overflow = 'visible';
-      clone.style.boxShadow = 'none';
-
-      wrapper.appendChild(clone);
-      document.body.appendChild(wrapper);
-
-      try {
-        await new Promise(r => setTimeout(r, 120));
-        const canvas = await html2pdf()
-          .set({
-            html2canvas: {
-              scale: 3,
-              useCORS: true,
-              backgroundColor: '#ffffff',
-              scrollX: 0,
-              scrollY: 0,
-              width: wrapper.scrollWidth,
-              height: wrapper.scrollHeight,
-              windowWidth: wrapper.scrollWidth,
-              windowHeight: wrapper.scrollHeight
-            }
-          })
-          .from(wrapper)
-          .toCanvas()
-          .get('canvas');
-        return canvas;
-      } finally {
-        document.body.removeChild(wrapper);
+    function wrapCanvasLines(ctx, text, maxWidth) {
+      if (!text) return [];
+      const words = String(text).split(/\s+/);
+      const lines = [];
+      let current = '';
+      for (const w of words) {
+        const test = current ? current + ' ' + w : w;
+        if (ctx.measureText(test).width > maxWidth && current) {
+          lines.push(current);
+          current = w;
+        } else {
+          current = test;
+        }
       }
+      if (current) lines.push(current);
+      return lines;
+    }
+
+    function drawRoundedRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    async function loadImageSafe(src) {
+      if (!src) return null;
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+      });
+    }
+
+    async function captureFullReceiptCanvas() {
+      const order = state.activeSaleForReceipt;
+      if (!order) throw new Error('No hay pedido activo.');
+      const isSticker = state.currentReceiptView === 'sticker';
+      const items = typeof order.items_json === 'string' ? JSON.parse(order.items_json) : (order.items || []);
+      const logoImg = await loadImageSafe(state.profile.logo_data_url);
+
+      const theme = state.profile.receipt_theme || 'coquette';
+      const accentColor = theme === 'glam' ? '#E11D48' : (theme === 'minimal' ? '#0F172A' : (theme === 'neon' ? '#6D28D9' : '#7C3AED'));
+      const softBg = theme === 'glam' ? '#FFF1F2' : (theme === 'minimal' ? '#F8FAFC' : '#F5F3FF');
+
+      const W = isSticker ? 680 : 960;
+      const pad = isSticker ? 36 : 56;
+      const contentW = W - pad * 2;
+
+      // Measure canvas
+      const mCanvas = document.createElement('canvas');
+      const mCtx = mCanvas.getContext('2d');
+
+      if (isSticker) {
+        // Measure Sticker Height
+        let h = 40;
+        if (logoImg) h += 100;
+        h += 140; // header + folio + tracking
+        mCtx.font = 'bold 26px sans-serif';
+        const addrLines = wrapCanvasLines(mCtx, order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar', contentW);
+        h += 90 + addrLines.length * 34;
+        mCtx.font = 'bold 26px sans-serif';
+        items.forEach(i => {
+          const lines = wrapCanvasLines(mCtx, `[ ] ${i.quantity}x ${i.productName}`, contentW);
+          h += lines.length * 36 + 12;
+        });
+        h += 130;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = W;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, W, h);
+
+        let y = 36;
+        if (logoImg) {
+          const ratio = Math.min(180 / logoImg.width, 80 / logoImg.height);
+          const lw = logoImg.width * ratio, lh = logoImg.height * ratio;
+          ctx.drawImage(logoImg, (W - lw) / 2, y, lw, lh);
+          y += lh + 16;
+        }
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('ETIQUETA DE DESPACHO', W / 2, y + 20);
+        y += 38;
+
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '900 44px monospace';
+        ctx.fillText(order.folio_number, W / 2, y + 40);
+        y += 54;
+
+        ctx.font = 'bold 24px monospace';
+        ctx.fillText(order.tracking_code, W / 2, y + 22);
+        y += 38;
+
+        ctx.strokeStyle = '#0F172A';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+        y += 28;
+
+        ctx.textAlign = 'left';
+        ctx.font = '800 30px sans-serif';
+        ctx.fillText(order.customer_name, pad, y + 24);
+        y += 42;
+        if (order.customer_phone) {
+          ctx.font = '600 24px sans-serif';
+          ctx.fillStyle = '#334155';
+          ctx.fillText('WhatsApp: ' + order.customer_phone, pad, y + 20);
+          y += 34;
+        }
+        ctx.font = '600 24px sans-serif';
+        ctx.fillStyle = '#334155';
+        addrLines.forEach(l => { ctx.fillText(l, pad, y + 20); y += 34; });
+        y += 12;
+
+        ctx.strokeStyle = '#94A3B8';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+        y += 26;
+
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 20px sans-serif';
+        ctx.fillText('PRODUCTOS A DESPACHAR:', pad, y + 16);
+        y += 34;
+
+        ctx.font = 'bold 26px sans-serif';
+        items.forEach(i => {
+          const lines = wrapCanvasLines(ctx, `[ ] ${i.quantity}x ${i.productName}`, contentW);
+          lines.forEach(l => { ctx.fillText(l, pad, y + 22); y += 34; });
+          y += 8;
+        });
+        y += 14;
+
+        ctx.strokeStyle = '#0F172A';
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+        y += 30;
+
+        const isPaid = order.payment_status === 'paid';
+        ctx.fillStyle = isPaid ? '#065F46' : '#92400E';
+        ctx.font = '900 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(isPaid ? 'ABONADO - LISTO PARA ENVIO' : 'PENDIENTE DE ABONO', W / 2, y + 20);
+        return canvas;
+      }
+
+      // Measure Full Boleta Height
+      let totalH = 32; // top bar + top margin
+      if (logoImg) totalH += 150;
+      else totalH += 90;
+
+      mCtx.font = 'bold 24px sans-serif';
+      const contactText = [state.profile.phone, state.profile.instagram, state.profile.address].filter(Boolean).join(' • ');
+      const contactLines = wrapCanvasLines(mCtx, contactText, contentW);
+      totalH += 65 + contactLines.length * 32 + 30; // brand name + contact + divider
+
+      totalH += 110; // folio + date box
+
+      // Client box
+      mCtx.font = '600 25px sans-serif';
+      const cAddrLines = order.customer_address ? wrapCanvasLines(mCtx, 'Envío: ' + order.customer_address, contentW - 48) : [];
+      let clientBoxH = 95;
+      if (order.customer_phone) clientBoxH += 34;
+      if (order.customer_handle) clientBoxH += 34;
+      clientBoxH += cAddrLines.length * 34;
+      totalH += clientBoxH + 36;
+
+      // Items header + items
+      totalH += 56;
+      mCtx.font = 'bold 28px sans-serif';
+      const measuredItems = items.map(i => {
+        const lines = wrapCanvasLines(mCtx, i.productName, contentW - 240);
+        return { ...i, lines, h: Math.max(76, lines.length * 36 + 38) };
+      });
+      measuredItems.forEach(mi => { totalH += mi.h; });
+
+      // Totals + status
+      totalH += 190;
+      if (order.discount_amount > 0) totalH += 44;
+
+      // Notes
+      mCtx.font = '600 24px sans-serif';
+      const noteLines = order.notes ? wrapCanvasLines(mCtx, order.notes, contentW - 48) : [];
+      if (noteLines.length) totalH += 60 + noteLines.length * 32 + 24;
+
+      // Footer
+      mCtx.font = 'italic 24px sans-serif';
+      const footerLines = wrapCanvasLines(mCtx, state.profile.receipt_footer_message || '', contentW - 20);
+      totalH += 110 + footerLines.length * 32 + 40;
+
+      // Create Full Boleta Canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = totalH;
+      const ctx = canvas.getContext('2d');
+
+      // White card background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, W, totalH);
+
+      // Top accent bar
+      ctx.fillStyle = accentColor;
+      ctx.fillRect(0, 0, W, 18);
+
+      let y = 48;
+      // Logo or Emoji Badge
+      if (logoImg) {
+        const ratio = Math.min(280 / logoImg.width, 130 / logoImg.height);
+        const lw = logoImg.width * ratio, lh = logoImg.height * ratio;
+        ctx.drawImage(logoImg, (W - lw) / 2, y, lw, lh);
+        y += lh + 20;
+      } else {
+        drawRoundedRect(ctx, W / 2 - 40, y, 80, 80, 24);
+        ctx.fillStyle = softBg;
+        ctx.fill();
+        ctx.font = '44px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = accentColor;
+        ctx.fillText(state.profile.store_icon || '🛍️', W / 2, y + 56);
+        y += 96;
+      }
+
+      // Brand Name & Contact
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#0F172A';
+      ctx.font = '800 38px Georgia, serif';
+      ctx.fillText((state.profile.name || 'MI COMERCIO').toUpperCase(), W / 2, y + 32);
+      y += 50;
+
+      ctx.fillStyle = '#64748B';
+      ctx.font = '600 23px sans-serif';
+      contactLines.forEach(l => { ctx.fillText(l, W / 2, y + 20); y += 32; });
+      y += 18;
+
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+      y += 24;
+
+      // Folio & Date box
+      drawRoundedRect(ctx, pad, y, contentW, 92, 22);
+      ctx.fillStyle = '#F8FAFC';
+      ctx.fill();
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('COMPROBANTE', pad + 24, y + 28);
+      ctx.fillStyle = accentColor;
+      ctx.font = 'bold 28px monospace';
+      ctx.fillText(`${order.folio_number}  •  ${order.tracking_code}`, pad + 24, y + 66);
+
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('FECHA', W - pad - 24, y + 28);
+      ctx.fillStyle = '#334155';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(formatDate(order.created_at), W - pad - 24, y + 66);
+      y += 116;
+
+      // Client Box
+      drawRoundedRect(ctx, pad, y, contentW, clientBoxH, 24);
+      ctx.fillStyle = softBg;
+      ctx.fill();
+      ctx.strokeStyle = '#E9D5FF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      let cy = y + 30;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = accentColor;
+      ctx.font = '800 18px sans-serif';
+      ctx.fillText('CLIENTE & DESPACHO', pad + 24, cy);
+      cy += 34;
+
+      ctx.fillStyle = '#0F172A';
+      ctx.font = '800 30px sans-serif';
+      ctx.fillText(order.customer_name, pad + 24, cy);
+      cy += 34;
+
+      ctx.fillStyle = '#475569';
+      ctx.font = '600 24px sans-serif';
+      if (order.customer_phone) { ctx.fillText('WhatsApp: ' + order.customer_phone, pad + 24, cy); cy += 34; }
+      if (order.customer_handle) { ctx.fillText('Ref: ' + order.customer_handle, pad + 24, cy); cy += 34; }
+      cAddrLines.forEach(l => { ctx.fillText(l, pad + 24, cy); cy += 34; });
+      y += clientBoxH + 28;
+
+      // Items Header
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '800 20px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('CANT. / DESCRIPCIÓN', pad, y + 20);
+      ctx.textAlign = 'right';
+      ctx.fillText('IMPORTE', W - pad, y + 20);
+      y += 36;
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
+      y += 12;
+
+      // Items Rows
+      measuredItems.forEach(mi => {
+        drawRoundedRect(ctx, pad, y + 10, 62, 42, 12);
+        ctx.fillStyle = softBg;
+        ctx.fill();
+        ctx.textAlign = 'center';
+        ctx.fillStyle = accentColor;
+        ctx.font = '800 24px sans-serif';
+        ctx.fillText(`${mi.quantity}x`, pad + 31, y + 39);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#0F172A';
+        ctx.font = 'bold 28px sans-serif';
+        let iy = y + 34;
+        mi.lines.forEach(l => { ctx.fillText(l, pad + 80, iy); iy += 36; });
+        ctx.fillStyle = '#94A3B8';
+        ctx.font = '600 22px sans-serif';
+        ctx.fillText(`${formatCurrency(mi.unitPrice)} c/u`, pad + 80, iy);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#0F172A';
+        ctx.font = '800 28px sans-serif';
+        ctx.fillText(formatCurrency(mi.subtotal), W - pad, y + 38);
+
+        y += mi.h;
+        ctx.strokeStyle = '#F1F5F9';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(pad, y - 4); ctx.lineTo(W - pad, y - 4); ctx.stroke();
+      });
+      y += 22;
+
+      // Totals
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#64748B';
+      ctx.font = '600 24px sans-serif';
+      ctx.fillText('Subtotal', pad, y + 22);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#334155';
+      ctx.font = 'bold 24px sans-serif';
+      ctx.fillText(formatCurrency(order.subtotal), W - pad, y + 22);
+      y += 40;
+
+      if (order.discount_amount > 0) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#C026D3';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(order.discount_label || 'Descuento', pad, y + 22);
+        ctx.textAlign = 'right';
+        ctx.fillText(`-${formatCurrency(order.discount_amount)}`, W - pad, y + 22);
+        y += 44;
+      }
+
+      drawRoundedRect(ctx, pad, y + 4, contentW, 78, 22);
+      ctx.fillStyle = softBg;
+      ctx.fill();
+      ctx.strokeStyle = '#E9D5FF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#0F172A';
+      ctx.font = '800 30px Georgia, serif';
+      ctx.fillText('TOTAL', pad + 24, y + 53);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = accentColor;
+      ctx.font = '900 40px sans-serif';
+      ctx.fillText(formatCurrency(order.total), W - pad - 24, y + 56);
+      y += 102;
+
+      // Payment Status Pill
+      const isPaid = order.payment_status === 'paid';
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#64748B';
+      ctx.font = '600 23px sans-serif';
+      ctx.fillText('Estado del Abono:', pad, y + 26);
+
+      const statusTxt = isPaid ? 'ABONADO ✅' : 'PENDIENTE DE ABONO ⏳';
+      ctx.textAlign = 'right';
+      ctx.fillStyle = isPaid ? '#059669' : '#D97706';
+      ctx.font = '800 24px sans-serif';
+      ctx.fillText(statusTxt, W - pad, y + 26);
+      y += 52;
+
+      // Notes
+      if (noteLines.length) {
+        const nh = 54 + noteLines.length * 32;
+        drawRoundedRect(ctx, pad, y, contentW, nh, 20);
+        ctx.fillStyle = '#FFFBEB';
+        ctx.fill();
+        ctx.strokeStyle = '#FDE68A';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#92400E';
+        ctx.font = '800 18px sans-serif';
+        ctx.fillText('OBSERVACIONES:', pad + 20, y + 28);
+        ctx.font = '600 23px sans-serif';
+        let ny = y + 58;
+        noteLines.forEach(l => { ctx.fillText(l, pad + 20, ny); ny += 32; });
+        y += nh + 24;
+      }
+
+      // Footer
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(pad, y + 6); ctx.lineTo(W - pad, y + 6); ctx.stroke();
+      y += 42;
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = accentColor;
+      ctx.font = 'italic 36px Georgia, serif';
+      ctx.fillText('¡Muchas gracias por tu compra!', W / 2, y + 20);
+      y += 48;
+
+      ctx.fillStyle = '#64748B';
+      ctx.font = 'italic 22px sans-serif';
+      footerLines.forEach(l => { ctx.fillText(l, W / 2, y + 18); y += 32; });
+
+      return canvas;
     }
 
     async function sendReceiptImageToWhatsApp() {
@@ -1887,7 +2284,7 @@
 
       const btnLabel = document.getElementById('btn-master-whatsapp-label');
       const prevText = btnLabel ? btnLabel.innerText : 'ENVIAR SOLO IMAGEN A WHATSAPP';
-      if (btnLabel) btnLabel.innerText = 'Generando imagen completa... ⏳';
+      if (btnLabel) btnLabel.innerText = 'Generando imagen... ⏳';
 
       try {
         const canvas = await captureFullReceiptCanvas();
@@ -1895,19 +2292,22 @@
         const filename = `Comprobante_${order.folio_number}.png`;
         const file = new File([blob], filename, { type: 'image/png' });
 
-        // Compartir SOLO LA IMAGEN (sin texto) cuando el navegador móvil lo permite
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file] });
-          return;
+          try {
+            await navigator.share({ files: [file] });
+            return;
+          } catch (shareErr) {
+            if (shareErr && shareErr.name === 'AbortError') return;
+          }
         }
 
-        // En PC (Windows): descarga la imagen completa y la copia al portapapeles para pegarla directo en WhatsApp Web (Ctrl+V)
+        // En PC (Windows): descarga la imagen completa y la copia al portapapeles
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
         a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setTimeout(() => URL.revokeObjectURL(url), 2500);
 
         try {
           if (navigator.clipboard && window.ClipboardItem) {
@@ -1919,7 +2319,7 @@
         window.open(phone ? `https://wa.me/${phone}` : 'https://wa.me/', '_blank');
       } catch (err) {
         console.error(err);
-        alert('No se pudo generar la imagen completa. Intenta con el botón "Imagen" o "PDF".');
+        alert('Error generando la imagen: ' + (err.message || err));
       } finally {
         if (btnLabel) btnLabel.innerText = prevText;
       }
@@ -1936,9 +2336,9 @@
         a.href = url;
         a.download = state.currentReceiptView === 'sticker' ? `Etiqueta_${folio}.png` : `Comprobante_${folio}.png`;
         a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setTimeout(() => URL.revokeObjectURL(url), 2500);
       } catch (err) {
-        alert('Error al generar la imagen.');
+        alert('Error al generar la imagen: ' + (err.message || err));
       }
     }
 
@@ -1948,26 +2348,20 @@
       const filename = isSticker ? `Etiqueta_${folio}.pdf` : `Comprobante_${folio}.pdf`;
       try {
         const canvas = await captureFullReceiptCanvas();
-        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+        const imgData = canvas.toDataURL('image/png');
         const pdfW = isSticker ? 58 : 85;
-        const pdfH = Math.max(80, (canvas.height * pdfW) / canvas.width + 4);
-        const { jsPDF } = window.jspdf || {};
-        if (jsPDF) {
-          const doc = new jsPDF({ unit: 'mm', format: [pdfW, pdfH], orientation: 'portrait' });
-          doc.addImage(imgData, 'JPEG', 2, 2, pdfW - 4, pdfH - 4);
-          doc.save(filename);
+        const pdfH = Math.max(60, (canvas.height * pdfW) / canvas.width);
+        const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+        if (!jsPDFCtor) {
+          alert('La librería PDF aún está cargando. Intenta de nuevo en 2 segundos o usa "Imagen".');
           return;
         }
-        // Fallback html2pdf
-        const el = isSticker ? document.getElementById('printable-sticker') : document.getElementById('printable-receipt');
-        html2pdf().set({
-          margin: [3, 3, 3, 3], filename,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2.5, useCORS: true },
-          jsPDF: { unit: 'mm', format: [pdfW, pdfH], orientation: 'portrait' }
-        }).from(el).save();
+        const doc = new jsPDFCtor({ unit: 'mm', format: [pdfW, pdfH], orientation: 'portrait' });
+        doc.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+        doc.save(filename);
       } catch (err) {
-        alert('Error al generar PDF.');
+        console.error(err);
+        alert('Error al generar PDF: ' + (err.message || err));
       }
     }
 
@@ -2097,7 +2491,7 @@
               ${!isPaid ? `
                 <button onclick="generatePaymentLinkForOrder('${o.id}')" class="px-2.5 py-1 bg-sky-100 text-sky-800 font-bold rounded-xl text-[10px]">🔗 ${o.mp_payment_link ? 'Copiar Link MP' : 'Crear Link MP'}</button>
                 <button onclick="verifyOrderPaymentMP('${o.id}')" class="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-xl text-[10px]">🔄 Verificar Pago MP</button>
-                <button onclick="markOrderPaid('${o.id}', '${o.customer_name}', ${o.total})" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-xl text-[10px]">✅ Marcar Abonado</button>
+                <button onclick="markOrderPaid('${o.id}')" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-xl text-[10px]">✅ Marcar Abonado</button>
               ` : ''}
               <button onclick="editOrderTracking('${o.id}')" class="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold rounded-xl text-[10px]">🚚 ${o.shipping_tracking ? 'Guía: ' + o.shipping_tracking : '+ Cargar Nº Guía'}</button>
             </div>
@@ -2120,9 +2514,10 @@
       } catch (err) { alert(err.message); }
     }
 
-    async function markOrderPaid(id, name, total) {
+    async function markOrderPaid(id) {
+      const o = state.orders.find(x => x.id === id);
       await updateOrderStatus(id, { payment_status: 'paid' });
-      triggerPaymentToast(name, total);
+      if (o) triggerPaymentToast(o.customer_name, o.total);
     }
 
     async function verifyOrderPaymentMP(id) {
@@ -2232,7 +2627,8 @@
                 <button onclick="adjustProductStock('${p.id}', 1)" class="w-4 font-bold text-purple-700">+</button>
               </div>
               <span class="font-black text-purple-700">${formatCurrency(price)}</span>
-              <button onclick="deleteProduct('${p.id}')" class="text-slate-300 hover:text-rose-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+              <button onclick="openEditProductModal('${p.id}')" class="text-slate-400 hover:text-purple-700" title="Editar"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+              <button onclick="deleteProduct('${p.id}')" class="text-slate-300 hover:text-rose-500" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
             </div>
           </div>
         `;
@@ -2249,7 +2645,10 @@
       } catch (err) { alert(err.message); }
     }
 
+    let editingProductId = null;
+
     function openNewProductModal() {
+      editingProductId = null;
       document.getElementById('prod-name').value = '';
       document.getElementById('prod-cost').value = '';
       document.getElementById('prod-price').value = '';
@@ -2260,6 +2659,22 @@
       updateProductProfitPreview();
       document.getElementById('modal-product-form').classList.remove('hidden');
     }
+
+    function openEditProductModal(id) {
+      const p = state.products.find(x => x.id === id);
+      if (!p) return;
+      editingProductId = id;
+      document.getElementById('prod-name').value = p.name || '';
+      document.getElementById('prod-cost').value = p.cost_price || 0;
+      document.getElementById('prod-price').value = p.price || 0;
+      document.getElementById('prod-category').value = p.category || '';
+      document.getElementById('prod-stock').value = p.stock ?? 0;
+      document.getElementById('prod-min-stock').value = p.min_stock ?? 3;
+      document.getElementById('prod-barcode').value = p.barcode || '';
+      updateProductProfitPreview();
+      document.getElementById('modal-product-form').classList.remove('hidden');
+    }
+
     function closeProductFormModal() { document.getElementById('modal-product-form').classList.add('hidden'); }
 
     function updateProductProfitPreview() {
@@ -2281,18 +2696,22 @@
       const price = parseFloat(document.getElementById('prod-price').value);
       const cost_price = parseFloat(document.getElementById('prod-cost').value) || 0;
       if (!name || isNaN(price) || price < 0) { alert('Completa nombre y precio de venta válidos'); return; }
+      const payload = {
+        name, price, cost_price,
+        category: document.getElementById('prod-category').value.trim() || 'General',
+        stock: parseInt(document.getElementById('prod-stock').value) || 0,
+        min_stock: parseInt(document.getElementById('prod-min-stock').value) || 3,
+        barcode: document.getElementById('prod-barcode').value.trim()
+      };
       try {
-        const res = await api('/api/products', {
-          method: 'POST',
-          body: JSON.stringify({
-            name, price, cost_price,
-            category: document.getElementById('prod-category').value.trim() || 'General',
-            stock: parseInt(document.getElementById('prod-stock').value) || 0,
-            min_stock: parseInt(document.getElementById('prod-min-stock').value) || 3,
-            barcode: document.getElementById('prod-barcode').value.trim()
-          })
-        });
-        state.products.unshift(res.product);
+        if (editingProductId) {
+          const res = await api(`/api/products/${editingProductId}`, { method: 'PUT', body: JSON.stringify(payload) });
+          const idx = state.products.findIndex(x => x.id === editingProductId);
+          if (idx >= 0 && res.product) state.products[idx] = res.product;
+        } else {
+          const res = await api('/api/products', { method: 'POST', body: JSON.stringify(payload) });
+          state.products.unshift(res.product);
+        }
         closeProductFormModal();
         renderCatalogList();
       } catch (err) { alert(err.message); }
