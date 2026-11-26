@@ -122,34 +122,58 @@
     </div>
   </div>
 
-  <!-- ================= AUTH SCREEN (LOGIN / REGISTER) ================= -->
-  <div id="auth-screen" class="w-full max-w-md min-h-screen flex flex-col justify-center p-5 hidden">
-    <div class="bg-white/95 backdrop-blur-xl rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-5">
-      <div class="text-center space-y-1.5">
-        <div class="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-500/30">
-          🛍️
-        </div>
-        <h1 class="font-serif font-black text-xl text-slate-900">VentaFlow POS</h1>
-        <p class="text-xs text-slate-500">Pedidos, despachos, ganancias y cobros automáticos con Mercado Pago para tu comercio.</p>
+  <!-- ================= AUTH SCREEN (LANDING + LOGIN / REGISTER + SELF-SERVICE) ================= -->
+  <div id="auth-screen" class="w-full max-w-md min-h-screen flex flex-col justify-center p-4 py-6 space-y-3.5 hidden">
+    <!-- Commercial Hero Banner -->
+    <div class="bg-gradient-to-br from-violet-700 via-fuchsia-600 to-purple-900 rounded-[28px] p-5 text-white shadow-xl space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2.5 py-1 rounded-full">✨ Todo en Uno para Comercios</span>
+        <span class="text-[10px] font-extrabold bg-emerald-400/25 border border-emerald-300/40 text-emerald-100 px-2.5 py-0.5 rounded-full">🎁 3 Días Gratis</span>
       </div>
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-2xl shrink-0 shadow">🛍️</div>
+        <div class="min-w-0">
+          <h1 class="font-serif font-black text-xl leading-tight">VentaFlow POS</h1>
+          <p class="text-[11px] text-purple-100 leading-snug">Tu sistema de pedidos, tienda online con carrito, boletas y cobros Mercado Pago.</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-1.5 pt-1 text-[10px] font-semibold text-purple-50">
+        <div class="bg-white/10 rounded-xl px-2.5 py-1.5 truncate">🌐 Tienda Online Propia</div>
+        <div class="bg-white/10 rounded-xl px-2.5 py-1.5 truncate">🧾 Boletas &amp; Sticker 58mm</div>
+        <div class="bg-white/10 rounded-xl px-2.5 py-1.5 truncate">💳 Links Mercado Pago</div>
+        <div class="bg-white/10 rounded-xl px-2.5 py-1.5 truncate">📊 Costos, Gastos &amp; Excel</div>
+      </div>
+    </div>
 
+    <!-- Auth Form Card -->
+    <div class="bg-white/95 backdrop-blur-xl rounded-[28px] p-5 shadow-2xl border border-purple-100 space-y-4">
       <div class="grid grid-cols-2 gap-1.5 bg-purple-50 p-1 rounded-2xl text-xs">
-        <button type="button" onclick="toggleAuthMode('login')" id="auth-tab-login" class="py-2 rounded-xl font-bold bg-white text-purple-900 shadow-sm">Iniciar Sesión</button>
-        <button type="button" onclick="toggleAuthMode('register')" id="auth-tab-register" class="py-2 rounded-xl font-bold text-slate-500">Crear Comercio</button>
+        <button type="button" onclick="toggleAuthMode('login')" id="auth-tab-login" class="py-2.5 rounded-xl font-bold bg-white text-purple-900 shadow-sm transition-all">Iniciar Sesión</button>
+        <button type="button" onclick="toggleAuthMode('register')" id="auth-tab-register" class="py-2.5 rounded-xl font-bold text-slate-500 transition-all">Probar 3 Días Gratis</button>
       </div>
 
       <form id="auth-form" onsubmit="submitAuthForm(event)" class="space-y-3 text-xs">
-        <div id="auth-store-wrap" class="hidden">
-          <label class="font-bold text-slate-700 block mb-1">Nombre de tu Tienda / Comercio</label>
-          <input type="text" id="auth-store-name" placeholder="Ej: Glow Cosméticos, Tienda Norte..." class="w-full px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
+        <div id="auth-store-wrap" class="hidden space-y-3">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Nombre de tu Tienda / Comercio *</label>
+            <input type="text" id="auth-store-name" placeholder="Ej: Glow Cosméticos, Tienda Norte..." class="w-full min-w-0 px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
+          </div>
+          <div class="p-3 bg-violet-50/70 border border-violet-200 rounded-2xl space-y-1">
+            <label class="font-bold text-violet-950 block">🔐 PIN Secreto de Recuperación (4+ dígitos) *</label>
+            <input type="password" inputmode="numeric" id="auth-recovery-pin" placeholder="Ej: 2580 (solo tú lo sabes)" class="w-full min-w-0 px-3 py-2 bg-white border border-violet-200 rounded-xl focus:outline-none focus:border-violet-500 font-mono font-bold tracking-widest">
+            <p class="text-[10px] text-slate-500 leading-snug">Con este PIN podrás restablecer tu contraseña tú mismo al instante si algún día la olvidas, sin hablar con soporte.</p>
+          </div>
         </div>
         <div>
-          <label class="font-bold text-slate-700 block mb-1">Correo Electrónico</label>
-          <input type="email" id="auth-email" required placeholder="tu@correo.com" class="w-full px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+          <label class="font-bold text-slate-700 block mb-1">Correo Electrónico *</label>
+          <input type="email" id="auth-email" required placeholder="tu@correo.com" class="w-full min-w-0 px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
         </div>
         <div>
-          <label class="font-bold text-slate-700 block mb-1">Contraseña</label>
-          <input type="password" id="auth-password" required placeholder="••••••••" class="w-full px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+          <div class="flex items-center justify-between mb-1">
+            <label class="font-bold text-slate-700">Contraseña *</label>
+            <button type="button" id="btn-forgot-pw-link" onclick="openForgotPasswordModal()" class="text-[11px] font-bold text-purple-700 hover:underline">¿Olvidaste tu clave?</button>
+          </div>
+          <input type="password" id="auth-password" required placeholder="••••••••" class="w-full min-w-0 px-3.5 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
         </div>
 
         <div id="auth-error" class="hidden p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-semibold"></div>
@@ -159,8 +183,14 @@
         </button>
       </form>
 
-      <div class="text-center pt-2 border-t border-purple-50 text-[11px] text-slate-400">
-        Plan Trimestral: <strong class="text-purple-700">$10.000 pesos cada 3 meses</strong> • Activación inmediata con Mercado Pago.
+      <div class="pt-2 border-t border-purple-50 flex flex-col gap-2">
+        <button type="button" onclick="openStaffLoginModal()" class="w-full py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5">
+          <span>👷</span>
+          <span>Ingreso Empleado / Modo Despacho (con PIN)</span>
+        </button>
+        <p class="text-center text-[11px] text-slate-400">
+          3 días de prueba sin cargo • Luego <strong class="text-purple-700">$10.000 cada 3 meses</strong> por Mercado Pago.
+        </p>
       </div>
     </div>
   </div>
@@ -168,16 +198,21 @@
   <!-- ================= SUBSCRIPTION PAYWALL SCREEN ================= -->
   <div id="paywall-screen" class="w-full max-w-md min-h-screen flex flex-col justify-center p-5 hidden">
     <div class="bg-white/95 backdrop-blur-xl rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-5">
-      <div class="flex items-center justify-between">
-        <div>
-          <span class="text-[10px] font-black uppercase tracking-wider text-purple-600 bg-purple-100 px-2.5 py-1 rounded-full">Activación de Cuenta</span>
-          <h2 class="font-serif font-black text-lg text-slate-900 mt-1.5" id="paywall-store-name">Mi Comercio</h2>
-          <p class="text-[11px] text-slate-500" id="paywall-email"></p>
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <span class="text-[10px] font-black uppercase tracking-wider text-purple-600 bg-purple-100 px-2.5 py-1 rounded-full">Plan Trimestral</span>
+          <h2 class="font-serif font-black text-lg text-slate-900 mt-1.5 truncate" id="paywall-store-name">Mi Comercio</h2>
+          <p class="text-[11px] text-slate-500 truncate" id="paywall-email"></p>
         </div>
-        <button onclick="logoutUser()" class="text-xs font-bold text-slate-400 hover:text-rose-600 flex items-center gap-1">
-          <i data-lucide="log-out" class="w-4 h-4"></i>
-          <span>Salir</span>
-        </button>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button onclick="backToAppFromPaywall()" id="btn-paywall-back" class="hidden px-2.5 py-1.5 rounded-xl bg-purple-50 text-purple-800 text-xs font-bold border border-purple-200">
+            ← Volver
+          </button>
+          <button onclick="logoutUser()" class="text-xs font-bold text-slate-400 hover:text-rose-600 flex items-center gap-1">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            <span>Salir</span>
+          </button>
+        </div>
       </div>
 
       <div class="bg-gradient-to-br from-violet-600 via-fuchsia-600 to-purple-800 rounded-3xl p-5 text-white shadow-xl space-y-2 relative overflow-hidden">
@@ -231,7 +266,12 @@
           <h1 id="header-store-title" class="font-black text-sm text-slate-800 leading-tight font-serif tracking-tight truncate">
             Mi Comercio
           </h1>
-          <p class="text-[10px] text-emerald-700 font-bold" id="header-sub-badge">Plan Activo • 90d</p>
+          <div class="flex items-center gap-1.5">
+            <p class="text-[10px] text-emerald-700 font-bold truncate" id="header-sub-badge">Plan Activo • 90d</p>
+            <button type="button" onclick="openUpgradePlanScreen()" id="btn-header-upgrade" class="hidden px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[9px] font-extrabold border border-amber-300 shrink-0">
+              ⚡ Abonar Plan
+            </button>
+          </div>
         </div>
       </div>
 
@@ -267,6 +307,17 @@
         </div>
         <button onclick="installAsApp()" class="px-3 py-1.5 bg-white text-purple-950 font-extrabold rounded-xl text-[11px] shrink-0 shadow">
           Instalar
+        </button>
+      </div>
+
+      <!-- Aviso de PIN Secreto si es cuenta antigua sin PIN configurado -->
+      <div id="missing-pin-banner" class="hidden bg-violet-50 border border-violet-200 rounded-2xl p-3 flex items-center justify-between gap-2 text-xs no-print">
+        <div class="min-w-0">
+          <p class="font-bold text-violet-950 text-[11px]">🔐 Activa tu PIN Secreto de Recuperación</p>
+          <p class="text-[10px] text-slate-600">Así podrás recuperar tu contraseña tú mismo si algún día la olvidas.</p>
+        </div>
+        <button onclick="switchTab('settings'); setTimeout(()=>document.getElementById('sec-current-pw')?.focus(), 150);" class="px-2.5 py-1.5 bg-violet-600 text-white font-bold rounded-xl text-[10px] shrink-0">
+          Configurar
         </button>
       </div>
 
@@ -438,15 +489,30 @@
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0">
             <h2 class="text-base font-bold text-slate-800 font-serif">Mis Productos</h2>
-            <p class="text-[11px] text-slate-400">Costos, ganancia por unidad, stock y catálogo WhatsApp.</p>
+            <p class="text-[11px] text-slate-400">Fotos, variantes, etiquetas 58mm, stock y tienda web.</p>
           </div>
-          <button onclick="openNewProductModal()" class="text-xs font-bold vf-brand-grad text-white px-3 py-2 rounded-2xl flex items-center gap-1 shadow-md shrink-0">
+          <button id="btn-new-product" onclick="openNewProductModal()" class="text-xs font-bold vf-brand-grad text-white px-3 py-2 rounded-2xl flex items-center gap-1 shadow-md shrink-0">
             <i data-lucide="plus" class="w-4 h-4"></i>
             <span>Nuevo Producto</span>
           </button>
         </div>
 
-        <div class="grid grid-cols-2 gap-2">
+        <!-- Card Link Tienda Online Pública -->
+        <div class="bg-white rounded-3xl p-3.5 border border-purple-100 shadow-sm space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <span class="text-[10px] font-black uppercase tracking-wider text-purple-700 block">🌐 Tu Tienda Online con Carrito</span>
+              <p class="text-[10px] text-slate-500 leading-snug">Tus clientes ven fotos y stock real, arman su carrito y el pedido entra directo a Despachos.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <input type="text" id="catalog-public-store-url" readonly class="flex-1 min-w-0 px-2.5 py-1.5 bg-purple-50/60 border border-purple-200 rounded-xl font-mono text-[10px] text-purple-900 truncate">
+            <button type="button" onclick="copyPublicStoreUrl()" class="px-2.5 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold rounded-xl text-[11px] shrink-0">📋 Copiar</button>
+            <button type="button" onclick="openPublicStoreUrl()" class="px-2.5 py-1.5 vf-brand-grad text-white font-bold rounded-xl text-[11px] shrink-0">↗ Abrir</button>
+          </div>
+        </div>
+
+        <div id="catalog-owner-actions" class="grid grid-cols-2 gap-2">
           <button type="button" onclick="shareCatalogToWhatsApp()" class="py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs">
             <i data-lucide="share-2" class="w-4 h-4"></i>
             <span>Catálogo WhatsApp</span>
@@ -473,14 +539,20 @@
         <div id="catalog-products-list" class="space-y-2"></div>
       </div>
 
-      <!-- TAB 4: AUDITORÍA, GANANCIAS & REPOSICIÓN -->
+      <!-- TAB 4: AUDITORÍA, GANANCIAS, GASTOS & REPOSICIÓN -->
       <div id="tab-audit" class="space-y-3.5 hidden text-xs">
-        <div class="bg-gradient-to-r from-violet-700 via-purple-800 to-fuchsia-800 rounded-3xl p-4 text-white shadow-xl flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-xl">📊</div>
-          <div>
-            <h3 class="font-bold text-sm font-serif">Balance, Costos &amp; Ganancia Propia</h3>
-            <p class="text-[11px] text-purple-200">Total Vendido = Costo de Reposición + Ganancia Neta</p>
+        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-xl flex items-center justify-between gap-2">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-xl shrink-0">📊</div>
+            <div class="min-w-0">
+              <h3 class="font-bold text-sm font-serif truncate">Balance, Costos &amp; Ganancia en Mano</h3>
+              <p class="text-[10px] text-white/85 truncate">Ventas - Costo Mercadería - Gastos = Ganancia Limpia</p>
+            </div>
           </div>
+          <button type="button" onclick="exportAccountingCSV()" class="px-3 py-2 bg-white text-purple-950 font-extrabold rounded-2xl text-[11px] shadow shrink-0 flex items-center gap-1">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+            <span>Excel .CSV</span>
+          </button>
         </div>
 
         <!-- Balance de Hoy -->
@@ -496,11 +568,11 @@
               <span id="audit-today-total" class="text-sm font-black text-purple-800">$ 0</span>
             </div>
             <div class="p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
-              <span class="text-[9px] font-bold text-slate-500 uppercase block">Costo Mercadería</span>
+              <span class="text-[9px] font-bold text-slate-500 uppercase block">Costo + Gastos</span>
               <span id="audit-today-cost" class="text-sm font-black text-slate-700">$ 0</span>
             </div>
             <div class="p-2.5 bg-emerald-50 rounded-2xl border border-emerald-200">
-              <span class="text-[9px] font-bold text-emerald-700 uppercase block">Ganancia Propia</span>
+              <span class="text-[9px] font-bold text-emerald-700 uppercase block">En Mano Hoy</span>
               <span id="audit-today-profit" class="text-sm font-black text-emerald-700">$ 0</span>
             </div>
           </div>
@@ -514,7 +586,7 @@
         <!-- Balance Histórico Acumulado -->
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="font-bold text-slate-800 uppercase tracking-wide text-[11px]">🏦 Acumulado Total</span>
+            <span class="font-bold text-slate-800 uppercase tracking-wide text-[11px]">🏦 Acumulado Total del Negocio</span>
             <span id="audit-all-margin" class="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Margen: 0%</span>
           </div>
           <div class="space-y-1.5 text-xs">
@@ -523,15 +595,51 @@
               <span id="audit-all-total" class="font-black text-purple-900">$ 0</span>
             </div>
             <div class="flex justify-between items-center py-1 border-b border-purple-50">
-              <span class="text-slate-500">Total Costo (Capital / Reposición):</span>
+              <span class="text-slate-500">(-) Costo Mercadería (Reposición):</span>
               <span id="audit-all-cost" class="font-bold text-slate-700">$ 0</span>
             </div>
-            <div class="flex justify-between items-center pt-1">
-              <span class="font-extrabold text-emerald-800">Ganancia Propia Total (Neta):</span>
-              <span id="audit-all-profit" class="text-base font-black text-emerald-600">$ 0</span>
+            <div class="flex justify-between items-center py-1 border-b border-purple-50">
+              <span class="text-slate-500">(-) Gastos Operativos Registrados:</span>
+              <span id="audit-all-expenses" class="font-bold text-rose-600">$ 0</span>
+            </div>
+            <div class="flex justify-between items-center pt-1.5 bg-emerald-50/70 px-3 py-2 rounded-2xl border border-emerald-200">
+              <span class="font-extrabold text-emerald-900">💰 Ganancia Final en Mano:</span>
+              <span id="audit-all-profit" class="text-base font-black text-emerald-700">$ 0</span>
             </div>
           </div>
           <p id="audit-ticket-avg" class="text-[10px] text-slate-400 text-right"></p>
+        </div>
+
+        <!-- Gastos Operativos -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
+          <div>
+            <h4 class="font-bold text-xs text-slate-800 uppercase flex items-center gap-1.5">
+              <i data-lucide="wallet" class="w-4 h-4 text-rose-500"></i>
+              Gastos Operativos
+            </h4>
+            <p class="text-[10px] text-slate-400 mt-0.5">Anota bolsas, envíos, publicidad o alquiler para descontarlos de tu ganancia.</p>
+          </div>
+
+          <form onsubmit="submitNewExpense(event)" class="space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <select id="exp-category" class="w-full min-w-0 px-2.5 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-[11px] text-slate-700">
+                <option value="Packaging / Bolsas">🛍️ Packaging / Bolsas</option>
+                <option value="Envíos / Correo">🚚 Envíos / Correo</option>
+                <option value="Publicidad / Ads">📣 Publicidad / Ads</option>
+                <option value="Alquiler / Servicios">🏢 Alquiler / Servicios</option>
+                <option value="Otros">📌 Otros Gastos</option>
+              </select>
+              <input type="number" id="exp-amount" step="any" required placeholder="Monto $ *" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-rose-700 text-right">
+            </div>
+            <div class="flex gap-2">
+              <input type="text" id="exp-desc" required placeholder="Detalle (ej. 100 bolsas ecommerce)..." class="flex-1 min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+              <button type="submit" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shrink-0 text-[11px]">
+                + Sumar
+              </button>
+            </div>
+          </form>
+
+          <div id="expenses-list" class="space-y-1.5 max-h-44 overflow-y-auto pt-1"></div>
         </div>
 
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
@@ -581,7 +689,19 @@
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
           <div>
             <label class="font-bold text-slate-700 block mb-1">Nombre de tu Tienda</label>
-            <input type="text" id="setting-name" oninput="updateReceiptLivePreview()" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-950">
+            <input type="text" id="setting-name" oninput="updateReceiptLivePreview()" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-950">
+          </div>
+
+          <!-- Link Personalizado Tienda Online -->
+          <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100 space-y-1.5">
+            <label class="font-bold text-slate-800 block">🌐 Link de Tu Tienda Online con Carrito</label>
+            <p class="text-[10px] text-slate-500">Personaliza el nombre corto de tu link público para compartir en redes.</p>
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-mono text-slate-400 shrink-0">/tienda/</span>
+              <input type="text" id="setting-slug" placeholder="mi-comercio" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-purple-200 rounded-xl font-mono font-bold text-purple-800 text-xs">
+              <button type="button" onclick="copyPublicStoreUrl()" class="px-2.5 py-1.5 bg-purple-100 text-purple-900 font-bold rounded-xl text-[10px] shrink-0">Copiar</button>
+              <button type="button" onclick="openPublicStoreUrl()" class="px-2.5 py-1.5 vf-brand-grad text-white font-bold rounded-xl text-[10px] shrink-0">Abrir</button>
+            </div>
           </div>
 
           <div class="p-3 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-2">
@@ -688,6 +808,11 @@
                 <option value="ORDEN DE SERVICIO">🛠️ Servicios / Turnos</option>
               </select>
             </div>
+            <div class="pt-1 border-t border-purple-100">
+              <label class="font-bold text-slate-800 block mb-0.5">👷 PIN Modo Empleado / Despacho (Opcional)</label>
+              <p class="text-[10px] text-slate-500 mb-1.5">Tus empleados entran con tu correo o link de tienda + este PIN: arman pedidos y despachos sin ver ganancias ni ajustes.</p>
+              <input type="text" inputmode="numeric" id="setting-staff-pin" placeholder="Dejar vacío para desactivar (ej. 1234)" class="w-full min-w-0 px-3 py-2 bg-white border border-purple-200 rounded-xl font-mono font-bold text-slate-800">
+            </div>
           </div>
 
           <!-- Vista Previa en Vivo del Encabezado del Comprobante -->
@@ -716,6 +841,38 @@
               <span>Guía de la App</span>
             </button>
           </div>
+        </div>
+
+        <!-- Card Seguridad de Cuenta (Cambio de Contraseña & PIN Autogestionable) -->
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
+          <div>
+            <h4 class="font-bold text-xs text-slate-900 uppercase flex items-center gap-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-violet-600"></i>
+              Seguridad de tu Cuenta (Autogestión)
+            </h4>
+            <p class="text-[10px] text-slate-500 mt-0.5">Cambia tu contraseña o actualiza tu PIN Secreto de Recuperación cuando quieras, sin depender de nadie.</p>
+          </div>
+
+          <form onsubmit="submitChangePasswordSettings(event)" class="space-y-2.5">
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Contraseña Actual *</label>
+              <input type="password" id="sec-current-pw" required placeholder="Ingresa tu contraseña actual" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Nueva Clave (opc.)</label>
+                <input type="password" id="sec-new-pw" placeholder="Mín. 4 caract." class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">PIN Secreto (opc.)</label>
+                <input type="password" inputmode="numeric" id="sec-new-pin" placeholder="4+ dígitos" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold">
+              </div>
+            </div>
+            <div id="sec-feedback" class="hidden p-2.5 rounded-xl text-[11px] font-bold"></div>
+            <button type="submit" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl">
+              Actualizar Contraseña / PIN Secreto
+            </button>
+          </form>
         </div>
       </div>
 
@@ -981,54 +1138,87 @@
     </div>
   </div>
 
-  <!-- MODAL: CREAR PRODUCTO -->
-  <div id="modal-product-form" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-3.5 border border-purple-100 text-xs">
+  <!-- MODAL: CREAR / EDITAR PRODUCTO -->
+  <div id="modal-product-form" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden overflow-y-auto no-print">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-3 border border-purple-100 text-xs my-auto max-h-[92vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-purple-50 pb-2">
-        <h3 class="font-bold text-sm text-slate-800 font-serif">Añadir Producto</h3>
+        <h3 id="prod-modal-title" class="font-bold text-sm text-slate-800 font-serif">Añadir Producto</h3>
         <button onclick="closeProductFormModal()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
+
+      <!-- Foto del Producto (Comprimida automáticamente) -->
+      <div class="p-2.5 bg-purple-50/50 rounded-2xl border border-purple-100 flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <img id="prod-image-preview" src="" class="w-11 h-11 rounded-xl object-cover border border-purple-200 bg-white hidden shrink-0">
+          <div id="prod-image-placeholder" class="w-11 h-11 rounded-xl bg-white border border-purple-200 flex items-center justify-center text-lg shrink-0">📸</div>
+          <div class="min-w-0">
+            <span class="font-bold text-slate-700 block">Foto del Producto</span>
+            <span class="text-[10px] text-slate-400 block truncate">Se luce en tu Tienda Online</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" onclick="document.getElementById('prod-image-file').click()" class="px-2.5 py-1.5 bg-purple-600 text-white rounded-xl font-bold text-[10px]">Subir</button>
+          <button type="button" id="btn-remove-prod-img" onclick="clearProductImage()" class="px-2 py-1.5 text-rose-600 font-bold text-[10px] hidden">✕</button>
+          <input type="file" id="prod-image-file" accept="image/*" class="hidden" onchange="handleProductImageUpload(event)">
+        </div>
+      </div>
+
       <div>
         <label class="font-bold text-slate-700 block">Nombre del Producto *</label>
-        <input type="text" id="prod-name" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
+        <input type="text" id="prod-name" class="w-full min-w-0 mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
       </div>
       <div class="grid grid-cols-2 gap-2">
         <div>
           <label class="font-bold text-slate-700 block">Precio Costo</label>
-          <input type="number" id="prod-cost" oninput="updateProductProfitPreview()" placeholder="0" class="w-full mt-1 px-3 py-2 bg-slate-50 border border-purple-200 rounded-xl font-bold text-slate-700">
+          <input type="number" id="prod-cost" oninput="updateProductProfitPreview()" placeholder="0" class="w-full min-w-0 mt-1 px-3 py-2 bg-slate-50 border border-purple-200 rounded-xl font-bold text-slate-700">
         </div>
         <div>
           <label class="font-bold text-slate-700 block">Precio Venta *</label>
-          <input type="number" id="prod-price" oninput="updateProductProfitPreview()" placeholder="0" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-800">
+          <input type="number" id="prod-price" oninput="updateProductProfitPreview()" placeholder="0" class="w-full min-w-0 mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-800">
         </div>
       </div>
       <div id="prod-profit-preview" class="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800 text-center">
         Ganancia por unidad: $ 0 (0%)
       </div>
-      <div>
-        <label class="font-bold text-slate-700 block">Categoría</label>
-        <input type="text" id="prod-category" placeholder="General" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="font-bold text-slate-700 block">Categoría</label>
+          <input type="text" id="prod-category" placeholder="General" class="w-full min-w-0 mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+        </div>
+        <div>
+          <div class="flex items-center justify-between">
+            <label class="font-bold text-slate-700 block">Código / SKU</label>
+            <button type="button" onclick="scanBarcodeForProductField()" class="text-purple-600 text-[10px] font-bold">📷</button>
+          </div>
+          <input type="text" id="prod-barcode" placeholder="Auto / EAN" class="w-full min-w-0 mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono">
+        </div>
       </div>
       <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="font-medium text-slate-600 block">Stock Inicial</label>
-          <input type="number" id="prod-stock" value="10" class="w-full mt-1 px-3 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
+          <label class="font-medium text-slate-600 block">Stock Total</label>
+          <input type="number" id="prod-stock" value="10" class="w-full min-w-0 mt-1 px-3 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
         </div>
         <div>
-          <label class="font-medium text-slate-600 block">Stock Mínimo</label>
-          <input type="number" id="prod-min-stock" value="3" class="w-full mt-1 px-3 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
+          <label class="font-medium text-slate-600 block">Alerta Stock Mín.</label>
+          <input type="number" id="prod-min-stock" value="3" class="w-full min-w-0 mt-1 px-3 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
         </div>
       </div>
-      <div>
+
+      <!-- Variantes Opcionales (Talles / Colores / Tonos) -->
+      <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
         <div class="flex items-center justify-between">
-          <label class="font-bold text-slate-700 block">Código de Barras / SKU</label>
-          <button type="button" onclick="scanBarcodeForProductField()" class="text-purple-600 text-[10px] font-bold">📷 Escanear</button>
+          <div>
+            <span class="font-bold text-slate-700 block">🎨 Talles / Colores (Opcional)</span>
+            <span class="text-[10px] text-slate-400">Stock separado por talle, tono o modelo</span>
+          </div>
+          <button type="button" onclick="addProductVariantRow()" class="px-2 py-1 bg-purple-100 text-purple-800 rounded-lg font-bold text-[10px]">+ Variante</button>
         </div>
-        <input type="text" id="prod-barcode" class="w-full mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono">
+        <div id="prod-variants-container" class="space-y-1.5"></div>
       </div>
-      <div class="flex gap-2 pt-2">
+
+      <div class="flex gap-2 pt-1">
         <button onclick="closeProductFormModal()" class="flex-1 py-2.5 border border-purple-200 rounded-xl font-semibold">Cancelar</button>
-        <button onclick="saveProductFromModal()" class="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-bold rounded-xl">Guardar</button>
+        <button onclick="saveProductFromModal()" class="flex-1 py-2.5 vf-brand-grad text-white font-bold rounded-xl shadow">Guardar</button>
       </div>
     </div>
   </div>
@@ -1077,63 +1267,152 @@
     </div>
   </div>
 
-  <!-- MODAL: PANEL ADMIN (SUSCRIPCIONES $10.000/3M & CONFIG PLATAFORMA) -->
-  <div id="modal-admin" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto">
-    <div class="bg-white w-full max-w-lg rounded-[32px] p-5 shadow-2xl space-y-4 my-auto text-xs max-h-[90vh] overflow-y-auto">
+  <!-- MODAL: PANEL ADMIN (SUSCRIPCIONES $10.000/3M & CRM COMERCIOS) -->
+  <div id="modal-admin" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto no-print">
+    <div class="bg-white w-full max-w-lg rounded-[32px] p-5 shadow-2xl space-y-4 my-auto text-xs max-h-[92vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-slate-100 pb-3">
         <div>
           <h3 class="font-bold text-sm text-slate-900 font-serif">⚙️ Panel Administrador SaaS</h3>
-          <p class="text-[10px] text-slate-500">Cobro de suscripciones ($10.000 / 3 meses) y comercios activos</p>
+          <p class="text-[10px] text-slate-500">Configuración persistente en PostgreSQL y CRM de Comercios</p>
         </div>
         <button onclick="closeAdminModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
 
       <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
-        <span class="font-bold text-slate-800 block">1. Tu Cuenta Receptora de Suscripciones (Mercado Pago)</span>
-        <input type="password" id="admin-mp-token" placeholder="Access Token de Producción (APP_USR-...)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-[11px]">
-        <input type="url" id="admin-mp-pay-link" placeholder="O Link de Pago directo $10.000 (ej. https://mpago.la/...)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
-        <input type="text" id="admin-base-url" placeholder="URL pública (ej. https://ventaflow-pos.onrender.com)" class="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
-        <button onclick="saveAdminConfig()" class="w-full py-2 bg-slate-900 text-white font-bold rounded-xl">Guardar Configuración de Cobros</button>
+        <span class="font-bold text-slate-800 block">1. Cobro de Suscripciones ($10.000 / 3 meses) &amp; Prueba Gratis</span>
+        <input type="password" id="admin-mp-token" placeholder="Access Token de Producción (APP_USR-...)" class="w-full min-w-0 px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-[11px]">
+        <input type="url" id="admin-mp-pay-link" placeholder="O Link de Pago directo $10.000 (ej. https://mpago.la/...)" class="w-full min-w-0 px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
+        <div class="grid grid-cols-3 gap-2">
+          <div class="col-span-2">
+            <label class="text-[10px] font-bold text-slate-600 block mb-0.5">URL Pública del Servidor</label>
+            <input type="text" id="admin-base-url" placeholder="https://ventaflow-pos.onrender.com" class="w-full min-w-0 px-3 py-2 bg-white border border-slate-300 rounded-xl text-[11px]">
+          </div>
+          <div>
+            <label class="text-[10px] font-bold text-slate-600 block mb-0.5">Días Prueba</label>
+            <input type="number" id="admin-trial-days" value="3" min="0" max="30" class="w-full min-w-0 px-3 py-2 bg-white border border-slate-300 rounded-xl font-bold text-center text-[11px]">
+          </div>
+        </div>
+        <button onclick="saveAdminConfig()" class="w-full py-2.5 bg-slate-900 text-white font-bold rounded-xl">Guardar Configuración en Base de Datos</button>
       </div>
 
       <div class="space-y-2">
-        <span class="font-bold text-slate-800 block">2. Comercios Registrados</span>
-        <div id="admin-users-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-800">2. CRM de Comercios Registrados</span>
+          <span id="admin-users-count" class="text-[10px] font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full">0 comercios</span>
+        </div>
+        <div id="admin-users-list" class="space-y-2 max-h-72 overflow-y-auto"></div>
       </div>
     </div>
   </div>
 
+  <!-- MODAL: AUTOGESTIÓN DE CONTRASEÑA OLVIDADA (100% USUARIO SIN HABLAR AL ADMIN) -->
+  <div id="modal-forgot-password" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-4 border border-purple-100 text-xs">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">🔑 Recuperar mi Contraseña</h3>
+          <p class="text-[10px] text-slate-500">Restablécela tú mismo al instante con tu PIN Secreto</p>
+        </div>
+        <button onclick="closeForgotPasswordModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form onsubmit="submitSelfPasswordReset(event)" class="space-y-3">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Correo de tu Comercio *</label>
+          <input type="email" id="fp-email" required placeholder="tu@correo.com" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Tu PIN Secreto de Recuperación *</label>
+          <input type="password" inputmode="numeric" id="fp-pin" required placeholder="PIN de 4+ dígitos que elegiste" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold tracking-widest">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Elige tu Nueva Contraseña *</label>
+          <input type="password" id="fp-new-pw" required placeholder="Mínimo 4 caracteres" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl">
+        </div>
+
+        <div id="fp-feedback" class="hidden p-2.5 rounded-xl text-[11px] font-bold"></div>
+
+        <button type="submit" id="btn-fp-submit" class="w-full py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-extrabold rounded-2xl shadow-lg">
+          CAMBIAR CLAVE E INGRESAR AHORA
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: INGRESO EMPLEADO / MODO DESPACHO -->
+  <div id="modal-staff-login" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-4 border border-purple-100 text-xs">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">👷 Ingreso Modo Empleado</h3>
+          <p class="text-[10px] text-slate-500">Acceso seguro para armar pedidos y despachos</p>
+        </div>
+        <button onclick="closeStaffLoginModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form onsubmit="submitStaffLogin(event)" class="space-y-3">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Correo o Link Corto de la Tienda *</label>
+          <input type="text" id="staff-identifier" required placeholder="Ej: mi-comercio o tienda@correo.com" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl font-semibold">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">PIN de Empleado *</label>
+          <input type="password" inputmode="numeric" id="staff-pin-input" required placeholder="PIN asignado por el titular" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold tracking-widest">
+        </div>
+        <div id="staff-login-error" class="hidden p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-bold"></div>
+        <button type="submit" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl shadow-lg">
+          INGRESAR A DESPACHOS
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: SELECTOR DE VARIANTE AL VENDER -->
+  <div id="modal-variant-picker" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white w-full max-w-xs rounded-[28px] p-5 shadow-2xl space-y-3 text-xs border border-purple-100">
+      <div class="flex items-center justify-between border-b border-purple-50 pb-2">
+        <h3 id="vp-title" class="font-bold text-sm text-slate-900 font-serif truncate pr-2">Elegir Talle / Variante</h3>
+        <button onclick="closeVariantPickerModal()" class="text-slate-400"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div id="vp-options" class="space-y-1.5 max-h-60 overflow-y-auto"></div>
+    </div>
+  </div>
+
   <!-- MODAL: GUÍA DE FUNCIONES PARA EL CLIENTE -->
-  <div id="modal-guide" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto">
+  <div id="modal-guide" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto no-print">
     <div class="bg-white w-full max-w-md rounded-[32px] p-5 shadow-2xl space-y-3.5 my-auto text-xs max-h-[88vh] overflow-y-auto">
       <div class="flex items-center justify-between border-b border-purple-100 pb-3">
         <div>
-          <h3 class="font-bold text-sm text-slate-900 font-serif">✨ Guía Rápida de Tu App</h3>
-          <p class="text-[10px] text-slate-500">Todo lo que incluye tu suscripción y cómo usarlo</p>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">✨ Todo lo que Incluye tu Suscripción</h3>
+          <p class="text-[10px] text-slate-500">Guía clara de cada herramienta disponible en tu comercio</p>
         </div>
         <button onclick="closeGuideModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
 
-      <div class="space-y-2.5">
+      <div class="space-y-2">
         <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
-          <p class="font-bold text-purple-950">1. 🛍️ Pedido</p>
-          <p class="text-[11px] text-slate-600 mt-0.5">Carga cliente, escanea o elige productos, aplica promos (2x1, 3x2, % o monto libre) y emite el comprobante en imagen limpia con tu logo.</p>
+          <p class="font-bold text-purple-950">1. 🌐 Tu Propia Tienda Online con Carrito</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">En Catálogo o Tienda tienes tu link público (`/tienda/tu-marca`). Tus clientes ven fotos, talles y stock real, compran y el pedido entra solo a Despachos.</p>
         </div>
         <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
-          <p class="font-bold text-purple-950">2. 🚚 Despachos</p>
-          <p class="text-[11px] text-slate-600 mt-0.5">Genera un Link de Pago de Mercado Pago por pedido, verifica si abonaron, carga el Nº de Guía y actualiza el envío (Preparando → Empacado → Despachado).</p>
+          <p class="font-bold text-purple-950">2. 🛍️ Pedidos, Promos &amp; Boletas HD sin Cortes</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Aplica promos 2x1, 3x2 o descuentos, emite comprobantes en Imagen PNG para WhatsApp, PDF o Pegatina Térmica de 58mm con tu logo.</p>
         </div>
         <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
-          <p class="font-bold text-purple-950">3. 🏷️ Catálogo</p>
-          <p class="text-[11px] text-slate-600 mt-0.5">Registra Precio Costo, Precio Venta, stock mínimo y código de barras. El stock se descuenta solo y puedes compartir tu catálogo por WhatsApp.</p>
+          <p class="font-bold text-purple-950">3. 🚚 Despachos, Seguimiento &amp; Mercado Pago</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Genera Links de Pago por pedido, verifica abonos con alerta de voz y comparte el seguimiento en vivo (`PED-XXXXXX`).</p>
         </div>
         <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
-          <p class="font-bold text-purple-950">4. 📊 Resumen</p>
-          <p class="text-[11px] text-slate-600 mt-0.5">Ve tu Total Vendido, el Costo de Reposición, tu Ganancia Propia Neta y pide mercadería faltante al proveedor por WhatsApp.</p>
+          <p class="font-bold text-purple-950">4. 🏷️ Fotos, Variantes &amp; Etiquetas de Código 58mm</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Carga foto, talles/colores y descarga etiquetas de código de barras y precio listas para imprimir y pegar en tu mercadería.</p>
         </div>
         <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
-          <p class="font-bold text-purple-950">5. 🧾 Tienda (100% Personalizable)</p>
-          <p class="text-[11px] text-slate-600 mt-0.5">Sube tu logo, cambia el color completo de toda la app, elige tu rubro, diseña tus boletas y conecta tu Mercado Pago en "Cobros MP".</p>
+          <p class="font-bold text-purple-950">5. 📊 Gastos Operativos, Ganancia en Mano &amp; Excel</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Descuenta costo de reposición y gastos (bolsas, envíos, alquiler) para ver tu ganancia limpia real y exportar todo a Excel (`.CSV`).</p>
+        </div>
+        <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100">
+          <p class="font-bold text-purple-950">6. 👷 Modo Empleado &amp; 🔐 Clave 100% Autogestionable</p>
+          <p class="text-[11px] text-slate-600 mt-0.5">Crea un PIN para que tus empleados armen pedidos sin ver tus ganancias, y cambia o recupera tu contraseña tú mismo con tu PIN Secreto.</p>
         </div>
       </div>
 
@@ -1165,6 +1444,7 @@
       products: [],
       customers: [],
       orders: [],
+      expenses: [],
       currentCart: [],
       activeDiscount: null,
       initialPaymentStatus: 'pending',
@@ -1205,7 +1485,7 @@
       return new Date(dateStr).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
-    // ================= AUTH & PAYWALL =================
+    // ================= AUTH, SELF-SERVICE RECOVERY, STAFF & PAYWALL =================
 
     function toggleAuthMode(mode) {
       authMode = mode;
@@ -1213,18 +1493,21 @@
       const btn = document.getElementById('auth-submit-btn');
       const tLogin = document.getElementById('auth-tab-login');
       const tReg = document.getElementById('auth-tab-register');
+      const forgotBtn = document.getElementById('btn-forgot-pw-link');
       document.getElementById('auth-error').classList.add('hidden');
 
       if (mode === 'register') {
         storeWrap.classList.remove('hidden');
-        btn.innerText = 'Crear Cuenta y Activar Plan ($10.000 / 3 meses)';
-        tReg.className = 'py-2 rounded-xl font-bold bg-white text-purple-900 shadow-sm';
-        tLogin.className = 'py-2 rounded-xl font-bold text-slate-500';
+        if (forgotBtn) forgotBtn.classList.add('hidden');
+        btn.innerText = '🎁 Crear Comercio y Activar 3 Días Gratis';
+        tReg.className = 'py-2.5 rounded-xl font-bold bg-white text-purple-900 shadow-sm transition-all';
+        tLogin.className = 'py-2.5 rounded-xl font-bold text-slate-500 transition-all';
       } else {
         storeWrap.classList.add('hidden');
+        if (forgotBtn) forgotBtn.classList.remove('hidden');
         btn.innerText = 'Ingresar a mi Comercio';
-        tLogin.className = 'py-2 rounded-xl font-bold bg-white text-purple-900 shadow-sm';
-        tReg.className = 'py-2 rounded-xl font-bold text-slate-500';
+        tLogin.className = 'py-2.5 rounded-xl font-bold bg-white text-purple-900 shadow-sm transition-all';
+        tReg.className = 'py-2.5 rounded-xl font-bold text-slate-500 transition-all';
       }
     }
 
@@ -1236,12 +1519,13 @@
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
       const store_name = document.getElementById('auth-store-name').value.trim();
+      const recovery_pin = document.getElementById('auth-recovery-pin')?.value.trim() || '';
 
       try {
         const endpoint = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
         const data = await api(endpoint, {
           method: 'POST',
-          body: JSON.stringify({ email, password, store_name })
+          body: JSON.stringify({ email, password, store_name, recovery_pin })
         });
         sessionToken = data.token;
         localStorage.setItem(SESSION_KEY, sessionToken);
@@ -1250,6 +1534,83 @@
       } catch (err) {
         errBox.innerText = err.message;
         errBox.classList.remove('hidden');
+      }
+    }
+
+    function openForgotPasswordModal() {
+      const loginEmail = document.getElementById('auth-email')?.value.trim() || '';
+      if (loginEmail) document.getElementById('fp-email').value = loginEmail;
+      document.getElementById('fp-pin').value = '';
+      document.getElementById('fp-new-pw').value = '';
+      document.getElementById('fp-feedback').classList.add('hidden');
+      document.getElementById('modal-forgot-password').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeForgotPasswordModal() {
+      document.getElementById('modal-forgot-password').classList.add('hidden');
+    }
+
+    async function submitSelfPasswordReset(e) {
+      e.preventDefault();
+      const fb = document.getElementById('fp-feedback');
+      const btn = document.getElementById('btn-fp-submit');
+      fb.classList.add('hidden');
+      btn.disabled = true;
+      try {
+        const data = await api('/api/auth/self-reset-password', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: document.getElementById('fp-email').value.trim(),
+            recovery_pin: document.getElementById('fp-pin').value.trim(),
+            new_password: document.getElementById('fp-new-pw').value
+          })
+        });
+        sessionToken = data.token;
+        localStorage.setItem(SESSION_KEY, sessionToken);
+        currentUser = data.user;
+        closeForgotPasswordModal();
+        await routeAfterAuth();
+      } catch (err) {
+        fb.className = 'p-2.5 rounded-xl text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200';
+        fb.innerText = err.message;
+        fb.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function openStaffLoginModal() {
+      document.getElementById('staff-login-error').classList.add('hidden');
+      document.getElementById('staff-pin-input').value = '';
+      document.getElementById('modal-staff-login').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeStaffLoginModal() {
+      document.getElementById('modal-staff-login').classList.add('hidden');
+    }
+
+    async function submitStaffLogin(e) {
+      e.preventDefault();
+      const errEl = document.getElementById('staff-login-error');
+      errEl.classList.add('hidden');
+      try {
+        const data = await api('/api/auth/staff-login', {
+          method: 'POST',
+          body: JSON.stringify({
+            identifier: document.getElementById('staff-identifier').value.trim(),
+            staff_pin: document.getElementById('staff-pin-input').value.trim()
+          })
+        });
+        sessionToken = data.token;
+        localStorage.setItem(SESSION_KEY, sessionToken);
+        currentUser = data.user;
+        closeStaffLoginModal();
+        await routeAfterAuth();
+      } catch (err) {
+        errEl.innerText = err.message;
+        errEl.classList.remove('hidden');
       }
     }
 
@@ -1268,6 +1629,18 @@
       lucide.createIcons();
     }
 
+    function openUpgradePlanScreen() {
+      if (!currentUser) return;
+      document.getElementById('paywall-store-name').innerText = state.profile.name || currentUser.store_name;
+      document.getElementById('paywall-email').innerText = currentUser.email;
+      document.getElementById('btn-paywall-back').classList.toggle('hidden', currentUser.subscription_status !== 'active');
+      showScreen('paywall');
+    }
+
+    function backToAppFromPaywall() {
+      if (currentUser && currentUser.subscription_status === 'active') showScreen('app');
+    }
+
     async function refreshAuthStatus() {
       if (!sessionToken) { showScreen('auth'); return; }
       try {
@@ -1281,8 +1654,30 @@
       }
     }
 
+    function getPublicStoreFullUrl() {
+      const slug = (document.getElementById('setting-slug')?.value.trim() || state.profile.slug || '').trim();
+      return slug ? `${window.location.origin}/tienda/${slug}` : `${window.location.origin}/tienda`;
+    }
+
+    function refreshPublicStoreLinks() {
+      const url = `${window.location.origin}/tienda/${state.profile.slug || ''}`;
+      const catInput = document.getElementById('catalog-public-store-url');
+      if (catInput) catInput.value = url;
+    }
+
+    function copyPublicStoreUrl() {
+      const url = getPublicStoreFullUrl();
+      if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
+      alert(`¡Link de tu Tienda Online copiado! 🌐\n\n${url}`);
+    }
+
+    function openPublicStoreUrl() {
+      window.open(getPublicStoreFullUrl(), '_blank');
+    }
+
     async function routeAfterAuth() {
       if (!currentUser) { showScreen('auth'); return; }
+      document.getElementById('btn-paywall-back')?.classList.add('hidden');
       if (currentUser.subscription_status !== 'active') {
         document.getElementById('paywall-store-name').innerText = currentUser.store_name;
         document.getElementById('paywall-email').innerText = currentUser.email;
@@ -1300,13 +1695,42 @@
       state.products = boot.products || [];
       state.customers = boot.customers || [];
       state.orders = boot.orders || [];
+      state.expenses = boot.expenses || [];
+      const isStaff = (boot.scope === 'staff' || currentUser.scope === 'staff') && currentUser.role !== 'admin';
+      currentUser.scope = isStaff ? 'staff' : 'owner';
 
       document.getElementById('header-store-title').innerText = state.profile.name || currentUser.store_name;
       document.title = (state.profile.name || 'VentaFlow POS') + ' — App';
-      document.getElementById('header-sub-badge').innerText = currentUser.role === 'admin'
-        ? 'Administrador'
-        : `Plan Activo • ${currentUser.days_left}d`;
+
+      const subBadge = document.getElementById('header-sub-badge');
+      const upgBtn = document.getElementById('btn-header-upgrade');
+      if (currentUser.role === 'admin') {
+        subBadge.innerText = 'Administrador SaaS';
+        subBadge.className = 'text-[10px] text-purple-700 font-bold truncate';
+        upgBtn?.classList.add('hidden');
+      } else if (isStaff) {
+        subBadge.innerText = '👷 Modo Empleado • Despacho';
+        subBadge.className = 'text-[10px] text-slate-600 font-bold truncate';
+        upgBtn?.classList.add('hidden');
+      } else if (currentUser.is_trial) {
+        subBadge.innerText = `🎁 Prueba • ${currentUser.days_left}d`;
+        subBadge.className = 'text-[10px] text-amber-700 font-extrabold truncate';
+        upgBtn?.classList.remove('hidden');
+      } else {
+        subBadge.innerText = `Plan Activo • ${currentUser.days_left}d`;
+        subBadge.className = 'text-[10px] text-emerald-700 font-bold truncate';
+        upgBtn?.classList.toggle('hidden', currentUser.days_left > 10);
+      }
+
+      // Role / Staff visibility rules
       document.getElementById('btn-open-admin').classList.toggle('hidden', currentUser.role !== 'admin');
+      document.getElementById('mp-status-pill').classList.toggle('hidden', isStaff);
+      document.getElementById('nav-btn-audit').classList.toggle('hidden', isStaff);
+      document.getElementById('nav-btn-settings').classList.toggle('hidden', isStaff);
+      document.getElementById('btn-new-product')?.classList.toggle('hidden', isStaff);
+      document.getElementById('catalog-owner-actions')?.classList.toggle('hidden', isStaff);
+      document.getElementById('missing-pin-banner')?.classList.toggle('hidden', isStaff || !!currentUser.has_recovery_pin);
+
       document.getElementById('label-next-folio').innerText = 'Pedido #' + String(state.profile.next_folio_number || 1001).padStart(6, '0');
       const modeLbl = document.getElementById('label-business-mode');
       if (modeLbl && state.profile.business_mode) modeLbl.innerText = state.profile.business_mode;
@@ -1314,6 +1738,10 @@
       applyAppPalette(state.profile.app_palette || 'violet', state.profile.custom_color || '#7C3AED');
       updateHeaderLogo();
       updateMPUIStatus();
+      refreshPublicStoreLinks();
+      if (isStaff && (state.activeTab === 'audit' || state.activeTab === 'settings')) {
+        switchTab('sale');
+      }
       renderCart();
       updateTotals();
       showScreen('app');
@@ -1497,6 +1925,17 @@
 
     function scanBarcodeForProductField() { openBarcodeScannerModal('product-field'); }
 
+    function parseProductVariants(prod) {
+      if (!prod) return [];
+      if (Array.isArray(prod.variants)) return prod.variants;
+      try {
+        const parsed = JSON.parse(prod.variants_json || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
     function handleScannedBarcode(code) {
       const clean = String(code).trim().toLowerCase();
       const prod = state.products.find(p =>
@@ -1505,7 +1944,9 @@
         p.name.toLowerCase() === clean
       );
       if (prod) {
-        addProductToCart(prod);
+        const vars = parseProductVariants(prod);
+        if (vars.length > 0) openVariantPickerModal(prod);
+        else addProductToCart(prod);
       } else {
         document.getElementById('quick-live-name').value = `Art. ${code}`;
         document.getElementById('quick-live-price').focus();
@@ -1520,26 +1961,58 @@
       const bP = document.getElementById('btn-pay-status-pending');
       const bA = document.getElementById('btn-pay-status-paid');
       if (status === 'paid') {
-        bA.className = 'py-2 px-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-900 font-bold text-center';
-        bP.className = 'py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center';
+        bA.className = 'py-2 px-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-900 font-bold text-center text-[11px]';
+        bP.className = 'py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center text-[11px]';
       } else {
-        bP.className = 'py-2 px-3 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold text-center';
-        bA.className = 'py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center';
+        bP.className = 'py-2 px-3 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold text-center text-[11px]';
+        bA.className = 'py-2 px-3 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold text-center text-[11px]';
       }
     }
 
-    function addProductToCart(prod) {
-      const existing = state.currentCart.find(i => i.productName.toLowerCase() === prod.name.toLowerCase());
+    function addProductToCart(prod, variantName = '') {
+      const displayName = variantName ? `${prod.name} (${variantName})` : prod.name;
+      const existing = state.currentCart.find(i => i.productName.toLowerCase() === displayName.toLowerCase());
       if (existing) existing.quantity += 1;
       else state.currentCart.push({
-        id: 'c_' + Date.now(),
-        productName: prod.name,
+        id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+        productName: displayName,
+        variantName: variantName || '',
         unitPrice: Number(prod.price),
         unitCost: Number(prod.cost_price) || 0,
         quantity: 1
       });
       renderCart();
       updateTotals();
+    }
+
+    function openVariantPickerModal(prod) {
+      const vars = parseProductVariants(prod);
+      document.getElementById('vp-title').innerText = prod.name;
+      document.getElementById('vp-options').innerHTML = vars.map((v, idx) => {
+        const st = Number(v.stock) || 0;
+        return `
+          <button type="button" onclick="chooseVariantForSale('${prod.id}', ${idx})" class="w-full p-2.5 rounded-2xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100 flex items-center justify-between font-bold text-slate-800">
+            <span>${v.name}</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full ${st > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'}">Stock: ${st}</span>
+          </button>
+        `;
+      }).join('');
+      document.getElementById('modal-variant-picker').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeVariantPickerModal() {
+      document.getElementById('modal-variant-picker').classList.add('hidden');
+    }
+
+    function chooseVariantForSale(prodId, varIdx) {
+      const prod = state.products.find(x => x.id === prodId);
+      if (!prod) return;
+      const vars = parseProductVariants(prod);
+      const chosen = vars[varIdx];
+      closeVariantPickerModal();
+      closeCatalogModal();
+      addProductToCart(prod, chosen ? chosen.name : '');
     }
 
     function addQuickLiveItem() {
@@ -1658,6 +2131,7 @@
         customer_handle: document.getElementById('client-handle').value.trim(),
         items: state.currentCart.map(i => ({
           productName: i.productName,
+          variantName: i.variantName || '',
           unitPrice: i.unitPrice,
           unitCost: i.unitCost || 0,
           quantity: i.quantity,
@@ -2465,9 +2939,10 @@
           <div class="bg-white rounded-3xl p-4 border border-purple-100 shadow-sm space-y-2.5">
             <div class="flex items-start justify-between">
               <div>
-                <div class="flex items-center gap-1.5">
+                <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="font-mono font-black text-purple-700">${o.folio_number}</span>
                   <span class="text-[10px] font-mono bg-purple-50 px-1.5 py-0.5 rounded text-purple-600">${o.tracking_code}</span>
+                  ${o.source === 'web_store' ? '<span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800">🌐 Tienda Web</span>' : ''}
                   <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
                     ${isPaid ? 'Abonado ✅' : 'Pend. Abono ⏳'}
                   </span>
@@ -2591,6 +3066,7 @@
 
     function renderCatalogList() {
       const container = document.getElementById('catalog-products-list');
+      const isStaff = currentUser && currentUser.scope === 'staff';
       const q = (document.getElementById('catalog-search')?.value || '').toLowerCase().trim();
       const filtered = state.products.filter(p => {
         if (q && !(p.name.toLowerCase().includes(q) || (p.barcode || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q))) return false;
@@ -2608,27 +3084,41 @@
         const cost = Number(p.cost_price) || 0;
         const price = Number(p.price) || 0;
         const profit = price - cost;
+        const vars = parseProductVariants(p);
         const badge = st <= 0 ? '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">🔴 Agotado</span>'
           : (st <= min ? `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⚠️ Quedan ${st}</span>`
             : `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">🟢 ${st}</span>`);
+        const thumb = p.image_url
+          ? `<img src="${p.image_url}" class="w-11 h-11 rounded-2xl object-cover border border-purple-100 shrink-0 bg-slate-50">`
+          : `<div class="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-lg shrink-0">🛍️</div>`;
+
         return `
-          <div class="bg-white rounded-3xl p-3.5 border border-purple-100 shadow-sm flex items-center justify-between text-xs">
-            <div class="min-w-0 pr-2">
-              <div class="flex items-center gap-1.5 flex-wrap"><p class="font-bold text-slate-800">${p.name}</p>${badge}</div>
-              <p class="text-[10px] text-slate-400">${p.category || 'General'} ${p.barcode ? '• ' + p.barcode : ''}</p>
-              <p class="text-[10px] mt-0.5 text-slate-500">
-                Costo: <strong>${formatCurrency(cost)}</strong> • Ganancia: <strong class="text-emerald-700">+${formatCurrency(profit)}</strong>
-              </p>
-            </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <div class="flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-xl border border-purple-100">
-                <button onclick="adjustProductStock('${p.id}', -1)" class="w-4 font-bold">-</button>
-                <span class="font-black w-5 text-center">${st}</span>
-                <button onclick="adjustProductStock('${p.id}', 1)" class="w-4 font-bold text-purple-700">+</button>
+          <div class="bg-white rounded-3xl p-3.5 border border-purple-100 shadow-sm space-y-2 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2.5 min-w-0">
+                ${thumb}
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5 flex-wrap"><p class="font-bold text-slate-800 truncate">${p.name}</p>${badge}</div>
+                  <p class="text-[10px] text-slate-400 truncate">${p.category || 'General'} ${p.barcode ? '• ' + p.barcode : ''}</p>
+                  ${vars.length ? `<p class="text-[10px] text-purple-700 font-semibold truncate">Variantes: ${vars.map(v => `${v.name} (${v.stock})`).join(', ')}</p>` : ''}
+                  ${!isStaff ? `<p class="text-[10px] mt-0.5 text-slate-500">Costo: <strong>${formatCurrency(cost)}</strong> • Ganancia: <strong class="text-emerald-700">+${formatCurrency(profit)}</strong></p>` : ''}
+                </div>
               </div>
-              <span class="font-black text-purple-700">${formatCurrency(price)}</span>
-              <button onclick="openEditProductModal('${p.id}')" class="text-slate-400 hover:text-purple-700" title="Editar"><i data-lucide="pencil" class="w-4 h-4"></i></button>
-              <button onclick="deleteProduct('${p.id}')" class="text-slate-300 hover:text-rose-500" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+              <span class="font-black text-sm text-purple-700 shrink-0">${formatCurrency(price)}</span>
+            </div>
+            <div class="flex items-center justify-between pt-1.5 border-t border-purple-50">
+              <div class="flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-xl border border-purple-100">
+                <button onclick="adjustProductStock('${p.id}', -1)" class="w-5 font-bold">-</button>
+                <span class="font-black w-6 text-center">${st}</span>
+                <button onclick="adjustProductStock('${p.id}', 1)" class="w-5 font-bold text-purple-700">+</button>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button onclick="downloadProductBarcodeLabel('${p.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[10px]" title="Descargar Etiqueta 58mm con Código de Barras">🏷️ Etiqueta</button>
+                ${!isStaff ? `
+                  <button onclick="openEditProductModal('${p.id}')" class="p-1.5 text-slate-400 hover:text-purple-700" title="Editar"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                  <button onclick="deleteProduct('${p.id}')" class="p-1.5 text-slate-300 hover:text-rose-500" title="Eliminar"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                ` : ''}
+              </div>
             </div>
           </div>
         `;
@@ -2646,24 +3136,126 @@
     }
 
     let editingProductId = null;
+    let prodImageDataUrl = '';
+    let productVariantsDraft = [];
+
+    function handleProductImageUpload(e) {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          const maxDim = 320;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          prodImageDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          syncProductImagePreview();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearProductImage() {
+      prodImageDataUrl = '';
+      const f = document.getElementById('prod-image-file');
+      if (f) f.value = '';
+      syncProductImagePreview();
+    }
+
+    function syncProductImagePreview() {
+      const img = document.getElementById('prod-image-preview');
+      const ph = document.getElementById('prod-image-placeholder');
+      const rm = document.getElementById('btn-remove-prod-img');
+      if (prodImageDataUrl) {
+        img.src = prodImageDataUrl;
+        img.classList.remove('hidden');
+        ph.classList.add('hidden');
+        rm.classList.remove('hidden');
+      } else {
+        img.classList.add('hidden');
+        ph.classList.remove('hidden');
+        rm.classList.add('hidden');
+      }
+    }
+
+    function renderProductVariantsDraft() {
+      const box = document.getElementById('prod-variants-container');
+      if (!box) return;
+      if (!productVariantsDraft.length) {
+        box.innerHTML = '<p class="text-[10px] text-slate-400">Sin variantes (usa stock único arriba).</p>';
+        return;
+      }
+      box.innerHTML = productVariantsDraft.map((v, idx) => `
+        <div class="flex items-center gap-1.5">
+          <input type="text" value="${(v.name || '').replace(/"/g, '&quot;')}" oninput="updateVariantDraft(${idx}, 'name', this.value)" placeholder="Ej: Talle M / Negro" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-semibold text-[11px]">
+          <input type="number" value="${v.stock ?? 0}" oninput="updateVariantDraft(${idx}, 'stock', this.value)" placeholder="Stock" class="w-16 shrink-0 px-2 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-center text-[11px]">
+          <button type="button" onclick="removeVariantDraft(${idx})" class="text-rose-500 font-bold px-1.5">✕</button>
+        </div>
+      `).join('');
+    }
+
+    function addProductVariantRow() {
+      productVariantsDraft.push({ name: '', stock: 5 });
+      renderProductVariantsDraft();
+      recalcTotalStockFromVariants();
+    }
+
+    function updateVariantDraft(idx, field, val) {
+      if (!productVariantsDraft[idx]) return;
+      if (field === 'stock') {
+        productVariantsDraft[idx].stock = Math.max(0, parseInt(val) || 0);
+        recalcTotalStockFromVariants();
+      } else {
+        productVariantsDraft[idx].name = val;
+      }
+    }
+
+    function removeVariantDraft(idx) {
+      productVariantsDraft.splice(idx, 1);
+      renderProductVariantsDraft();
+      recalcTotalStockFromVariants();
+    }
+
+    function recalcTotalStockFromVariants() {
+      if (!productVariantsDraft.length) return;
+      const sum = productVariantsDraft.reduce((s, v) => s + (parseInt(v.stock) || 0), 0);
+      document.getElementById('prod-stock').value = sum;
+    }
 
     function openNewProductModal() {
       editingProductId = null;
+      prodImageDataUrl = '';
+      productVariantsDraft = [];
+      document.getElementById('prod-modal-title').innerText = 'Añadir Producto';
       document.getElementById('prod-name').value = '';
       document.getElementById('prod-cost').value = '';
       document.getElementById('prod-price').value = '';
       document.getElementById('prod-category').value = '';
       document.getElementById('prod-stock').value = '10';
       document.getElementById('prod-min-stock').value = '3';
-      document.getElementById('prod-barcode').value = '';
+      document.getElementById('prod-barcode').value = '779' + Math.floor(10000 + Math.random() * 89999);
+      syncProductImagePreview();
+      renderProductVariantsDraft();
       updateProductProfitPreview();
       document.getElementById('modal-product-form').classList.remove('hidden');
+      lucide.createIcons();
     }
 
     function openEditProductModal(id) {
       const p = state.products.find(x => x.id === id);
       if (!p) return;
       editingProductId = id;
+      prodImageDataUrl = p.image_url || '';
+      productVariantsDraft = parseProductVariants(p).map(v => ({ name: v.name, stock: Number(v.stock) || 0 }));
+      document.getElementById('prod-modal-title').innerText = 'Editar Producto';
       document.getElementById('prod-name').value = p.name || '';
       document.getElementById('prod-cost').value = p.cost_price || 0;
       document.getElementById('prod-price').value = p.price || 0;
@@ -2671,8 +3263,11 @@
       document.getElementById('prod-stock').value = p.stock ?? 0;
       document.getElementById('prod-min-stock').value = p.min_stock ?? 3;
       document.getElementById('prod-barcode').value = p.barcode || '';
+      syncProductImagePreview();
+      renderProductVariantsDraft();
       updateProductProfitPreview();
       document.getElementById('modal-product-form').classList.remove('hidden');
+      lucide.createIcons();
     }
 
     function closeProductFormModal() { document.getElementById('modal-product-form').classList.add('hidden'); }
@@ -2696,12 +3291,18 @@
       const price = parseFloat(document.getElementById('prod-price').value);
       const cost_price = parseFloat(document.getElementById('prod-cost').value) || 0;
       if (!name || isNaN(price) || price < 0) { alert('Completa nombre y precio de venta válidos'); return; }
+      const cleanVariants = productVariantsDraft
+        .map(v => ({ name: String(v.name || '').trim(), stock: Math.max(0, parseInt(v.stock) || 0) }))
+        .filter(v => v.name.length > 0);
+
       const payload = {
         name, price, cost_price,
         category: document.getElementById('prod-category').value.trim() || 'General',
         stock: parseInt(document.getElementById('prod-stock').value) || 0,
         min_stock: parseInt(document.getElementById('prod-min-stock').value) || 3,
-        barcode: document.getElementById('prod-barcode').value.trim()
+        barcode: document.getElementById('prod-barcode').value.trim(),
+        image_url: prodImageDataUrl,
+        variants: cleanVariants
       };
       try {
         if (editingProductId) {
@@ -2715,6 +3316,90 @@
         closeProductFormModal();
         renderCatalogList();
       } catch (err) { alert(err.message); }
+    }
+
+    // Generador Canvas 2D de Etiqueta 58mm con Código de Barras CODE-39 Escaneable
+    const CODE39_MAP = {
+      '0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw','5':'wnnwwnnnn',
+      '6':'nnwwwnnnn','7':'nnnwnnwnw','8':'wnnwnnwnn','9':'nnwwnnwnn','A':'wnnnnwnnw','B':'nnwnnwnnw',
+      'C':'wnwnnwnnn','D':'nnnnwwnnw','E':'wnnnwwnnn','F':'nnwnwwnnn','G':'nnnnnwwnw','H':'wnnnnwwnn',
+      'I':'nnwnnwwnn','J':'nnnnwwwnn','K':'wnnnnnnww','L':'nnwnnnnww','M':'wnwnnnnwn','N':'nnnnwnnww',
+      'O':'wnnnwnnwn','P':'nnwnwnnwn','Q':'nnnnnnwww','R':'wnnnnnwwn','S':'nnwnnnwwn','T':'nnnnwnwwn',
+      'U':'wwnnnnnnw','V':'nwwnnnnnw','W':'wwwnnnnnn','X':'nwnnwnnnw','Y':'wwnnwnnnn','Z':'nwwnwnnnn',
+      '-':'nwnnnnwnw','.':'wwnnnnwnn',' ':'nwwnnnwnn','*':'nwnnwnwnn'
+    };
+
+    function drawCode39Barcode(ctx, rawText, x, y, maxW, height) {
+      const clean = String(rawText || '1001').toUpperCase().replace(/[^0-9A-Z\-. ]/g, '') || '1001';
+      const full = `*${clean}*`;
+      const unitsPerChar = 16; // 6 narrow (1) + 3 wide (3) + 1 inter-char gap (1)
+      const totalUnits = full.length * unitsPerChar - 1;
+      const narrow = Math.max(1.5, Math.min(4, maxW / totalUnits));
+      const wide = narrow * 2.8;
+      let actualW = 0;
+      for (const ch of full) {
+        const pat = CODE39_MAP[ch] || CODE39_MAP['0'];
+        for (let i = 0; i < 9; i++) actualW += (pat[i] === 'w' ? wide : narrow);
+        actualW += narrow;
+      }
+      let cx = x + (maxW - actualW) / 2;
+      ctx.fillStyle = '#0F172A';
+      for (const ch of full) {
+        const pat = CODE39_MAP[ch] || CODE39_MAP['0'];
+        for (let i = 0; i < 9; i++) {
+          const w = pat[i] === 'w' ? wide : narrow;
+          if (i % 2 === 0) ctx.fillRect(cx, y, w, height);
+          cx += w;
+        }
+        cx += narrow;
+      }
+    }
+
+    function downloadProductBarcodeLabel(prodId) {
+      const p = state.products.find(x => x.id === prodId);
+      if (!p) return;
+      const code = (p.barcode || p.sku || p.id.slice(-6)).toUpperCase();
+      const W = 560, H = 340;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(10, 10, W - 20, H - 20);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#64748B';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText((state.profile.name || 'MI TIENDA').toUpperCase(), W / 2, 42);
+
+      ctx.fillStyle = '#0F172A';
+      ctx.font = '800 26px sans-serif';
+      const titleLines = wrapCanvasLines(ctx, p.name, W - 60).slice(0, 2);
+      let ty = 78;
+      titleLines.forEach(l => { ctx.fillText(l, W / 2, ty); ty += 30; });
+
+      ctx.fillStyle = '#7C3AED';
+      ctx.font = '900 42px sans-serif';
+      ctx.fillText(formatCurrency(p.price), W / 2, ty + 24);
+
+      drawCode39Barcode(ctx, code, 40, ty + 44, W - 80, 76);
+
+      ctx.fillStyle = '#334155';
+      ctx.font = 'bold 20px monospace';
+      ctx.fillText(code, W / 2, ty + 144);
+
+      canvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Etiqueta_${p.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2500);
+      }, 'image/png');
     }
 
     async function deleteProduct(id) {
@@ -2742,41 +3427,57 @@
       const filtered = state.products.filter(p => !q || p.name.toLowerCase().includes(q) || (p.barcode || '').toLowerCase().includes(q));
       const box = document.getElementById('picker-products-list');
       if (!filtered.length) { box.innerHTML = '<p class="text-xs text-slate-400 text-center py-4">Sin productos coincidentes.</p>'; return; }
-      box.innerHTML = filtered.map(p => `
-        <div onclick="selectProductForSale('${p.id}')" class="flex items-center justify-between p-3 bg-purple-50/40 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer text-xs">
-          <div>
-            <p class="font-bold text-slate-800">${p.name}</p>
-            <p class="text-[10px] text-purple-500">${p.category} • Stock: ${p.stock}</p>
+      box.innerHTML = filtered.map(p => {
+        const vars = parseProductVariants(p);
+        return `
+          <div onclick="selectProductForSale('${p.id}')" class="flex items-center justify-between p-3 bg-purple-50/40 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer text-xs">
+            <div class="min-w-0 pr-2">
+              <p class="font-bold text-slate-800 truncate">${p.name}</p>
+              <p class="text-[10px] text-purple-500 truncate">${p.category} • Stock: ${p.stock} ${vars.length ? `• ${vars.length} variantes` : ''}</p>
+            </div>
+            <span class="font-black text-purple-700 shrink-0">${formatCurrency(p.price)}</span>
           </div>
-          <span class="font-black text-purple-700">${formatCurrency(p.price)}</span>
-        </div>
-      `).join('');
+        `;
+      }).join('');
     }
 
     function selectProductForSale(id) {
       const p = state.products.find(x => x.id === id);
-      if (p) { addProductToCart(p); closeCatalogModal(); }
+      if (!p) return;
+      const vars = parseProductVariants(p);
+      if (vars.length > 0) {
+        openVariantPickerModal(p);
+      } else {
+        addProductToCart(p);
+        closeCatalogModal();
+      }
     }
 
     function shareCatalogToWhatsApp() {
       if (!state.products.length) { alert('Tu catálogo está vacío.'); return; }
-      let msg = `🛍️ *CATÁLOGO - ${(state.profile.name || '').toUpperCase()}*\n\n`;
+      const storeUrl = `${window.location.origin}/tienda/${state.profile.slug || ''}`;
+      let msg = `🛍️ *CATÁLOGO - ${(state.profile.name || '').toUpperCase()}*\n`;
+      if (state.profile.slug) msg += `🌐 Compra directo aquí: ${storeUrl}\n`;
+      msg += `\n`;
       state.products.forEach(p => {
         msg += `• *${p.name}*: ${formatCurrency(p.price)} (${p.stock > 0 ? 'Disponible' : 'Agotado'})\n`;
       });
-      msg += `\n💬 Responde con los productos que deseas para armar tu pedido y enviarte el link de pago.`;
+      msg += `\n💬 Pide desde la tienda online o responde este mensaje para armar tu envío.`;
       window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
-    // ================= AUDITORÍA & REPOSICIÓN =================
+    // ================= AUDITORÍA, GASTOS, EXCEL & REPOSICIÓN =================
 
     function renderAuditModule() {
+      const todayIso = new Date().toISOString().slice(0, 10);
       const todayStr = new Date().toDateString();
       const todayOrders = state.orders.filter(o => new Date(o.created_at).toDateString() === todayStr);
+      const todayExpenses = (state.expenses || []).filter(e => (e.expense_date || '').slice(0, 10) === todayIso);
 
       const todayTotal = todayOrders.reduce((s, o) => s + Number(o.total || 0), 0);
       const todayCost = todayOrders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
-      const todayProfit = todayTotal - todayCost;
+      const todayExpSum = todayExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+      const todayProfit = todayTotal - todayCost - todayExpSum;
       const paid = todayOrders.filter(o => o.payment_status === 'paid').reduce((s, o) => s + Number(o.total || 0), 0);
       const pending = todayOrders.filter(o => o.payment_status !== 'paid').reduce((s, o) => s + Number(o.total || 0), 0);
       const items = todayOrders.reduce((s, o) => {
@@ -2785,7 +3486,7 @@
       }, 0);
 
       document.getElementById('audit-today-total').innerText = formatCurrency(todayTotal);
-      document.getElementById('audit-today-cost').innerText = formatCurrency(todayCost);
+      document.getElementById('audit-today-cost').innerText = formatCurrency(todayCost + todayExpSum);
       document.getElementById('audit-today-profit').innerText = formatCurrency(todayProfit);
       document.getElementById('audit-today-paid').innerText = formatCurrency(paid);
       document.getElementById('audit-today-pending').innerText = `Pendiente cobro: ${formatCurrency(pending)}`;
@@ -2794,14 +3495,19 @@
       // Historical Totals
       const allTotal = state.orders.reduce((s, o) => s + Number(o.total || 0), 0);
       const allCost = state.orders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
-      const allProfit = allTotal - allCost;
+      const allExpenses = (state.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0);
+      const allProfit = allTotal - allCost - allExpenses;
       const allMargin = allTotal > 0 ? Math.round((allProfit / allTotal) * 100) : 0;
 
       document.getElementById('audit-all-total').innerText = formatCurrency(allTotal);
       document.getElementById('audit-all-cost').innerText = formatCurrency(allCost);
+      const expEl = document.getElementById('audit-all-expenses');
+      if (expEl) expEl.innerText = formatCurrency(allExpenses);
       document.getElementById('audit-all-profit').innerText = formatCurrency(allProfit);
-      document.getElementById('audit-all-margin').innerText = `Margen: ${allMargin}%`;
-      document.getElementById('audit-ticket-avg').innerText = `Total de pedidos registrados: ${state.orders.length}`;
+      document.getElementById('audit-all-margin').innerText = `Margen Limpio: ${allMargin}%`;
+      document.getElementById('audit-ticket-avg').innerText = `Pedidos registrados: ${state.orders.length} • Gastos anotados: ${(state.expenses || []).length}`;
+
+      renderExpensesList();
 
       const good = state.products.filter(p => Number(p.stock) > (Number(p.min_stock) || 3)).length;
       const low = state.products.filter(p => Number(p.stock) > 0 && Number(p.stock) <= (Number(p.min_stock) || 3)).length;
@@ -2812,8 +3518,105 @@
 
       const needy = state.products.filter(p => Number(p.stock) <= (Number(p.min_stock) || 3));
       document.getElementById('restock-needed-list').innerHTML = needy.length
-        ? needy.map(p => `<div class="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 flex justify-between text-xs"><span class="font-bold">${p.name}</span><span class="text-rose-700 font-bold">Stock: ${p.stock}</span></div>`).join('')
+        ? needy.map(p => `<div class="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 flex justify-between text-xs"><span class="font-bold truncate pr-2">${p.name}</span><span class="text-rose-700 font-bold shrink-0">Stock: ${p.stock}</span></div>`).join('')
         : '<div class="p-3 bg-emerald-50 rounded-2xl text-emerald-700 font-bold text-center">🎉 Todo el inventario está saludable</div>';
+    }
+
+    function renderExpensesList() {
+      const box = document.getElementById('expenses-list');
+      if (!box) return;
+      if (!state.expenses || !state.expenses.length) {
+        box.innerHTML = '<p class="text-[11px] text-slate-400 text-center py-2">Aún no registraste gastos operativos.</p>';
+        return;
+      }
+      box.innerHTML = state.expenses.map(e => `
+        <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2 text-xs">
+          <div class="min-w-0">
+            <p class="font-bold text-slate-800 truncate">${e.description}</p>
+            <p class="text-[10px] text-slate-400">${e.category} • ${e.expense_date}</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="font-extrabold text-rose-600">-${formatCurrency(e.amount)}</span>
+            <button type="button" onclick="deleteExpense('${e.id}')" class="text-slate-300 hover:text-rose-600 font-bold">✕</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function submitNewExpense(e) {
+      e.preventDefault();
+      const category = document.getElementById('exp-category').value;
+      const amount = parseFloat(document.getElementById('exp-amount').value);
+      const description = document.getElementById('exp-desc').value.trim();
+      if (!description || isNaN(amount) || amount <= 0) return;
+      try {
+        const res = await api('/api/expenses', {
+          method: 'POST',
+          body: JSON.stringify({ category, amount, description })
+        });
+        state.expenses.unshift(res.expense);
+        document.getElementById('exp-amount').value = '';
+        document.getElementById('exp-desc').value = '';
+        renderAuditModule();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function deleteExpense(id) {
+      try {
+        await api(`/api/expenses/${id}`, { method: 'DELETE' });
+        state.expenses = state.expenses.filter(x => x.id !== id);
+        renderAuditModule();
+      } catch (err) { alert(err.message); }
+    }
+
+    function exportAccountingCSV() {
+      const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const rows = [];
+      rows.push(['REPORTE CONTABLE - ' + (state.profile.name || 'MI TIENDA')]);
+      rows.push(['Fecha Exportacion', new Date().toLocaleString('es-AR')]);
+      rows.push([]);
+      rows.push(['=== VENTAS Y PEDIDOS ===']);
+      rows.push(['Fecha', 'Folio', 'Codigo', 'Origen', 'Cliente', 'WhatsApp', 'Estado Pago', 'Estado Envio', 'Total Venta', 'Costo Mercaderia', 'Ganancia Bruta']);
+      state.orders.forEach(o => {
+        rows.push([
+          formatDate(o.created_at),
+          o.folio_number,
+          o.tracking_code,
+          o.source === 'web_store' ? 'Tienda Online' : 'POS',
+          o.customer_name,
+          o.customer_phone || '',
+          o.payment_status === 'paid' ? 'Abonado' : 'Pendiente',
+          o.dispatch_status,
+          Number(o.total || 0),
+          Number(o.total_cost || 0),
+          Number((o.total || 0) - (o.total_cost || 0))
+        ]);
+      });
+      rows.push([]);
+      rows.push(['=== GASTOS OPERATIVOS ===']);
+      rows.push(['Fecha', 'Categoria', 'Detalle', 'Monto Gasto']);
+      (state.expenses || []).forEach(e => {
+        rows.push([e.expense_date, e.category, e.description, Number(e.amount || 0)]);
+      });
+
+      const allTotal = state.orders.reduce((s, o) => s + Number(o.total || 0), 0);
+      const allCost = state.orders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
+      const allExp = (state.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0);
+      rows.push([]);
+      rows.push(['=== RESUMEN FINAL ===']);
+      rows.push(['Total Facturado', allTotal]);
+      rows.push(['Costo Mercaderia', allCost]);
+      rows.push(['Gastos Operativos', allExp]);
+      rows.push(['GANANCIA FINAL EN MANO', allTotal - allCost - allExp]);
+
+      const csvContent = '\uFEFF' + rows.map(r => r.map(esc).join(';')).join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Balance_${(state.profile.slug || 'tienda')}_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
     }
 
     function sendRestockOrderToSupplier() {
@@ -2842,6 +3645,10 @@
 
     function populateSettingsFields() {
       document.getElementById('setting-name').value = state.profile.name || '';
+      const slugEl = document.getElementById('setting-slug');
+      if (slugEl) slugEl.value = state.profile.slug || '';
+      const staffPinEl = document.getElementById('setting-staff-pin');
+      if (staffPinEl) staffPinEl.value = state.profile.staff_pin || '';
       document.getElementById('setting-phone').value = state.profile.phone || '';
       document.getElementById('setting-instagram').value = state.profile.instagram || '';
       document.getElementById('setting-address').value = state.profile.address || '';
@@ -3011,6 +3818,8 @@
           method: 'PUT',
           body: JSON.stringify({
             name: document.getElementById('setting-name').value.trim() || 'Mi Comercio',
+            slug: document.getElementById('setting-slug')?.value.trim() || '',
+            staff_pin: document.getElementById('setting-staff-pin')?.value.trim() || '',
             store_icon: document.getElementById('setting-store-icon').value,
             logo_data_url: state.profile.logo_data_url || '',
             receipt_theme: state.profile.receipt_theme || 'coquette',
@@ -3026,6 +3835,7 @@
           })
         });
         state.profile = res.profile;
+        if (document.getElementById('setting-slug')) document.getElementById('setting-slug').value = state.profile.slug || '';
         document.getElementById('header-store-title').innerText = state.profile.name;
         document.title = state.profile.name + ' — App';
         document.getElementById('label-next-folio').innerText = 'Pedido #' + String(state.profile.next_folio_number).padStart(6, '0');
@@ -3033,8 +3843,46 @@
         if (modeLbl && state.profile.business_mode) modeLbl.innerText = state.profile.business_mode;
         applyAppPalette(state.profile.app_palette || 'violet', state.profile.custom_color || '#7C3AED');
         updateHeaderLogo();
+        refreshPublicStoreLinks();
         alert('¡Configuración guardada en la nube! 💖');
       } catch (err) { alert(err.message); }
+    }
+
+    async function submitChangePasswordSettings(e) {
+      e.preventDefault();
+      const fb = document.getElementById('sec-feedback');
+      fb.classList.add('hidden');
+      const current_password = document.getElementById('sec-current-pw').value;
+      const new_password = document.getElementById('sec-new-pw').value;
+      const recovery_pin = document.getElementById('sec-new-pin').value.trim();
+
+      if (!new_password && !recovery_pin) {
+        fb.className = 'p-2.5 rounded-xl text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200';
+        fb.innerText = 'Completa una nueva contraseña, un nuevo PIN Secreto, o ambos.';
+        fb.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        await api('/api/auth/change-password', {
+          method: 'POST',
+          body: JSON.stringify({ current_password, new_password, recovery_pin })
+        });
+        document.getElementById('sec-current-pw').value = '';
+        document.getElementById('sec-new-pw').value = '';
+        document.getElementById('sec-new-pin').value = '';
+        if (recovery_pin && currentUser) {
+          currentUser.has_recovery_pin = true;
+          document.getElementById('missing-pin-banner')?.classList.add('hidden');
+        }
+        fb.className = 'p-2.5 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200';
+        fb.innerText = '✅ ¡Datos de seguridad actualizados con éxito!';
+        fb.classList.remove('hidden');
+      } catch (err) {
+        fb.className = 'p-2.5 rounded-xl text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200';
+        fb.innerText = err.message;
+        fb.classList.remove('hidden');
+      }
     }
 
     // ================= VOICE, MP TOKEN & ADMIN =================
@@ -3095,17 +3943,44 @@
         document.getElementById('admin-base-url').value = data.config.public_base_url || window.location.origin;
         const linkEl = document.getElementById('admin-mp-pay-link');
         if (linkEl) linkEl.value = data.config.platform_mp_pay_link || '';
-        document.getElementById('admin-users-list').innerHTML = data.users.map(u => `
-          <div class="p-3 bg-purple-50/40 rounded-2xl border border-purple-100 flex items-center justify-between">
-            <div>
-              <p class="font-bold text-slate-900">${u.store_name} <span class="text-[10px] text-slate-500">(${u.email})</span></p>
-              <p class="text-[10px] ${u.subscription_status === 'active' ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}">
-                ${u.subscription_status.toUpperCase()} ${u.subscription_expires_at ? '• Vence: ' + formatDate(u.subscription_expires_at) : ''}
-              </p>
+        const trialEl = document.getElementById('admin-trial-days');
+        if (trialEl) trialEl.value = data.config.trial_days ?? 3;
+
+        const merchants = (data.users || []).filter(u => u.role !== 'admin');
+        const countEl = document.getElementById('admin-users-count');
+        if (countEl) countEl.innerText = `${merchants.length} comercios`;
+
+        document.getElementById('admin-users-list').innerHTML = (data.users || []).map(u => {
+          const st = u.computed_status || u.subscription_status;
+          const badgeCls = st === 'active'
+            ? 'bg-emerald-100 text-emerald-800'
+            : (st === 'trial' ? 'bg-amber-100 text-amber-900' : 'bg-rose-100 text-rose-800');
+          const badgeTxt = st === 'trial'
+            ? `PRUEBA (${u.days_left}d)`
+            : (st === 'active' ? `ACTIVO (${u.days_left}d)` : 'VENCIDO');
+          const cleanPhone = String(u.store_phone || '').replace(/\D/g, '');
+          return `
+            <div class="p-3 bg-purple-50/40 rounded-2xl border border-purple-100 space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="font-bold text-slate-900 truncate">${u.store_name} <span class="text-[10px] text-slate-500">(${u.email})</span></p>
+                  <div class="flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full ${badgeCls}">${badgeTxt}</span>
+                    ${u.store_slug ? `<a href="/tienda/${u.store_slug}" target="_blank" class="text-[10px] font-mono text-purple-700 hover:underline">/tienda/${u.store_slug}</a>` : ''}
+                  </div>
+                </div>
+              </div>
+              ${u.role !== 'admin' ? `
+                <div class="flex flex-wrap gap-1.5 pt-1 border-t border-purple-100/60">
+                  <button onclick="adminActivateUser(${u.id}, 'activate')" class="px-2.5 py-1 bg-emerald-600 text-white font-bold rounded-xl text-[10px]">+90 días</button>
+                  <button onclick="adminActivateUser(${u.id}, 'suspend')" class="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-xl text-[10px]">Suspender</button>
+                  <button onclick="adminResetUserPassword(${u.id}, '${u.email.replace(/'/g, '')}')" class="px-2.5 py-1 bg-slate-200 text-slate-800 font-bold rounded-xl text-[10px]" title="Reseteo manual opcional de respaldo">🔑 Clave</button>
+                  ${cleanPhone ? `<button onclick="adminSendWhatsAppReminder('${cleanPhone}', '${u.store_name.replace(/'/g, '')}', ${u.days_left || 0})" class="px-2.5 py-1 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">📲 WhatsApp</button>` : ''}
+                </div>
+              ` : ''}
             </div>
-            ${u.role !== 'admin' ? `<button onclick="adminActivateUser(${u.id})" class="px-2.5 py-1 bg-emerald-600 text-white font-bold rounded-xl text-[10px]">+90 días</button>` : ''}
-          </div>
-        `).join('');
+          `;
+        }).join('');
       } catch (err) { alert(err.message); }
     }
     function closeAdminModal() { document.getElementById('modal-admin').classList.add('hidden'); }
@@ -3116,18 +3991,36 @@
           body: JSON.stringify({
             platform_mp_token: document.getElementById('admin-mp-token').value.trim(),
             platform_mp_pay_link: document.getElementById('admin-mp-pay-link')?.value.trim() || '',
-            public_base_url: document.getElementById('admin-base-url').value.trim()
+            public_base_url: document.getElementById('admin-base-url').value.trim(),
+            trial_days: parseInt(document.getElementById('admin-trial-days')?.value ?? '3')
           })
         });
-        alert('Configuración guardada.');
+        alert('Configuración guardada de forma permanente en la base de datos. ✅');
       } catch (err) { alert(err.message); }
     }
-    async function adminActivateUser(uid) {
-      await api('/api/admin/activate-user', { method: 'POST', body: JSON.stringify({ user_id: uid }) });
+    async function adminActivateUser(uid, action = 'activate') {
+      await api('/api/admin/activate-user', { method: 'POST', body: JSON.stringify({ user_id: uid, action }) });
       openAdminModal();
+    }
+    async function adminResetUserPassword(uid, email) {
+      const new_password = prompt(`Asignar nueva clave temporal para ${email}:`);
+      if (!new_password) return;
+      try {
+        await api('/api/admin/reset-user-password', { method: 'POST', body: JSON.stringify({ user_id: uid, new_password }) });
+        alert(`Clave actualizada para ${email}.`);
+      } catch (err) { alert(err.message); }
+    }
+    function adminSendWhatsAppReminder(phone, storeName, daysLeft) {
+      const txt = daysLeft > 0
+        ? `¡Hola *${storeName}*! 👋 Te escribimos de VentaFlow POS para recordarte que te quedan *${daysLeft} días* activos. Puedes renovar tu trimestre ($10.000 por 90 días) directo desde la app con Mercado Pago.`
+        : `¡Hola *${storeName}*! 👋 Tu periodo de prueba/plan en VentaFlow POS finalizó. Puedes reactivar tu tienda y catálogo online ($10.000 por 3 meses) directo ingresando a la app.`;
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(txt)}`, '_blank');
     }
 
     function switchTab(tab) {
+      if (currentUser && currentUser.scope === 'staff' && (tab === 'audit' || tab === 'settings')) {
+        return;
+      }
       state.activeTab = tab;
       ['sale', 'dispatches', 'catalog', 'audit', 'settings'].forEach(t => {
         document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
