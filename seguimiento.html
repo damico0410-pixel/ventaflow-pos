@@ -2,30 +2,32 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Seguimiento de Pedido</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Seguimiento de Pedido en Vivo</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { overflow-x: hidden; max-width: 100%; }
     body { background: linear-gradient(135deg, #F5F3FF 0%, #FDF4FF 50%, #F3E8FF 100%); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; }
   </style>
 </head>
 <body class="flex flex-col items-center justify-center p-4">
-  <div class="w-full max-w-md bg-white rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-5">
-    <div id="loading-box" class="text-center py-8 text-sm text-purple-600 font-bold">Buscando tu pedido... ⏳</div>
+  <div class="w-full max-w-md bg-white rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-4">
+    <div id="loading-box" class="text-center py-8 text-sm text-purple-600 font-bold">Buscando tu paquete... ⏳</div>
 
     <div id="error-box" class="hidden text-center py-6 space-y-2">
       <span class="text-3xl block">🔍</span>
       <h2 class="font-bold text-slate-800">Pedido no encontrado</h2>
-      <p class="text-xs text-slate-500">Verifica el código de seguimiento o consulta con la tienda.</p>
+      <p class="text-xs text-slate-500">Verifica el código de seguimiento (ej. PED-XXXXXX).</p>
       <div class="flex gap-2 pt-2">
-        <input type="text" id="manual-code" placeholder="Ej: PED-A1B2C3" class="flex-1 px-3 py-2 border border-purple-200 rounded-xl text-xs uppercase">
-        <button onclick="searchManual()" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl text-xs">Buscar</button>
+        <input type="text" id="manual-code" placeholder="Ej: PED-A1B2C3" class="flex-1 min-w-0 px-3 py-2 border border-purple-200 rounded-xl text-xs uppercase font-mono">
+        <button onclick="searchManual()" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl text-xs shrink-0">Buscar</button>
       </div>
     </div>
 
-    <div id="order-box" class="hidden space-y-4">
-      <div class="text-center space-y-1 border-b border-purple-100 pb-4">
+    <div id="order-box" class="hidden space-y-4 text-xs">
+      <div class="text-center space-y-1 border-b border-purple-100 pb-3.5">
         <img id="store-logo" src="" class="h-12 mx-auto object-contain hidden mb-1 rounded-xl">
         <span id="store-icon" class="text-3xl block">🛍️</span>
         <h1 id="store-name" class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">Mi Comercio</h1>
@@ -34,7 +36,7 @@
 
       <div class="flex items-center justify-between bg-purple-50/70 p-3.5 rounded-2xl border border-purple-100">
         <div>
-          <span class="text-[10px] font-bold uppercase text-purple-600 block">Pedido</span>
+          <span class="text-[10px] font-bold uppercase text-purple-600 block">Comprobante</span>
           <span id="ord-folio" class="font-mono font-black text-base text-purple-900">#001001</span>
           <span id="ord-code" class="text-[10px] font-mono text-slate-500 block"></span>
         </div>
@@ -43,41 +45,122 @@
         </div>
       </div>
 
+      <!-- Línea de progreso del despacho -->
       <div class="space-y-2">
-        <span class="text-xs font-bold text-slate-700 block">Estado del Despacho</span>
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-slate-700">Estado del Despacho</span>
+          <span id="ord-delivery-badge" class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full"></span>
+        </div>
         <div class="grid grid-cols-4 gap-1 text-center text-[10px] font-bold">
           <div id="step-to_prepare" class="p-2 rounded-xl border">📦<br>Preparando</div>
           <div id="step-packed" class="p-2 rounded-xl border">🎁<br>Empacado</div>
           <div id="step-dispatched" class="p-2 rounded-xl border">🚚<br>En Camino</div>
           <div id="step-delivered" class="p-2 rounded-xl border">✅<br>Entregado</div>
         </div>
-        <div id="shipping-info" class="hidden p-3 bg-sky-50 border border-sky-200 rounded-2xl text-xs text-sky-900">
-          <strong class="block">Datos del Envío:</strong>
-          <span id="shipping-detail"></span>
+
+        <!-- Información de Correo y Rastreo Directo Oficial -->
+        <div id="shipping-info" class="hidden p-3.5 bg-sky-50 border border-sky-200 rounded-2xl text-sky-950 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <span class="text-[10px] font-black uppercase text-sky-700 block">🚚 Transporte y Nº de Guía</span>
+              <p id="shipping-detail" class="font-bold text-xs truncate"></p>
+            </div>
+            <button type="button" id="btn-copy-guide" onclick="copyTrackingGuide()" class="hidden px-2.5 py-1 bg-white border border-sky-200 text-sky-800 rounded-lg font-bold text-[10px] shrink-0">📋 Copiar Guía</button>
+          </div>
+          <a id="btn-carrier-official" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-center block shadow-sm">
+            🔎 Rastrear en Sitio Oficial del Correo ↗
+          </a>
         </div>
       </div>
 
-      <div class="space-y-1.5 border-t border-purple-100 pt-3 text-xs">
-        <span class="font-bold text-slate-700 block">Productos:</span>
+      <!-- Detalle de Productos y Totales -->
+      <div class="space-y-1.5 border-t border-purple-100 pt-3">
+        <span class="font-bold text-slate-700 block">Detalle del Pedido:</span>
         <div id="ord-items" class="space-y-1 text-slate-600"></div>
+        <div id="ord-extra-rows" class="space-y-1 pt-1 border-t border-slate-100 text-slate-500"></div>
         <div class="flex justify-between items-baseline pt-2 border-t border-purple-50 font-black text-base text-purple-800">
           <span>TOTAL</span>
           <span id="ord-total">$ 0</span>
         </div>
       </div>
 
-      <a id="btn-pay-mp" href="#" target="_blank" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-center text-sm shadow-lg block">
-        💳 ABONAR CON MERCADO PAGO
-      </a>
+      <!-- Medios de Abono si está pendiente -->
+      <div id="unpaid-actions" class="hidden space-y-2 pt-1 border-t border-purple-100">
+        <a id="btn-pay-mp" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-center text-xs shadow-lg block">
+          💳 ABONAR CON MERCADO PAGO
+        </a>
+        <a id="btn-pay-ext" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3 bg-indigo-600 text-white font-extrabold rounded-2xl text-center text-xs shadow block">
+          🔗 IR AL LINK DE PAGO ONLINE
+        </a>
+        <div id="bank-box" class="hidden p-3 bg-purple-50 border border-purple-200 rounded-2xl space-y-1">
+          <span class="text-[10px] font-black uppercase text-purple-700 block">🏦 Datos para Transferencia</span>
+          <p id="bank-holder" class="text-[11px] text-slate-600"></p>
+          <div class="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-purple-200">
+            <span id="bank-alias" class="font-mono font-bold text-slate-900 truncate"></span>
+            <button type="button" onclick="copyBank()" class="px-2 py-1 bg-purple-600 text-white font-bold rounded-lg text-[10px] shrink-0">📋 Copiar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <a id="btn-store-link" href="#" class="hidden py-2.5 bg-purple-50 text-purple-800 font-bold rounded-xl text-center border border-purple-200">🛍️ Ver Tienda</a>
+        <a id="btn-wa-store" href="#" target="_blank" rel="noopener noreferrer" class="hidden py-2.5 bg-emerald-50 text-emerald-800 font-bold rounded-xl text-center border border-emerald-200">💬 Consultar WA</a>
+      </div>
     </div>
   </div>
 
   <script>
     const STEPS = ['to_prepare', 'packed', 'dispatched', 'delivered'];
+    let currentGuide = '';
+    let currentAlias = '';
+
+    function esc(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function resolveCarrierUrl(carrier, tracking) {
+      const c = String(carrier || '').toLowerCase();
+      const t = encodeURIComponent(String(tracking || '').trim());
+      if (!c) return '';
+      if (c.includes('andreani')) return t ? `https://www.andreani.com/#!/informacionEnvio/${t}` : 'https://www.andreani.com/';
+      if (c.includes('correo argentino')) return 'https://www.correoargentino.com.ar/formularios/e-commerce';
+      if (c.includes('oca')) return 'https://www.oca.com.ar/Busquedas/Envios';
+      if (c.includes('via cargo') || c.includes('vía cargo')) return 'https://viacargo.com.ar/seguimiento';
+      if (c.includes('dhl')) return `https://www.dhl.com/global-en/home/tracking.html?tracking-id=${t}`;
+      if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${t}`;
+      if (c.includes('ups')) return `https://www.ups.com/track?tracknum=${t}`;
+      if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`;
+      if (c.includes('estafeta')) return 'https://www.estafeta.com/Herramientas/Rastreo';
+      if (c.includes('chilexpress')) return 'https://www.chilexpress.cl/';
+      if (c.includes('blue express') || c.includes('bluexpress')) return 'https://www.blue.cl/seguimiento/';
+      if (c.includes('servientrega')) return 'https://www.servientrega.com/';
+      if (c.includes('correios')) return 'https://rastreamento.correios.com.br/';
+      if (c.includes('correos')) return 'https://www.correos.es/es/es/herramientas/localizador/envios';
+      return '';
+    }
 
     function searchManual() {
       const code = document.getElementById('manual-code').value.trim();
       if (code) window.location.href = `/seguimiento.html?code=${encodeURIComponent(code)}`;
+    }
+
+    function copyTrackingGuide() {
+      if (currentGuide && navigator.clipboard) {
+        navigator.clipboard.writeText(currentGuide).catch(() => {});
+        alert('¡Número de guía copiado! 📋');
+      }
+    }
+
+    function copyBank() {
+      if (currentAlias && navigator.clipboard) {
+        navigator.clipboard.writeText(currentAlias).catch(() => {});
+        alert('¡Alias / Cuenta copiada! 📋');
+      }
     }
 
     async function loadOrder() {
@@ -92,8 +175,9 @@
         if (!resp.ok) throw new Error('Not found');
         const data = await resp.json();
         const o = data.order;
-        const s = data.store;
+        const s = data.store || {};
         const sym = s.currency_symbol || '$';
+        const fmt = n => `${sym} ${Number(n || 0).toLocaleString('es-AR')}`;
 
         if (s.logo_data_url) {
           document.getElementById('store-logo').src = s.logo_data_url;
@@ -106,6 +190,7 @@
         document.getElementById('store-contact').innerText = [s.phone, s.instagram].filter(Boolean).join(' • ');
         document.getElementById('ord-folio').innerText = o.folio_number;
         document.getElementById('ord-code').innerText = o.tracking_code;
+        document.getElementById('ord-delivery-badge').innerText = o.delivery_method === 'pickup' ? '🏪 Retiro en Local' : '🚚 Envío a Domicilio';
 
         const badge = document.getElementById('ord-pay-badge');
         if (o.payment_status === 'paid') {
@@ -125,18 +210,65 @@
 
         if (o.shipping_carrier || o.shipping_tracking) {
           document.getElementById('shipping-info').classList.remove('hidden');
-          document.getElementById('shipping-detail').innerText = `${o.shipping_carrier || ''} ${o.shipping_tracking ? '— Guía: ' + o.shipping_tracking : ''}`;
+          document.getElementById('shipping-detail').innerText = [o.shipping_carrier, o.shipping_tracking ? `Guía: ${o.shipping_tracking}` : ''].filter(Boolean).join(' • ');
+          if (o.shipping_tracking) {
+            currentGuide = o.shipping_tracking;
+            document.getElementById('btn-copy-guide').classList.remove('hidden');
+          }
+          const officialUrl = resolveCarrierUrl(o.shipping_carrier, o.shipping_tracking);
+          if (officialUrl) {
+            const cBtn = document.getElementById('btn-carrier-official');
+            cBtn.href = officialUrl;
+            cBtn.innerText = `🔎 Rastrear en ${o.shipping_carrier || 'Sitio Oficial'} ↗`;
+            cBtn.classList.remove('hidden');
+          }
         }
 
-        document.getElementById('ord-items').innerHTML = o.items.map(i => `
-          <div class="flex justify-between"><span>${i.quantity}x ${i.productName}</span><span class="font-bold">${sym} ${Number(i.subtotal).toLocaleString('es-AR')}</span></div>
+        document.getElementById('ord-items').innerHTML = (o.items || []).map(i => `
+          <div class="flex justify-between gap-2"><span class="truncate">${Number(i.quantity)}x ${esc(i.productName)}</span><span class="font-bold shrink-0">${esc(fmt(i.subtotal))}</span></div>
         `).join('');
-        document.getElementById('ord-total').innerText = `${sym} ${Number(o.total).toLocaleString('es-AR')}`;
 
-        if (o.mp_payment_link && o.payment_status !== 'paid') {
-          const btn = document.getElementById('btn-pay-mp');
-          btn.href = o.mp_payment_link;
-          btn.classList.remove('hidden');
+        const extras = [];
+        if (Number(o.discount_amount) > 0) extras.push(`<div class="flex justify-between text-fuchsia-600 font-semibold"><span>${esc(o.discount_label || 'Descuento')}</span><span>-${esc(fmt(o.discount_amount))}</span></div>`);
+        if (Number(o.shipping_cost) > 0) extras.push(`<div class="flex justify-between"><span>Costo de Envío</span><span>${esc(fmt(o.shipping_cost))}</span></div>`);
+        if (Number(o.tax_amount) > 0) extras.push(`<div class="flex justify-between"><span>${esc(s.tax_label || 'Impuestos')}</span><span>${esc(fmt(o.tax_amount))}</span></div>`);
+        document.getElementById('ord-extra-rows').innerHTML = extras.join('');
+        document.getElementById('ord-total').innerText = fmt(o.total);
+
+        if (o.payment_status !== 'paid') {
+          let anyPay = false;
+          if (o.mp_payment_link) {
+            const btn = document.getElementById('btn-pay-mp');
+            btn.href = o.mp_payment_link;
+            btn.classList.remove('hidden');
+            anyPay = true;
+          }
+          if (s.external_pay_link) {
+            const eBtn = document.getElementById('btn-pay-ext');
+            eBtn.href = s.external_pay_link;
+            eBtn.classList.remove('hidden');
+            anyPay = true;
+          }
+          if (s.bank_alias) {
+            currentAlias = s.bank_alias;
+            document.getElementById('bank-alias').innerText = s.bank_alias;
+            document.getElementById('bank-holder').innerText = s.bank_holder ? `Titular: ${s.bank_holder}` : '';
+            document.getElementById('bank-box').classList.remove('hidden');
+            anyPay = true;
+          }
+          if (anyPay) document.getElementById('unpaid-actions').classList.remove('hidden');
+        }
+
+        if (s.slug) {
+          const stBtn = document.getElementById('btn-store-link');
+          stBtn.href = `/tienda/${encodeURIComponent(s.slug)}`;
+          stBtn.classList.remove('hidden');
+        }
+        const cleanPhone = String(s.phone || '').replace(/\D/g, '');
+        if (cleanPhone) {
+          const waBtn = document.getElementById('btn-wa-store');
+          waBtn.href = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`¡Hola! Consulto por mi pedido ${o.folio_number} (${o.tracking_code}).`)}`;
+          waBtn.classList.remove('hidden');
         }
 
         document.getElementById('loading-box').classList.add('hidden');

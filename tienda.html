@@ -23,7 +23,7 @@
 <body class="flex flex-col items-center pb-28">
 
   <div id="loading-view" class="w-full max-w-md min-h-screen flex items-center justify-center p-6 text-center">
-    <p class="text-sm font-bold text-purple-700 animate-pulse">Cargando catálogo de la tienda... 🛍️</p>
+    <p class="text-sm font-bold text-purple-700 animate-pulse">Cargando tienda oficial... 🛍️</p>
   </div>
 
   <div id="error-view" class="hidden w-full max-w-md min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-3">
@@ -41,6 +41,7 @@
       </div>
       <h1 id="st-name" class="text-xl font-extrabold tracking-tight" style="font-family:'Playfair Display',serif">Mi Tienda</h1>
       <p id="st-info" class="text-xs text-white/85"></p>
+      <div id="st-shipping-banner" class="hidden inline-block bg-white/20 backdrop-blur px-3 py-1 rounded-full text-[11px] font-bold"></div>
     </header>
 
     <main class="px-4 pt-4 space-y-3.5">
@@ -58,7 +59,7 @@
   <!-- FLOATING CART BAR -->
   <div id="cart-bar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-40">
     <button onclick="openCheckoutDrawer()" class="w-full py-3.5 px-5 st-grad text-white font-extrabold rounded-2xl shadow-2xl flex items-center justify-between text-sm">
-      <span id="cart-count-badge" class="bg-white/20 px-2.5 py-0.5 rounded-xl text-xs">0 prod.</span>
+      <span id="cart-count-badge" class="bg-white/20 px-2.5 py-0.5 rounded-xl text-xs">0 unid.</span>
       <span>Ver Pedido y Finalizar →</span>
       <span id="cart-total-badge">$ 0</span>
     </button>
@@ -66,25 +67,60 @@
 
   <!-- CHECKOUT MODAL -->
   <div id="checkout-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-    <div class="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-[32px] p-5 max-h-[90vh] overflow-y-auto space-y-4 text-xs">
-      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-        <h2 class="font-bold text-sm text-slate-900" style="font-family:'Playfair Display',serif">🛒 Tu Pedido</h2>
+    <div class="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-[32px] p-5 max-h-[92vh] overflow-y-auto space-y-3.5 text-xs">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+        <h2 class="font-bold text-sm text-slate-900" style="font-family:'Playfair Display',serif">🛒 Finalizar Tu Pedido</h2>
         <button onclick="closeCheckoutDrawer()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
 
-      <div id="cart-items-list" class="space-y-2 max-h-48 overflow-y-auto"></div>
+      <div id="cart-items-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
 
-      <div class="flex justify-between items-baseline pt-2 border-t border-slate-100">
-        <span class="font-bold text-slate-700">TOTAL A ABONAR</span>
-        <span id="drawer-total" class="text-xl font-black st-text">$ 0</span>
-      </div>
+      <div id="free-ship-progress" class="hidden p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800 text-center"></div>
 
-      <form onsubmit="submitPublicOrder(event)" class="space-y-2.5 pt-2 border-t border-slate-100">
-        <span class="font-bold text-slate-800 block uppercase tracking-wider text-[11px]">Datos para el Despacho</span>
-        <input type="text" id="co-name" required placeholder="Tu Nombre y Apellido *" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
-        <input type="tel" id="co-phone" required placeholder="Tu WhatsApp (ej. 54911...) *" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
-        <input type="text" id="co-address" required placeholder="Dirección y Localidad de entrega *" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
-        <input type="text" id="co-notes" placeholder="Notas opcionales (color, horario, etc.)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+      <form onsubmit="submitPublicOrder(event)" class="space-y-3 pt-2 border-t border-slate-100">
+        <!-- Honeypot anti-bots invisible -->
+        <input type="text" id="co-hp" class="hidden" tabindex="-1" autocomplete="off">
+
+        <!-- Método de Entrega -->
+        <div id="delivery-selector-wrap" class="space-y-1.5">
+          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">1. Forma de Entrega</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" onclick="setDeliveryMethod('delivery')" id="btn-del-delivery" class="p-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold text-[11px] text-center">
+              🚚 Envío a Domicilio
+            </button>
+            <button type="button" onclick="setDeliveryMethod('pickup')" id="btn-del-pickup" class="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center">
+              🏪 Retiro en Local
+            </button>
+          </div>
+        </div>
+
+        <!-- Datos del Comprador -->
+        <div class="space-y-2">
+          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">2. Tus Datos de Contacto</span>
+          <input type="text" id="co-name" required maxlength="90" placeholder="Tu Nombre y Apellido *" class="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
+          <input type="tel" id="co-phone" required maxlength="35" placeholder="Tu WhatsApp con código de área *" class="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
+          <div id="co-address-wrap">
+            <input type="text" id="co-address" maxlength="200" placeholder="Dirección, Calle, Altura y Ciudad *" class="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+          </div>
+          <input type="text" id="co-notes" maxlength="250" placeholder="Notas opcionales (timbre, horario, detalle)" class="w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+        </div>
+
+        <!-- Medio de Pago -->
+        <div class="space-y-1.5">
+          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">3. Medio de Pago Preferido</span>
+          <div id="payment-methods-grid" class="grid grid-cols-2 gap-1.5"></div>
+        </div>
+
+        <!-- Desglose de Totales -->
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
+          <div class="flex justify-between text-slate-500"><span>Subtotal productos:</span><span id="drawer-subtotal" class="font-semibold text-slate-700">$ 0</span></div>
+          <div class="flex justify-between text-slate-500" id="drawer-ship-row"><span>Costo de envío:</span><span id="drawer-ship" class="font-semibold text-slate-700">$ 0</span></div>
+          <div class="flex justify-between text-slate-500 hidden" id="drawer-tax-row"><span id="drawer-tax-lbl">Impuesto:</span><span id="drawer-tax" class="font-semibold text-slate-700">$ 0</span></div>
+          <div class="flex justify-between items-baseline pt-1.5 border-t border-slate-200">
+            <span class="font-extrabold text-slate-900">TOTAL FINAL</span>
+            <span id="drawer-total" class="text-lg font-black st-text">$ 0</span>
+          </div>
+        </div>
 
         <button type="submit" id="btn-submit-order" class="w-full py-3.5 st-grad text-white font-extrabold rounded-2xl shadow-lg text-sm">
           CONFIRMAR PEDIDO ✨
@@ -95,20 +131,33 @@
 
   <!-- SUCCESS MODAL -->
   <div id="success-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-    <div class="bg-white w-full max-w-sm rounded-[32px] p-6 text-center space-y-4 shadow-2xl">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-6 text-center space-y-4 shadow-2xl text-xs">
       <div class="w-14 h-14 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl">✅</div>
-      <h2 class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">¡Pedido Recibido!</h2>
-      <p class="text-xs text-slate-500">Tu código de seguimiento es <strong id="suc-code" class="font-mono text-purple-700"></strong></p>
+      <h2 class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">¡Pedido Confirmado!</h2>
+      <p class="text-slate-500">Tu código de seguimiento es <strong id="suc-code" class="font-mono text-purple-700 text-sm"></strong></p>
+
+      <!-- Bloque de Transferencia / Alias si aplica -->
+      <div id="suc-bank-box" class="hidden p-3 bg-purple-50 border border-purple-200 rounded-2xl text-left space-y-1.5">
+        <span class="text-[10px] font-black uppercase text-purple-700 block">🏦 Datos para Transferencia</span>
+        <p id="suc-bank-holder" class="text-[11px] text-slate-600"></p>
+        <div class="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-purple-200">
+          <span id="suc-bank-alias" class="font-mono font-bold text-slate-900 truncate"></span>
+          <button type="button" onclick="copyBankAlias()" class="px-2 py-1 bg-purple-600 text-white font-bold rounded-lg text-[10px] shrink-0">📋 Copiar</button>
+        </div>
+      </div>
 
       <div class="space-y-2 pt-1">
         <a id="suc-mp-btn" href="#" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-xs shadow-lg block">
-          💳 ABONAR AHORA CON MERCADO PAGO
+          💳 ABONAR CON MERCADO PAGO
         </a>
-        <a id="suc-wa-btn" href="#" target="_blank" class="w-full py-3 bg-emerald-500 text-white font-bold rounded-2xl text-xs shadow block">
-          📲 Avisar por WhatsApp a la Tienda
+        <a id="suc-ext-btn" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3.5 bg-indigo-600 text-white font-extrabold rounded-2xl text-xs shadow-lg block">
+          🔗 IR AL LINK DE PAGO ONLINE
+        </a>
+        <a id="suc-wa-btn" href="#" target="_blank" rel="noopener noreferrer" class="w-full py-3 bg-emerald-500 text-white font-bold rounded-2xl text-xs shadow block">
+          📲 Enviar Pedido por WhatsApp a la Tienda
         </a>
         <a id="suc-track-btn" href="#" class="w-full py-2.5 bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs block">
-          🚚 Ver Seguimiento de mi Envío
+          🚚 Ver Seguimiento en Vivo de mi Paquete
         </a>
       </div>
     </div>
@@ -127,6 +176,17 @@
     let products = [];
     let activeCategory = 'Todos';
     let cart = [];
+    let selectedDelivery = 'delivery';
+    let selectedPayMethod = 'mercadopago';
+
+    function esc(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     function getSlug() {
       const q = new URLSearchParams(window.location.search).get('s');
@@ -137,12 +197,15 @@
     }
 
     function fmt(n) {
-      return `${store?.currency_symbol || '$'} ${Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+      const sym = store?.currency_symbol || '$';
+      const num = Number(n || 0);
+      const decimals = (store?.currency_code === 'USD' || store?.currency_code === 'EUR' || store?.currency_code === 'PEN' || store?.currency_code === 'BRL') && (num % 1 !== 0) ? 2 : 0;
+      return `${sym} ${num.toLocaleString('es-AR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
     }
 
     function applyTheme(palette, customHex) {
       const root = document.documentElement;
-      if (palette === 'custom' && customHex) {
+      if (palette === 'custom' && /^#[0-9A-Fa-f]{6}$/.test(customHex || '')) {
         root.style.setProperty('--st-bg', `linear-gradient(135deg, ${customHex}12 0%, #FFFFFF 55%, ${customHex}18 100%)`);
         root.style.setProperty('--st-grad', `linear-gradient(135deg, ${customHex} 0%, ${customHex}DD 100%)`);
         root.style.setProperty('--st-accent', customHex);
@@ -167,7 +230,7 @@
         if (!resp.ok) throw new Error(data.error || 'No disponible');
         store = data.store;
         products = data.products || [];
-        document.title = `${store.name} — Tienda Online`;
+        document.title = `${store.name} — Tienda Oficial`;
         applyTheme(store.app_palette, store.custom_color);
 
         if (store.logo_data_url) {
@@ -180,6 +243,18 @@
         document.getElementById('st-name').innerText = store.name;
         document.getElementById('st-info').innerText = [store.address, store.instagram].filter(Boolean).join(' • ');
 
+        const shipBanner = document.getElementById('st-shipping-banner');
+        if (Number(store.free_shipping_min) > 0) {
+          shipBanner.innerText = `🚚 ¡Envío Gratis en compras desde ${fmt(store.free_shipping_min)}!`;
+          shipBanner.classList.remove('hidden');
+        } else if (store.allow_pickup) {
+          shipBanner.innerText = `🚚 Envíos a domicilio y Retiro sin cargo`;
+          shipBanner.classList.remove('hidden');
+        }
+
+        document.getElementById('btn-del-pickup').classList.toggle('hidden', !store.allow_pickup);
+        setupPaymentMethods();
+        setDeliveryMethod('delivery');
         renderCategories();
         renderStoreProducts();
         document.getElementById('loading-view').classList.add('hidden');
@@ -192,17 +267,66 @@
       }
     }
 
-    function renderCategories() {
-      const cats = ['Todos', ...new Set(products.map(p => p.category || 'General'))];
-      document.getElementById('st-categories').innerHTML = cats.map(c => `
-        <button onclick="selectCat('${c.replace(/'/g, "\\'")}')" class="px-3 py-1.5 rounded-xl font-bold shrink-0 ${activeCategory === c ? 'st-grad text-white shadow' : 'bg-white text-slate-600 border border-slate-200'}">
-          ${c}
+    function setupPaymentMethods() {
+      const methods = [];
+      if (store.mp_enabled) methods.push({ id: 'mercadopago', label: '💳 Mercado Pago' });
+      if (store.bank_alias) methods.push({ id: 'transfer', label: '🏦 Transferencia' });
+      if (store.external_pay_link) methods.push({ id: 'external_link', label: '🔗 Pago Online' });
+      if (store.cash_on_delivery || methods.length === 0) methods.push({ id: 'cash', label: '💵 Efectivo / Acordar' });
+      selectedPayMethod = methods[0].id;
+      renderPaymentMethodButtons(methods);
+      window._storeMethods = methods;
+    }
+
+    function renderPaymentMethodButtons(methods) {
+      const list = methods || window._storeMethods || [];
+      document.getElementById('payment-methods-grid').innerHTML = list.map(m => `
+        <button type="button" onclick="selectPayMethod('${m.id}')" class="p-2 rounded-xl text-[11px] font-bold text-center ${selectedPayMethod === m.id ? 'border-2 border-purple-600 bg-purple-50 text-purple-950' : 'border border-slate-200 bg-white text-slate-600'}">
+          ${esc(m.label)}
         </button>
       `).join('');
     }
 
-    function selectCat(c) {
-      activeCategory = c;
+    function selectPayMethod(id) {
+      selectedPayMethod = id;
+      renderPaymentMethodButtons();
+    }
+
+    function setDeliveryMethod(mode) {
+      selectedDelivery = (mode === 'pickup' && store?.allow_pickup) ? 'pickup' : 'delivery';
+      document.getElementById('btn-del-delivery').className = selectedDelivery === 'delivery'
+        ? 'p-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold text-[11px] text-center'
+        : 'p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center';
+      const pBtn = document.getElementById('btn-del-pickup');
+      if (pBtn && !pBtn.classList.contains('hidden')) {
+        pBtn.className = selectedDelivery === 'pickup'
+          ? 'p-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold text-[11px] text-center'
+          : 'p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center';
+      }
+      const addrWrap = document.getElementById('co-address-wrap');
+      const addrInp = document.getElementById('co-address');
+      if (selectedDelivery === 'pickup') {
+        addrWrap.classList.add('hidden');
+        addrInp.required = false;
+      } else {
+        addrWrap.classList.remove('hidden');
+        addrInp.required = true;
+      }
+      updateCartBar();
+    }
+
+    function renderCategories() {
+      const cats = ['Todos', ...new Set(products.map(p => p.category || 'General'))];
+      document.getElementById('st-categories').innerHTML = cats.map((c, idx) => `
+        <button type="button" data-cat-idx="${idx}" onclick="selectCatByIdx(${idx})" class="px-3 py-1.5 rounded-xl font-bold shrink-0 ${activeCategory === c ? 'st-grad text-white shadow' : 'bg-white text-slate-600 border border-slate-200'}">
+          ${esc(c)}
+        </button>
+      `).join('');
+      window._catList = cats;
+    }
+
+    function selectCatByIdx(idx) {
+      activeCategory = (window._catList || ['Todos'])[idx] || 'Todos';
       renderCategories();
       renderStoreProducts();
     }
@@ -211,7 +335,7 @@
       const q = (document.getElementById('st-search').value || '').toLowerCase().trim();
       const filtered = products.filter(p => {
         if (activeCategory !== 'Todos' && (p.category || 'General') !== activeCategory) return false;
-        if (q && !p.name.toLowerCase().includes(q)) return false;
+        if (q && !String(p.name || '').toLowerCase().includes(q)) return false;
         return true;
       });
 
@@ -223,27 +347,28 @@
 
       box.innerHTML = filtered.map(p => {
         const out = Number(p.stock) <= 0;
-        const hasVars = Array.isArray(p.variants) && p.variants.length > 0;
+        const availVars = Array.isArray(p.variants) ? p.variants.filter(v => Number(v.stock) > 0) : [];
+        const safeId = esc(p.id);
         return `
           <div class="bg-white rounded-3xl p-3 border border-purple-100/80 shadow-sm flex flex-col justify-between space-y-2">
             <div>
               ${p.image_url
-                ? `<img src="${p.image_url}" class="w-full h-28 object-cover rounded-2xl mb-2 bg-slate-50">`
+                ? `<img src="${esc(p.image_url)}" class="w-full h-28 object-cover rounded-2xl mb-2 bg-slate-50">`
                 : `<div class="w-full h-24 rounded-2xl bg-purple-50/60 flex items-center justify-center text-2xl mb-2">🛍️</div>`}
-              <span class="text-[9px] uppercase font-bold text-slate-400 block truncate">${p.category || 'General'}</span>
-              <h3 class="font-bold text-xs text-slate-800 leading-snug line-clamp-2">${p.name}</h3>
+              <span class="text-[9px] uppercase font-bold text-slate-400 block truncate">${esc(p.category || 'General')}</span>
+              <h3 class="font-bold text-xs text-slate-800 leading-snug line-clamp-2">${esc(p.name)}</h3>
             </div>
             <div class="space-y-1.5 pt-1">
               <div class="flex items-center justify-between">
-                <span class="font-black text-sm st-text">${fmt(p.price)}</span>
-                <span class="text-[9px] font-bold ${out ? 'text-rose-600' : 'text-emerald-600'}">${out ? 'Agotado' : `Stock: ${p.stock}`}</span>
+                <span class="font-black text-sm st-text">${esc(fmt(p.price))}</span>
+                <span class="text-[9px] font-bold ${out ? 'text-rose-600' : 'text-emerald-600'}">${out ? 'Agotado' : `Stock: ${Number(p.stock)}`}</span>
               </div>
-              ${hasVars && !out ? `
-                <select id="var-${p.id}" class="w-full px-2 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded-lg font-semibold">
-                  ${p.variants.filter(v => Number(v.stock) > 0).map(v => `<option value="${v.name}">${v.name} (${v.stock})</option>`).join('')}
+              ${availVars.length && !out ? `
+                <select id="var-${safeId}" class="w-full px-2 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded-lg font-semibold">
+                  ${availVars.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${Number(v.stock)})</option>`).join('')}
                 </select>
               ` : ''}
-              <button ${out ? 'disabled' : `onclick="addToPublicCart('${p.id}')"`} class="w-full py-2 rounded-xl font-bold text-xs ${out ? 'bg-slate-100 text-slate-400' : 'st-grad text-white shadow active:scale-95 transition-transform'}">
+              <button type="button" ${out ? 'disabled' : `onclick="addToPublicCart('${safeId}')"`} class="w-full py-2 rounded-xl font-bold text-xs ${out ? 'bg-slate-100 text-slate-400' : 'st-grad text-white shadow active:scale-95 transition-transform'}">
                 ${out ? 'Sin Stock' : '+ Agregar'}
               </button>
             </div>
@@ -281,19 +406,58 @@
       if (!cart.length) closeCheckoutDrawer();
     }
 
+    function computeTotals() {
+      const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+      const flat = Number(store?.shipping_flat_rate || 0);
+      const freeMin = Number(store?.free_shipping_min || 0);
+      let ship = 0;
+      if (selectedDelivery === 'delivery') {
+        ship = (freeMin > 0 && subtotal >= freeMin) ? 0 : flat;
+      }
+      const taxRate = Number(store?.tax_rate || 0);
+      const tax = taxRate > 0 ? Math.round(subtotal * (taxRate / 100) * 100) / 100 : 0;
+      return { subtotal, ship, tax, total: subtotal + ship + tax };
+    }
+
     function updateCartBar() {
       const bar = document.getElementById('cart-bar');
       if (!cart.length) { bar.classList.add('hidden'); return; }
       const count = cart.reduce((s, i) => s + i.quantity, 0);
-      const total = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+      const t = computeTotals();
       document.getElementById('cart-count-badge').innerText = `${count} unid.`;
-      document.getElementById('cart-total-badge').innerText = fmt(total);
-      document.getElementById('drawer-total').innerText = fmt(total);
+      document.getElementById('cart-total-badge').innerText = fmt(t.subtotal);
+
+      document.getElementById('drawer-subtotal').innerText = fmt(t.subtotal);
+      document.getElementById('drawer-ship').innerText = t.ship <= 0 ? '¡GRATIS!' : fmt(t.ship);
+      const taxRow = document.getElementById('drawer-tax-row');
+      if (t.tax > 0) {
+        taxRow.classList.remove('hidden');
+        document.getElementById('drawer-tax-lbl').innerText = `${store.tax_label || 'Impuesto'} (${store.tax_rate}%):`;
+        document.getElementById('drawer-tax').innerText = fmt(t.tax);
+      } else {
+        taxRow.classList.add('hidden');
+      }
+      document.getElementById('drawer-total').innerText = fmt(t.total);
+
+      const prog = document.getElementById('free-ship-progress');
+      const freeMin = Number(store?.free_shipping_min || 0);
+      if (freeMin > 0 && selectedDelivery === 'delivery') {
+        prog.classList.remove('hidden');
+        if (t.subtotal >= freeMin) {
+          prog.innerText = '🎉 ¡Felicitaciones! Tienes Envío Gratis en este pedido';
+        } else {
+          prog.innerText = `🚚 Te faltan ${fmt(freeMin - t.subtotal)} para obtener Envío Gratis`;
+        }
+      } else {
+        prog.classList.add('hidden');
+      }
+
       bar.classList.remove('hidden');
     }
 
     function openCheckoutDrawer() {
       renderDrawerItems();
+      updateCartBar();
       document.getElementById('checkout-modal').classList.remove('hidden');
       lucide.createIcons();
     }
@@ -303,16 +467,24 @@
       document.getElementById('cart-items-list').innerHTML = cart.map((i, idx) => `
         <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded-2xl">
           <div class="min-w-0 pr-2">
-            <p class="font-bold text-slate-800 truncate">${i.name} ${i.variant_name ? `(${i.variant_name})` : ''}</p>
-            <p class="text-[10px] text-slate-500">${fmt(i.price)} c/u</p>
+            <p class="font-bold text-slate-800 truncate">${esc(i.name)} ${i.variant_name ? `(${esc(i.variant_name)})` : ''}</p>
+            <p class="text-[10px] text-slate-500">${esc(fmt(i.price))} c/u</p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
             <button type="button" onclick="changeQty(${idx}, -1)" class="w-6 h-6 rounded-lg bg-white border font-bold">-</button>
-            <span class="font-bold w-4 text-center">${i.quantity}</span>
+            <span class="font-bold w-4 text-center">${Number(i.quantity)}</span>
             <button type="button" onclick="changeQty(${idx}, 1)" class="w-6 h-6 rounded-lg bg-white border font-bold">+</button>
           </div>
         </div>
       `).join('');
+    }
+
+    function copyBankAlias() {
+      const alias = document.getElementById('suc-bank-alias')?.innerText || '';
+      if (alias && navigator.clipboard) {
+        navigator.clipboard.writeText(alias).catch(() => {});
+        alert('¡Alias / Cuenta copiada al portapapeles! ✅');
+      }
     }
 
     async function submitPublicOrder(e) {
@@ -320,16 +492,19 @@
       if (!cart.length) return;
       const btn = document.getElementById('btn-submit-order');
       btn.disabled = true;
-      btn.innerText = 'Procesando pedido... ⏳';
+      btn.innerText = 'Procesando pedido seguro... 🔒';
 
       try {
         const resp = await fetch(`/api/public/store/${encodeURIComponent(store.slug)}/checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            website_hp: document.getElementById('co-hp').value,
             customer_name: document.getElementById('co-name').value.trim(),
             customer_phone: document.getElementById('co-phone').value.trim(),
             customer_address: document.getElementById('co-address').value.trim(),
+            delivery_method: selectedDelivery,
+            payment_method: selectedPayMethod,
             notes: document.getElementById('co-notes').value.trim(),
             items: cart.map(i => ({ product_id: i.product_id, variant_name: i.variant_name, quantity: i.quantity }))
           })
@@ -341,13 +516,33 @@
         document.getElementById('suc-code').innerText = data.order.tracking_code;
         document.getElementById('suc-track-btn').href = data.tracking_url;
 
+        const mpBtn = document.getElementById('suc-mp-btn');
         if (data.payment_link) {
-          const mpBtn = document.getElementById('suc-mp-btn');
           mpBtn.href = data.payment_link;
           mpBtn.classList.remove('hidden');
+        } else {
+          mpBtn.classList.add('hidden');
         }
 
-        const waMsg = `¡Hola ${store.name}! Acabo de realizar el Pedido ${data.order.folio_number} (${data.order.tracking_code}) por ${fmt(data.order.total)}.`;
+        const extBtn = document.getElementById('suc-ext-btn');
+        if (data.external_pay_link) {
+          extBtn.href = data.external_pay_link;
+          extBtn.classList.remove('hidden');
+        } else {
+          extBtn.classList.add('hidden');
+        }
+
+        const bankBox = document.getElementById('suc-bank-box');
+        if (data.bank_alias) {
+          document.getElementById('suc-bank-alias').innerText = data.bank_alias;
+          document.getElementById('suc-bank-holder').innerText = data.bank_holder ? `Titular / Banco: ${data.bank_holder}` : '';
+          bankBox.classList.remove('hidden');
+        } else {
+          bankBox.classList.add('hidden');
+        }
+
+        const fullTrackUrl = `${window.location.origin}${data.tracking_url}`;
+        const waMsg = `¡Hola ${store.name}! Realicé el Pedido ${data.order.folio_number} (${data.order.tracking_code}) por ${fmt(data.order.total)}. Seguimiento: ${fullTrackUrl}`;
         const cleanPhone = (data.store_phone || '').replace(/\D/g, '');
         document.getElementById('suc-wa-btn').href = cleanPhone
           ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(waMsg)}`

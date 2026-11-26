@@ -3,8 +3,10 @@ import socketserver
 import os
 import sys
 import re
+import hmac
 import json
 import time
+import base64
 import sqlite3
 import hashlib
 import secrets
@@ -12,6 +14,7 @@ import smtplib
 import threading
 import urllib.request
 import urllib.error
+from collections import defaultdict, deque
 from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse, parse_qs
@@ -30,9 +33,22 @@ PORT = int(os.environ.get('PORT', 8080))
 SUBSCRIPTION_PRICE = 10000
 SUBSCRIPTION_DAYS = 90  # 3 meses
 DEFAULT_TRIAL_DAYS = 3  # 3 días de prueba gratis automática al registrarse
+MAX_BODY_BYTES = 2_600_000  # Límite estricto anti-saturación de memoria (~2.5 MB)
 
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 IS_POSTGRES = bool(DATABASE_URL)
+
+# Lista blanca estricta de archivos estáticos públicos (impide robo de server.py, .db, .json, .env, .git)
+PUBLIC_STATIC_FILES = {
+    '/index.html': 'text/html; charset=utf-8',
+    '/tienda.html': 'text/html; charset=utf-8',
+    '/seguimiento.html': 'text/html; charset=utf-8',
+    '/manifest.json': 'application/manifest+json; charset=utf-8',
+    '/sw.js': 'application/javascript; charset=utf-8',
+    '/icon.svg': 'image/svg+xml',
+}
+
+MP_SUPPORTED_CURRENCIES = {'ARS', 'BRL', 'CLP', 'COP', 'MXN', 'PEN', 'UYU'}
 
 
 def utc_now():
@@ -41,17 +57,23 @@ def utc_now():
 
 def slugify(text):
     s = (text or '').strip().lower()
-    replacements = {'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n', 'ü': 'u'}
+    replacements = {'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n', 'ü': 'u', 'ç': 'c'}
     for k, v in replacements.items():
         s = s.replace(k, v)
     s = re.sub(r'[^a-z0-9]+', '-', s).strip('-')
-    return s or ('tienda-' + secrets.token_hex(3))
+    return (s[:48].strip('-')) or ('tienda-' + secrets.token_hex(3))
+
+
+# ================= CRIPTOGRAFÍA AUTENTICADA (PBKDF2 + AES-STREAM/HMAC-SHA256) =================
+
+_CACHED_MASTER_KEY = None
+_CRYPTO_LOCK = threading.Lock()
 
 
 def hash_password(password, salt=None):
     if not salt:
         salt = secrets.token_hex(16)
-    dk = hashlib.pbkdf2_hmac('sha256', str(password).encode('utf-8'), salt.encode('utf-8'), 120000)
+    dk = hashlib.pbkdf2_hmac('sha256', str(password).encode('utf-8'), salt.encode('utf-8'), 150000)
     return f"{salt}${dk.hex()}"
 
 
@@ -60,9 +82,213 @@ def verify_password(password, stored_hash):
         return False
     try:
         salt, _ = stored_hash.split('$', 1)
-        return secrets.compare_digest(hash_password(str(password), salt), stored_hash)
+        # Soporta hashes de 120k (v3) y 150k (v4)
+        cand_150 = hash_password(str(password), salt)
+        if secrets.compare_digest(cand_150, stored_hash):
+            return True
+        dk_120 = hashlib.pbkdf2_hmac('sha256', str(password).encode('utf-8'), salt.encode('utf-8'), 120000)
+        return secrets.compare_digest(f"{salt}${dk_120.hex()}", stored_hash)
     except Exception:
         return False
+
+
+def _keystream(enc_key: bytes, nonce: bytes, length: int) -> bytes:
+    out = bytearray()
+    counter = 0
+    while len(out) < length:
+        block = hmac.new(enc_key, nonce + counter.to_bytes(4, 'big'), hashlib.sha256).digest()
+        out.extend(block)
+        counter += 1
+    return bytes(out[:length])
+
+
+def get_master_key(conn=None) -> bytes:
+    global _CACHED_MASTER_KEY
+    with _CRYPTO_LOCK:
+        if _CACHED_MASTER_KEY is not None:
+            return _CACHED_MASTER_KEY
+        env_secret = os.environ.get('APP_MASTER_SECRET', '').strip()
+        if env_secret:
+            _CACHED_MASTER_KEY = hashlib.sha256(env_secret.encode('utf-8')).digest()
+            return _CACHED_MASTER_KEY
+
+        own = False
+        if conn is None:
+            try:
+                conn = get_db()
+                own = True
+            except Exception:
+                conn = None
+        try:
+            if conn is not None:
+                row = conn.execute("SELECT value FROM platform_settings WHERE key = 'MASTER_KEY_HEX'").fetchone()
+                if row and row['value']:
+                    _CACHED_MASTER_KEY = bytes.fromhex(row['value'])
+                    return _CACHED_MASTER_KEY
+                new_hex = secrets.token_hex(32)
+                conn.execute(
+                    '''INSERT INTO platform_settings (key, value) VALUES ('MASTER_KEY_HEX', ?)
+                       ON CONFLICT(key) DO NOTHING''',
+                    (new_hex,)
+                )
+                conn.commit()
+                row2 = conn.execute("SELECT value FROM platform_settings WHERE key = 'MASTER_KEY_HEX'").fetchone()
+                _CACHED_MASTER_KEY = bytes.fromhex(row2['value'])
+                return _CACHED_MASTER_KEY
+        except Exception:
+            if IS_POSTGRES and conn is not None:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+        finally:
+            if own and conn is not None:
+                conn.close()
+        return hashlib.sha256(b'ventaflow-fallback-local-key').digest()
+
+
+def encrypt_secret(plaintext: str, conn=None) -> str:
+    if not plaintext:
+        return ''
+    if str(plaintext).startswith('enc:v1:'):
+        return str(plaintext)
+    master = get_master_key(conn)
+    enc_key = hmac.new(master, b'vf-enc-v1', hashlib.sha256).digest()
+    mac_key = hmac.new(master, b'vf-mac-v1', hashlib.sha256).digest()
+    nonce = secrets.token_bytes(16)
+    raw = str(plaintext).encode('utf-8')
+    stream = _keystream(enc_key, nonce, len(raw))
+    cipher = bytes(a ^ b for a, b in zip(raw, stream))
+    ct_b64 = base64.urlsafe_b64encode(cipher).decode('ascii')
+    nonce_hex = nonce.hex()
+    tag = hmac.new(mac_key, f"enc:v1:{nonce_hex}:{ct_b64}".encode('ascii'), hashlib.sha256).hexdigest()
+    return f"enc:v1:{nonce_hex}:{ct_b64}:{tag}"
+
+
+def decrypt_secret(stored: str, conn=None) -> str:
+    if not stored:
+        return ''
+    s = str(stored)
+    if not s.startswith('enc:v1:'):
+        return s  # Compatibilidad transparente con valores previos a v4.0
+    try:
+        parts = s.split(':')
+        if len(parts) != 5:
+            return ''
+        _, _, nonce_hex, ct_b64, tag = parts
+        master = get_master_key(conn)
+        enc_key = hmac.new(master, b'vf-enc-v1', hashlib.sha256).digest()
+        mac_key = hmac.new(master, b'vf-mac-v1', hashlib.sha256).digest()
+        expected_tag = hmac.new(mac_key, f"enc:v1:{nonce_hex}:{ct_b64}".encode('ascii'), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected_tag, tag):
+            return ''
+        nonce = bytes.fromhex(nonce_hex)
+        cipher = base64.urlsafe_b64decode(ct_b64.encode('ascii'))
+        stream = _keystream(enc_key, nonce, len(cipher))
+        plain = bytes(a ^ b for a, b in zip(cipher, stream))
+        return plain.decode('utf-8')
+    except Exception:
+        return ''
+
+
+def mask_secret(secret_str: str) -> str:
+    if not secret_str:
+        return ''
+    s = str(secret_str)
+    if len(s) <= 8:
+        return '••••••••'
+    return f"{s[:8]}••••{s[-4:]}"
+
+
+# ================= ESCUDO ANTI-FUERZA BRUTA & RATE LIMITER EN MEMORIA =================
+
+class SecurityShield:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._ip_hits = defaultdict(deque)
+        self._failed_auth = defaultdict(deque)
+        self._lockouts = {}
+
+    def check_rate(self, bucket: str, ip: str, limit: int, window_sec: int = 60) -> bool:
+        now = time.monotonic()
+        key = f"{bucket}:{ip}"
+        with self._lock:
+            dq = self._ip_hits[key]
+            cutoff = now - window_sec
+            while dq and dq[0] < cutoff:
+                dq.popleft()
+            if len(dq) >= limit:
+                return False
+            dq.append(now)
+            # Limpieza ocasional para evitar crecimiento infinito
+            if len(self._ip_hits) > 4000:
+                stale_keys = [k for k, v in self._ip_hits.items() if not v or v[-1] < cutoff]
+                for sk in stale_keys:
+                    del self._ip_hits[sk]
+            return True
+
+    def is_locked_out(self, ip: str, identifier: str = '') -> int:
+        now = time.monotonic()
+        keys = [f"ip:{ip}"]
+        if identifier:
+            keys.append(f"id:{identifier.lower()[:80]}")
+        with self._lock:
+            rem = 0
+            for k in keys:
+                until = self._lockouts.get(k, 0)
+                if until > now:
+                    rem = max(rem, int(until - now) + 1)
+                elif k in self._lockouts:
+                    del self._lockouts[k]
+            return rem
+
+    def record_auth_failure(self, ip: str, identifier: str = ''):
+        now = time.monotonic()
+        keys = [f"ip:{ip}"]
+        if identifier:
+            keys.append(f"id:{identifier.lower()[:80]}")
+        with self._lock:
+            for k in keys:
+                dq = self._failed_auth[k]
+                cutoff = now - 300  # ventana 5 minutos
+                while dq and dq[0] < cutoff:
+                    dq.popleft()
+                dq.append(now)
+                if len(dq) >= 6:
+                    self._lockouts[k] = now + 300  # Bloqueo 5 minutos
+
+    def clear_auth_failures(self, ip: str, identifier: str = ''):
+        with self._lock:
+            for k in (f"ip:{ip}", f"id:{identifier.lower()[:80]}"):
+                self._failed_auth.pop(k, None)
+                self._lockouts.pop(k, None)
+
+
+SHIELD = SecurityShield()
+
+
+# ================= POOL DE CONEXIONES POSTGRESQL + SQLITE WRAPPER =================
+
+_PG_POOL = None
+_PG_POOL_LOCK = threading.Lock()
+
+
+def _get_pg_pool():
+    global _PG_POOL
+    if _PG_POOL is not None:
+        return _PG_POOL
+    with _PG_POOL_LOCK:
+        if _PG_POOL is None:
+            import psycopg2
+            import psycopg2.pool
+            import psycopg2.extras
+            _PG_POOL = psycopg2.pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=12,
+                dsn=DATABASE_URL,
+                cursor_factory=psycopg2.extras.RealDictCursor
+            )
+        return _PG_POOL
 
 
 class PgCursorWrapper:
@@ -99,10 +325,29 @@ class PgCursorWrapper:
 
 
 class PgConnWrapper:
-    def __init__(self, dsn):
+    def __init__(self):
         import psycopg2
         import psycopg2.extras
-        self._conn = psycopg2.connect(dsn, cursor_factory=psycopg2.extras.RealDictCursor)
+        self._pool = _get_pg_pool()
+        self._from_pool = True
+        conn = self._pool.getconn()
+        # Verifica si el servidor cerró la conexión SSL inactiva
+        try:
+            if conn.closed:
+                self._pool.putconn(conn, close=True)
+                conn = self._pool.getconn()
+            else:
+                with conn.cursor() as chk:
+                    chk.execute('SELECT 1')
+                conn.rollback()
+        except Exception:
+            try:
+                self._pool.putconn(conn, close=True)
+            except Exception:
+                pass
+            conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+            self._from_pool = False
+        self._conn = conn
 
     def cursor(self):
         return PgCursorWrapper(self._conn.cursor())
@@ -119,14 +364,36 @@ class PgConnWrapper:
         self._conn.rollback()
 
     def close(self):
-        self._conn.close()
+        if self._conn is None:
+            return
+        try:
+            if not self._conn.closed:
+                self._conn.rollback()
+        except Exception:
+            pass
+        if self._from_pool and self._pool is not None:
+            try:
+                self._pool.putconn(self._conn, close=bool(self._conn.closed))
+            except Exception:
+                try:
+                    self._conn.close()
+                except Exception:
+                    pass
+        else:
+            try:
+                self._conn.close()
+            except Exception:
+                pass
+        self._conn = None
 
 
 def get_db():
     if IS_POSTGRES:
-        return PgConnWrapper(DATABASE_URL)
+        return PgConnWrapper()
     conn = sqlite3.connect(DB_PATH, timeout=15.0)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA synchronous=NORMAL')
     return conn
 
 
@@ -147,7 +414,9 @@ def load_config(conn=None):
         try:
             with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
                 saved = json.load(f)
-                cfg.update({k: v for k, v in saved.items() if v is not None and v != ""})
+                for k, v in saved.items():
+                    if v is not None and v != "" and k != 'MASTER_KEY_HEX':
+                        cfg[k] = v
         except Exception:
             pass
 
@@ -163,8 +432,13 @@ def load_config(conn=None):
         try:
             rows = conn.execute('SELECT key, value FROM platform_settings').fetchall()
             for r in rows:
-                if r['value'] is not None and r['value'] != '':
-                    cfg[r['key']] = r['value']
+                k, val = r['key'], r['value']
+                if k == 'MASTER_KEY_HEX' or val is None or val == '':
+                    continue
+                if k in ('PLATFORM_MP_ACCESS_TOKEN', 'SMTP_PASS'):
+                    cfg[k] = decrypt_secret(val, conn)
+                else:
+                    cfg[k] = val
         except Exception:
             if IS_POSTGRES:
                 try:
@@ -186,22 +460,18 @@ def save_config(new_cfg, conn=None):
         for k, v in new_cfg.items():
             if v is None:
                 continue
+            val_str = str(v)
+            if k in ('PLATFORM_MP_ACCESS_TOKEN', 'SMTP_PASS') and val_str:
+                val_str = encrypt_secret(val_str, conn)
             conn.execute(
                 '''INSERT INTO platform_settings (key, value) VALUES (?, ?)
                    ON CONFLICT(key) DO UPDATE SET value = excluded.value''',
-                (str(k), str(v))
+                (str(k), val_str)
             )
         conn.commit()
     finally:
         if own_conn:
             conn.close()
-
-    try:
-        cfg = load_config()
-        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump(cfg, f, indent=2, ensure_ascii=False)
-    except Exception:
-        pass
 
 
 def ensure_unique_slug(conn, desired_slug, exclude_user_id=None):
@@ -274,7 +544,18 @@ def init_db():
             address TEXT DEFAULT '',
             instagram TEXT DEFAULT '',
             website TEXT DEFAULT '',
+            country_code TEXT DEFAULT 'AR',
+            currency_code TEXT DEFAULT 'ARS',
             currency_symbol TEXT DEFAULT '$',
+            tax_label TEXT DEFAULT '',
+            tax_rate REAL DEFAULT 0,
+            bank_alias TEXT DEFAULT '',
+            bank_holder TEXT DEFAULT '',
+            external_pay_link TEXT DEFAULT '',
+            cash_on_delivery INTEGER DEFAULT 1,
+            shipping_flat_rate REAL DEFAULT 0,
+            free_shipping_min REAL DEFAULT 0,
+            allow_pickup INTEGER DEFAULT 1,
             next_folio_number INTEGER DEFAULT 1001,
             receipt_footer_message TEXT DEFAULT '¡Muchas gracias por tu compra! 💖 Preparamos tu pedido con mucho cuidado para despacharlo pronto.',
             mp_access_token TEXT DEFAULT '',
@@ -327,12 +608,16 @@ def init_db():
             subtotal REAL NOT NULL,
             discount_amount REAL DEFAULT 0,
             discount_label TEXT DEFAULT '',
+            shipping_cost REAL DEFAULT 0,
+            tax_amount REAL DEFAULT 0,
             total REAL NOT NULL,
             total_cost REAL DEFAULT 0,
             net_profit REAL DEFAULT 0,
             payment_status TEXT DEFAULT 'pending',
+            payment_method TEXT DEFAULT 'mercadopago',
             mp_payment_id TEXT DEFAULT '',
             mp_payment_link TEXT DEFAULT '',
+            delivery_method TEXT DEFAULT 'delivery',
             dispatch_status TEXT DEFAULT 'to_prepare',
             shipping_carrier TEXT DEFAULT '',
             shipping_tracking TEXT DEFAULT '',
@@ -366,7 +651,6 @@ def init_db():
     ''')
     conn.commit()
 
-    # Safe migrations for existing databases
     migrations = [
         "ALTER TABLE users ADD COLUMN recovery_pin_hash TEXT DEFAULT ''",
         "ALTER TABLE users ADD COLUMN is_trial INTEGER DEFAULT 0",
@@ -377,11 +661,26 @@ def init_db():
         "ALTER TABLE orders ADD COLUMN total_cost REAL DEFAULT 0",
         "ALTER TABLE orders ADD COLUMN net_profit REAL DEFAULT 0",
         "ALTER TABLE orders ADD COLUMN source TEXT DEFAULT 'pos'",
+        "ALTER TABLE orders ADD COLUMN shipping_cost REAL DEFAULT 0",
+        "ALTER TABLE orders ADD COLUMN tax_amount REAL DEFAULT 0",
+        "ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'mercadopago'",
+        "ALTER TABLE orders ADD COLUMN delivery_method TEXT DEFAULT 'delivery'",
         "ALTER TABLE store_profiles ADD COLUMN app_palette TEXT DEFAULT 'violet'",
         "ALTER TABLE store_profiles ADD COLUMN custom_color TEXT DEFAULT '#7C3AED'",
         "ALTER TABLE store_profiles ADD COLUMN business_mode TEXT DEFAULT 'NUEVO PEDIDO PARA DESPACHO'",
         "ALTER TABLE store_profiles ADD COLUMN slug TEXT DEFAULT ''",
         "ALTER TABLE store_profiles ADD COLUMN staff_pin TEXT DEFAULT ''",
+        "ALTER TABLE store_profiles ADD COLUMN country_code TEXT DEFAULT 'AR'",
+        "ALTER TABLE store_profiles ADD COLUMN currency_code TEXT DEFAULT 'ARS'",
+        "ALTER TABLE store_profiles ADD COLUMN tax_label TEXT DEFAULT ''",
+        "ALTER TABLE store_profiles ADD COLUMN tax_rate REAL DEFAULT 0",
+        "ALTER TABLE store_profiles ADD COLUMN bank_alias TEXT DEFAULT ''",
+        "ALTER TABLE store_profiles ADD COLUMN bank_holder TEXT DEFAULT ''",
+        "ALTER TABLE store_profiles ADD COLUMN external_pay_link TEXT DEFAULT ''",
+        "ALTER TABLE store_profiles ADD COLUMN cash_on_delivery INTEGER DEFAULT 1",
+        "ALTER TABLE store_profiles ADD COLUMN shipping_flat_rate REAL DEFAULT 0",
+        "ALTER TABLE store_profiles ADD COLUMN free_shipping_min REAL DEFAULT 0",
+        "ALTER TABLE store_profiles ADD COLUMN allow_pickup INTEGER DEFAULT 1",
     ]
     for alter_sql in migrations:
         try:
@@ -390,6 +689,38 @@ def init_db():
         except Exception:
             if IS_POSTGRES:
                 conn.rollback()
+
+    # Índices de alta velocidad para cero retrasos en consultas
+    indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_products_user ON products(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_user_created ON orders(user_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_tracking ON orders(tracking_code)",
+        "CREATE INDEX IF NOT EXISTS idx_customers_user ON customers(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_expenses_user ON expenses(user_id, expense_date)",
+        "CREATE INDEX IF NOT EXISTS idx_store_slug ON store_profiles(slug)",
+        "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)",
+    ]
+    for idx_sql in indexes:
+        try:
+            c.execute(idx_sql)
+            conn.commit()
+        except Exception:
+            if IS_POSTGRES:
+                conn.rollback()
+
+    # Inicializar llave maestra de cifrado y migrar tokens en texto plano existentes a formato cifrado
+    get_master_key(conn)
+    plain_tokens = conn.execute(
+        "SELECT user_id, mp_access_token FROM store_profiles WHERE mp_access_token IS NOT NULL AND mp_access_token != ''"
+    ).fetchall()
+    for pt in plain_tokens:
+        raw_tok = pt['mp_access_token']
+        if raw_tok and not str(raw_tok).startswith('enc:v1:'):
+            conn.execute(
+                'UPDATE store_profiles SET mp_access_token = ? WHERE user_id = ?',
+                (encrypt_secret(raw_tok, conn), pt['user_id'])
+            )
+    conn.commit()
 
     # Populate missing slugs on existing store_profiles
     missing_slugs = conn.execute("SELECT user_id, name FROM store_profiles WHERE slug IS NULL OR slug = ''").fetchall()
@@ -415,7 +746,35 @@ def init_db():
         c.execute('INSERT INTO store_profiles (user_id, name, slug) VALUES (?, ?, ?)', (admin_id, 'Admin Central POS', admin_slug))
         conn.commit()
 
+    # Eliminar archivo local config.json inseguro si existía tras migrar a DB cifrada
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                legacy = json.load(f)
+            save_config(legacy, conn)
+            os.remove(CONFIG_PATH)
+        except Exception:
+            pass
+
     conn.close()
+
+
+def sanitize_profile_for_client(profile_row, conn=None, is_staff=False):
+    if not profile_row:
+        return {}
+    d = dict(profile_row)
+    raw_mp = decrypt_secret(d.get('mp_access_token') or '', conn)
+    d['mp_connected'] = bool(raw_mp)
+    d['mp_token_masked'] = mask_secret(raw_mp) if not is_staff else ''
+    d['mp_access_token'] = ''  # JAMÁS exponer el Access Token real al navegador
+    if is_staff:
+        d['staff_pin'] = ''
+    return d
+
+
+def resolve_mp_currency(profile_row):
+    code = ((profile_row['currency_code'] if profile_row and 'currency_code' in profile_row.keys() else '') or 'ARS').upper().strip()
+    return code if code in MP_SUPPORTED_CURRENCIES else 'ARS'
 
 
 def mp_api_request(method, path, token, payload=None):
@@ -424,7 +783,7 @@ def mp_api_request(method, path, token, payload=None):
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
-        'User-Agent': 'VentaFlowPOS-SaaS/3.0'
+        'User-Agent': 'VentaFlowPOS-SaaS/4.0'
     }
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=15) as resp:
@@ -523,12 +882,12 @@ def compute_subscription_info(user_row):
 def start_keepalive_daemon():
     def _loop():
         while True:
-            time.sleep(540)  # cada 9 minutos
+            time.sleep(540)
             try:
                 cfg = load_config()
                 base = (cfg.get('PUBLIC_BASE_URL') or os.environ.get('RENDER_EXTERNAL_URL') or '').rstrip('/')
                 if base.startswith('https://'):
-                    req = urllib.request.Request(f"{base}/api/health", headers={'User-Agent': 'VentaFlow-KeepAlive/1.0'})
+                    req = urllib.request.Request(f"{base}/api/health", headers={'User-Agent': 'VentaFlow-KeepAlive/4.0'})
                     with urllib.request.urlopen(req, timeout=10) as _:
                         pass
             except Exception:
@@ -538,35 +897,109 @@ def start_keepalive_daemon():
     t.start()
 
 
-class SaaSHandler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=BASE_DIR, **kwargs)
+class PayloadTooLargeError(Exception):
+    pass
 
-    def end_headers(self):
-        self.send_header('Access-Control-Allow-Origin', '*')
+
+class SaaSHandler(http.server.BaseHTTPRequestHandler):
+    server_version = "VentaFlowSecure/4.0"
+    sys_version = ""
+
+    def setup(self):
+        super().setup()
+        try:
+            self.request.settimeout(15.0)
+        except Exception:
+            pass
+
+    def log_message(self, fmt, *args):
+        # Registro limpio sin exponer tokens ni cabeceras sensibles
+        sys.stdout.write("%s - [%s] %s\n" % (self.get_client_ip(), self.log_date_time_string(), fmt % args))
+
+    def get_client_ip(self) -> str:
+        xff = self.headers.get('X-Forwarded-For', '')
+        if xff:
+            return xff.split(',')[0].strip()[:64]
+        return (self.client_address[0] if self.client_address else '0.0.0.0')[:64]
+
+    def send_security_headers(self):
+        origin = self.headers.get('Origin', '')
+        host = self.headers.get('Host', '')
+        if origin and (host and (origin == f"https://{host}" or origin == f"http://{host}") or origin.startswith('http://localhost') or origin.startswith('http://127.0.0.1')):
+            self.send_header('Access-Control-Allow-Origin', origin)
+            self.send_header('Vary', 'Origin')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-        super().end_headers()
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+        self.send_header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=()')
+        self.send_header('Cross-Origin-Opener-Policy', 'same-origin-allow-popups')
+        if self.headers.get('X-Forwarded-Proto') == 'https':
+            self.send_header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+        self.send_header(
+            'Content-Security-Policy',
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com data:; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' https://api.mercadopago.com; "
+            "frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+        )
 
     def do_OPTIONS(self):
         self.send_response(204)
+        self.send_security_headers()
         self.end_headers()
 
-    def send_json(self, code, payload):
+    def send_json(self, code, payload, extra_headers=None):
         body = json.dumps(payload, ensure_ascii=False).encode('utf-8')
         self.send_response(code)
+        self.send_security_headers()
         self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Cache-Control', 'no-store')
+        if extra_headers:
+            for hk, hv in extra_headers.items():
+                self.send_header(hk, hv)
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def serve_static_allowlisted(self, route_path: str, head_only: bool = False):
+        content_type = PUBLIC_STATIC_FILES.get(route_path)
+        if not content_type:
+            self.send_json(403, {'error': 'Acceso denegado por política de seguridad.'})
+            return
+        rel = route_path.lstrip('/')
+        full_path = os.path.abspath(os.path.join(BASE_DIR, rel))
+        if not full_path.startswith(os.path.abspath(BASE_DIR) + os.sep) or not os.path.isfile(full_path):
+            self.send_json(404, {'error': 'Recurso no encontrado.'})
+            return
+        with open(full_path, 'rb') as f:
+            content = f.read()
+        self.send_response(200)
+        self.send_security_headers()
+        self.send_header('Content-Type', content_type)
+        if route_path.endswith('.html') or route_path == '/sw.js':
+            self.send_header('Cache-Control', 'no-cache')
+        else:
+            self.send_header('Cache-Control', 'public, max-age=3600')
+        self.send_header('Content-Length', str(len(content)))
+        self.end_headers()
+        if not head_only:
+            self.wfile.write(content)
 
     def read_json_body(self):
         length = int(self.headers.get('Content-Length', 0) or 0)
         if length <= 0:
             return {}
-        raw = self.rfile.read(length).decode('utf-8')
+        if length > MAX_BODY_BYTES:
+            raise PayloadTooLargeError()
+        raw = self.rfile.read(length).decode('utf-8', errors='replace')
         try:
-            return json.loads(raw)
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
         except Exception:
             return {}
 
@@ -581,10 +1014,10 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
     def get_session_context(self, conn):
         auth = self.headers.get('Authorization', '')
         token = auth[7:].strip() if auth.startswith('Bearer ') else ''
-        if not token:
+        if not token or len(token) > 128:
             return None, None
         row = conn.execute(
-            '''SELECT u.*, s.scope AS session_scope
+            '''SELECT u.*, s.scope AS session_scope, s.expires_at AS session_expires_at
                FROM sessions s
                JOIN users u ON u.id = s.user_id
                WHERE s.token = ?''',
@@ -592,6 +1025,17 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
         ).fetchone()
         if not row:
             return None, None
+        # Validación estricta de expiración de sesión
+        try:
+            exp_dt = datetime.fromisoformat(row['session_expires_at'])
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if exp_dt <= utc_now():
+                conn.execute('DELETE FROM sessions WHERE token = ?', (token,))
+                conn.commit()
+                return None, None
+        except Exception:
+            pass
         scope = row['session_scope'] if 'session_scope' in row.keys() and row['session_scope'] else 'owner'
         return row, scope
 
@@ -613,9 +1057,36 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return None, None
         return user, scope
 
+    def check_global_shield(self, path: str) -> bool:
+        ip = self.get_client_ip()
+        if path.startswith('/api/'):
+            if not SHIELD.check_rate('api_global', ip, limit=180, window_sec=60):
+                self.send_json(429, {'error': 'Demasiadas solicitudes simultáneas desde tu red. Aguarda unos segundos.'})
+                return False
+        return True
+
+    def do_HEAD(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
+        if path == '/api/health':
+            self.send_response(200)
+            self.send_security_headers()
+            self.end_headers()
+            return
+        if path in ('/', ''):
+            path = '/index.html'
+        elif path == '/seguimiento':
+            path = '/seguimiento.html'
+        elif path == '/tienda' or path.startswith('/tienda/'):
+            path = '/tienda.html'
+        self.serve_static_allowlisted(path, head_only=True)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if not self.check_global_shield(path):
+            return
 
         if path == '/api/health':
             conn = get_db()
@@ -624,6 +1095,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 trial_days = int(cfg.get('TRIAL_DAYS') or DEFAULT_TRIAL_DAYS)
                 self.send_json(200, {
                     'ok': True,
+                    'version': '4.0-shield',
                     'database': 'postgresql' if IS_POSTGRES else 'sqlite',
                     'mp_platform_configured': bool(cfg.get('PLATFORM_MP_ACCESS_TOKEN') or cfg.get('PLATFORM_MP_PAY_LINK')),
                     'smtp_configured': bool(cfg.get('SMTP_HOST') and cfg.get('SMTP_USER')),
@@ -685,6 +1157,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
 
             target = '/?sub=activated' if activated else '/?sub=pending'
             self.send_response(302)
+            self.send_security_headers()
             self.send_header('Location', target)
             self.end_headers()
             return
@@ -695,20 +1168,19 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 user, scope = self.require_active_user(conn)
                 if not user:
                     return
+                is_staff = (scope == 'staff' and user['role'] != 'admin')
                 profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
                 products = conn.execute('SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
                 customers = conn.execute('SELECT * FROM customers WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
                 orders = conn.execute('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 300', (user['id'],)).fetchall()
                 expenses = conn.execute('SELECT * FROM expenses WHERE user_id = ? ORDER BY expense_date DESC, created_at DESC LIMIT 300', (user['id'],)).fetchall()
 
-                prof_dict = dict(profile) if profile else {}
+                prof_dict = sanitize_profile_for_client(profile, conn, is_staff=is_staff)
                 prods_list = [dict(p) for p in products]
                 orders_list = [dict(o) for o in orders]
                 expenses_list = [dict(e) for e in expenses]
 
-                if scope == 'staff' and user['role'] != 'admin':
-                    prof_dict['mp_access_token'] = ''
-                    prof_dict['staff_pin'] = ''
+                if is_staff:
                     for p in prods_list:
                         p['cost_price'] = 0
                     for o in orders_list:
@@ -723,6 +1195,30 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     'customers': [dict(c) for c in customers],
                     'orders': orders_list,
                     'expenses': expenses_list
+                })
+            finally:
+                conn.close()
+            return
+
+        if path == '/api/store/backup':
+            conn = get_db()
+            try:
+                user, _ = self.require_active_user(conn, owner_only=True)
+                if not user:
+                    return
+                profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
+                products = conn.execute('SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
+                customers = conn.execute('SELECT * FROM customers WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
+                orders = conn.execute('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
+                expenses = conn.execute('SELECT * FROM expenses WHERE user_id = ? ORDER BY expense_date DESC', (user['id'],)).fetchall()
+                self.send_json(200, {
+                    'backup_version': '4.0',
+                    'exported_at': utc_now().isoformat(),
+                    'store': sanitize_profile_for_client(profile, conn, is_staff=True),
+                    'products': [dict(p) for p in products],
+                    'customers': [dict(c) for c in customers],
+                    'orders': [dict(o) for o in orders],
+                    'expenses': [dict(e) for e in expenses]
                 })
             finally:
                 conn.close()
@@ -743,9 +1239,9 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json(200, {'paid': True, 'order': dict(order)})
                     return
                 profile = conn.execute('SELECT mp_access_token FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
-                mp_token = profile['mp_access_token'] if profile else ''
+                mp_token = decrypt_secret(profile['mp_access_token'], conn) if profile else ''
                 if not mp_token:
-                    self.send_json(400, {'error': 'Configura tu Access Token de Mercado Pago en Mi Tienda.'})
+                    self.send_json(400, {'error': 'Configura tu Access Token de Mercado Pago en Cobros MP.'})
                     return
 
                 try:
@@ -777,8 +1273,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 if not user:
                     return
                 profile = conn.execute('SELECT mp_access_token FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
-                query = parse_qs(parsed.query)
-                token = query.get('token', [None])[0] or (profile['mp_access_token'] if profile else '')
+                token = decrypt_secret(profile['mp_access_token'], conn) if profile else ''
                 if not token:
                     self.send_json(400, {'error': 'Token de Mercado Pago requerido'})
                     return
@@ -794,7 +1289,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path.startswith('/api/public/track/'):
-            tracking_code = path.split('/')[-1].strip().upper()
+            tracking_code = re.sub(r'[^A-Z0-9\-]', '', path.split('/')[-1].strip().upper())[:24]
             conn = get_db()
             try:
                 order = conn.execute('SELECT * FROM orders WHERE tracking_code = ?', (tracking_code,)).fetchone()
@@ -802,7 +1297,9 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json(404, {'error': 'Pedido no encontrado'})
                     return
                 profile = conn.execute(
-                    'SELECT name, slug, store_icon, logo_data_url, phone, address, instagram, currency_symbol FROM store_profiles WHERE user_id = ?',
+                    '''SELECT name, slug, store_icon, logo_data_url, phone, address, instagram,
+                              currency_symbol, currency_code, bank_alias, bank_holder, external_pay_link, tax_label
+                       FROM store_profiles WHERE user_id = ?''',
                     (order['user_id'],)
                 ).fetchone()
                 self.send_json(200, {
@@ -815,9 +1312,13 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                         'subtotal': order['subtotal'],
                         'discount_amount': order['discount_amount'],
                         'discount_label': order['discount_label'],
+                        'shipping_cost': order['shipping_cost'] if 'shipping_cost' in order.keys() else 0,
+                        'tax_amount': order['tax_amount'] if 'tax_amount' in order.keys() else 0,
                         'total': order['total'],
                         'payment_status': order['payment_status'],
+                        'payment_method': order['payment_method'] if 'payment_method' in order.keys() else 'mercadopago',
                         'mp_payment_link': order['mp_payment_link'],
+                        'delivery_method': order['delivery_method'] if 'delivery_method' in order.keys() else 'delivery',
                         'dispatch_status': order['dispatch_status'],
                         'shipping_carrier': order['shipping_carrier'],
                         'shipping_tracking': order['shipping_tracking'],
@@ -831,7 +1332,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path.startswith('/api/public/store/'):
-            slug = path.split('/')[4].strip().lower()
+            slug = re.sub(r'[^a-z0-9\-]', '', path.split('/')[4].strip().lower())[:64]
             conn = get_db()
             try:
                 profile = conn.execute('SELECT * FROM store_profiles WHERE lower(slug) = ?', (slug,)).fetchone()
@@ -861,6 +1362,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     del pd['variants_json']
                     pub_prods.append(pd)
 
+                mp_tok = decrypt_secret(profile['mp_access_token'], conn)
                 self.send_json(200, {
                     'store': {
                         'name': profile['name'],
@@ -872,8 +1374,19 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                         'phone': profile['phone'],
                         'address': profile['address'],
                         'instagram': profile['instagram'],
+                        'country_code': profile['country_code'] or 'AR',
+                        'currency_code': profile['currency_code'] or 'ARS',
                         'currency_symbol': profile['currency_symbol'] or '$',
-                        'mp_enabled': bool(profile['mp_access_token'])
+                        'tax_label': profile['tax_label'] or '',
+                        'tax_rate': float(profile['tax_rate'] or 0),
+                        'bank_alias': profile['bank_alias'] or '',
+                        'bank_holder': profile['bank_holder'] or '',
+                        'external_pay_link': profile['external_pay_link'] or '',
+                        'cash_on_delivery': bool(profile['cash_on_delivery']),
+                        'shipping_flat_rate': float(profile['shipping_flat_rate'] or 0),
+                        'free_shipping_min': float(profile['free_shipping_min'] or 0),
+                        'allow_pickup': bool(profile['allow_pickup']),
+                        'mp_enabled': bool(mp_tok)
                     },
                     'products': pub_prods
                 })
@@ -899,7 +1412,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 enriched_users = []
                 for u in users:
                     ud = dict(u)
-                    st, dleft, exp_s, is_tr = compute_subscription_info(u)
+                    st, dleft, _, is_tr = compute_subscription_info(u)
                     ud['computed_status'] = 'trial' if (st == 'active' and is_tr) else st
                     ud['days_left'] = dleft
                     enriched_users.append(ud)
@@ -916,7 +1429,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     'payments': [dict(p) for p in payments],
                     'config': {
                         'mp_platform_configured': bool(cfg.get('PLATFORM_MP_ACCESS_TOKEN')),
-                        'mp_token_masked': (cfg['PLATFORM_MP_ACCESS_TOKEN'][:12] + '...') if cfg.get('PLATFORM_MP_ACCESS_TOKEN') else '',
+                        'mp_token_masked': mask_secret(cfg.get('PLATFORM_MP_ACCESS_TOKEN', '')),
                         'platform_mp_pay_link': cfg.get('PLATFORM_MP_PAY_LINK', ''),
                         'public_base_url': cfg.get('PUBLIC_BASE_URL', ''),
                         'trial_days': int(cfg.get('TRIAL_DAYS') or DEFAULT_TRIAL_DAYS),
@@ -928,25 +1441,43 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 conn.close()
             return
 
-        # Serve clean frontend routes
-        if path == '/' or path == '':
-            self.path = '/index.html'
+        if path.startswith('/api/'):
+            self.send_json(404, {'error': 'Ruta API no encontrada'})
+            return
+
+        # Rutas limpias hacia la Lista Blanca estricta de vistas públicas
+        if path in ('/', ''):
+            route = '/index.html'
         elif path == '/seguimiento':
-            self.path = '/seguimiento.html'
+            route = '/seguimiento.html'
         elif path == '/tienda' or path.startswith('/tienda/'):
-            self.path = '/tienda.html'
-        return super().do_GET()
+            route = '/tienda.html'
+        else:
+            route = path
+        self.serve_static_allowlisted(route)
 
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
-        body = self.read_json_body()
+        ip = self.get_client_ip()
+
+        if not self.check_global_shield(path):
+            return
+
+        try:
+            body = self.read_json_body()
+        except PayloadTooLargeError:
+            self.send_json(413, {'error': 'El tamaño de la solicitud supera el límite de seguridad permitido.'})
+            return
 
         if path == '/api/auth/register':
-            email = (body.get('email') or '').strip().lower()
-            password = body.get('password') or ''
-            store_name = (body.get('store_name') or '').strip()
-            recovery_pin = str(body.get('recovery_pin') or '').strip()
+            if not SHIELD.check_rate('auth_reg', ip, limit=8, window_sec=60):
+                self.send_json(429, {'error': 'Demasiados registros seguidos. Espera un minuto.'})
+                return
+            email = (body.get('email') or '').strip().lower()[:120]
+            password = str(body.get('password') or '')
+            store_name = (body.get('store_name') or '').strip()[:80]
+            recovery_pin = str(body.get('recovery_pin') or '').strip()[:32]
 
             if not email or '@' not in email or len(password) < 4 or not store_name:
                 self.send_json(400, {'error': 'Completa correo válido, nombre de tienda y contraseña (mín. 4 caracteres).'})
@@ -1006,14 +1537,20 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path == '/api/auth/login':
-            email = (body.get('email') or '').strip().lower()
-            password = body.get('password') or ''
+            email = (body.get('email') or '').strip().lower()[:120]
+            password = str(body.get('password') or '')
+            wait_s = SHIELD.is_locked_out(ip, email)
+            if wait_s > 0:
+                self.send_json(429, {'error': f'Por seguridad anti-fuerza bruta, aguarda {wait_s}s antes de volver a intentar.'})
+                return
             conn = get_db()
             try:
                 user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
                 if not user or not verify_password(password, user['password_hash']):
+                    SHIELD.record_auth_failure(ip, email)
                     self.send_json(401, {'error': 'Correo o contraseña incorrectos.'})
                     return
+                SHIELD.clear_auth_failures(ip, email)
                 sess_token = secrets.token_urlsafe(32)
                 now_iso = utc_now().isoformat()
                 exp_iso = (utc_now() + timedelta(days=30)).isoformat()
@@ -1043,10 +1580,14 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path == '/api/auth/staff-login':
-            identifier = (body.get('identifier') or '').strip().lower()
-            pin = str(body.get('staff_pin') or '').strip()
+            identifier = (body.get('identifier') or '').strip().lower()[:120]
+            pin = str(body.get('staff_pin') or '').strip()[:32]
             if not identifier or not pin:
                 self.send_json(400, {'error': 'Ingresa el correo o link de la tienda y el PIN de Empleado.'})
+                return
+            wait_s = SHIELD.is_locked_out(ip, f"staff:{identifier}")
+            if wait_s > 0:
+                self.send_json(429, {'error': f'Demasiados intentos de PIN. Aguarda {wait_s}s.'})
                 return
             conn = get_db()
             try:
@@ -1058,8 +1599,10 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     (identifier, identifier)
                 ).fetchone()
                 if not row or not row['staff_pin'] or not secrets.compare_digest(str(row['staff_pin']), pin):
+                    SHIELD.record_auth_failure(ip, f"staff:{identifier}")
                     self.send_json(401, {'error': 'Tienda o PIN de Empleado incorrecto.'})
                     return
+                SHIELD.clear_auth_failures(ip, f"staff:{identifier}")
                 status, days_left, exp_str, is_trial = compute_subscription_info(row)
                 if status != 'active':
                     self.send_json(402, {'error': 'La suscripción de esta tienda no está activa.'})
@@ -1092,7 +1635,10 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path == '/api/auth/request-email-code':
-            email = (body.get('email') or '').strip().lower()
+            if not SHIELD.check_rate('email_otp', ip, limit=5, window_sec=300):
+                self.send_json(429, {'error': 'Espera unos minutos antes de pedir otro código.'})
+                return
+            email = (body.get('email') or '').strip().lower()[:120]
             conn = get_db()
             try:
                 user = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
@@ -1118,10 +1664,15 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path == '/api/auth/self-reset-password':
-            email = (body.get('email') or '').strip().lower()
-            recovery_pin = str(body.get('recovery_pin') or '').strip()
-            email_code = str(body.get('email_code') or '').strip()
-            new_password = body.get('new_password') or ''
+            email = (body.get('email') or '').strip().lower()[:120]
+            recovery_pin = str(body.get('recovery_pin') or '').strip()[:32]
+            email_code = str(body.get('email_code') or '').strip()[:16]
+            new_password = str(body.get('new_password') or '')
+
+            wait_s = SHIELD.is_locked_out(ip, f"reset:{email}")
+            if wait_s > 0:
+                self.send_json(429, {'error': f'Por seguridad anti-fuerza bruta, espera {wait_s}s antes de intentar de nuevo.'})
+                return
 
             if not email or len(new_password) < 4:
                 self.send_json(400, {'error': 'Ingresa tu correo y una nueva contraseña de al menos 4 caracteres.'})
@@ -1131,6 +1682,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
                 if not user:
+                    SHIELD.record_auth_failure(ip, f"reset:{email}")
                     self.send_json(404, {'error': 'No encontramos una cuenta con ese correo.'})
                     return
 
@@ -1148,12 +1700,14 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                             conn.execute('DELETE FROM password_resets WHERE email = ?', (email,))
 
                 if not verified:
+                    SHIELD.record_auth_failure(ip, f"reset:{email}")
                     if not user['recovery_pin_hash']:
                         self.send_json(400, {'error': 'Esta cuenta aún no tenía PIN Secreto configurado.'})
                     else:
                         self.send_json(401, {'error': 'PIN Secreto de Recuperación incorrecto.'})
                     return
 
+                SHIELD.clear_auth_failures(ip, f"reset:{email}")
                 conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (hash_password(new_password), user['id']))
                 conn.execute('DELETE FROM sessions WHERE user_id = ?', (user['id'],))
 
@@ -1197,11 +1751,12 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json(403, {'error': 'No permitido en Modo Empleado.'})
                     return
 
-                curr_pw = body.get('current_password') or ''
-                new_pw = body.get('new_password') or ''
-                new_pin = str(body.get('recovery_pin') or '').strip()
+                curr_pw = str(body.get('current_password') or '')
+                new_pw = str(body.get('new_password') or '')
+                new_pin = str(body.get('recovery_pin') or '').strip()[:32]
 
                 if not verify_password(curr_pw, user['password_hash']):
+                    SHIELD.record_auth_failure(ip, user['email'])
                     self.send_json(401, {'error': 'Tu contraseña actual es incorrecta.'})
                     return
                 if new_pw and len(new_pw) < 4:
@@ -1215,6 +1770,22 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', (hash_password(new_pw), user['id']))
                 if new_pin:
                     conn.execute('UPDATE users SET recovery_pin_hash = ? WHERE id = ?', (hash_password(new_pin), user['id']))
+                conn.commit()
+                self.send_json(200, {'ok': True})
+            finally:
+                conn.close()
+            return
+
+        if path == '/api/auth/logout-all':
+            conn = get_db()
+            try:
+                user, scope = self.get_session_context(conn)
+                if not user or scope == 'staff':
+                    self.send_json(403, {'error': 'Acción reservada al titular de la cuenta.'})
+                    return
+                auth = self.headers.get('Authorization', '')
+                curr_tok = auth[7:].strip() if auth.startswith('Bearer ') else ''
+                conn.execute('DELETE FROM sessions WHERE user_id = ? AND token != ?', (user['id'], curr_tok))
                 conn.commit()
                 self.send_json(200, {'ok': True})
             finally:
@@ -1356,7 +1927,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 pid = 'prod_' + secrets.token_hex(6)
                 now_iso = utc_now().isoformat()
                 variants = body.get('variants') if isinstance(body.get('variants'), list) else []
-                stock_val = int(body.get('stock') or 0)
+                stock_val = max(0, int(body.get('stock') or 0))
                 if variants:
                     stock_val = sum(max(0, int(v.get('stock') or 0)) for v in variants)
                 conn.execute(
@@ -1364,14 +1935,14 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (
                         pid, user['id'],
-                        (body.get('name') or '').strip(),
-                        float(body.get('price') or 0),
-                        float(body.get('cost_price') or 0),
-                        (body.get('category') or 'General').strip(),
+                        (body.get('name') or '').strip()[:140],
+                        max(0.0, float(body.get('price') or 0)),
+                        max(0.0, float(body.get('cost_price') or 0)),
+                        (body.get('category') or 'General').strip()[:60],
                         stock_val,
-                        int(body.get('min_stock') or 3),
-                        (body.get('barcode') or '').strip(),
-                        (body.get('sku') or body.get('barcode') or '').strip(),
+                        max(0, int(body.get('min_stock') or 3)),
+                        (body.get('barcode') or '').strip()[:64],
+                        (body.get('sku') or body.get('barcode') or '').strip()[:64],
                         (body.get('image_url') or '').strip(),
                         json.dumps(variants, ensure_ascii=False),
                         now_iso
@@ -1418,18 +1989,18 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 user, _ = self.require_active_user(conn, owner_only=True)
                 if not user:
                     return
-                desc = (body.get('description') or '').strip()
+                desc = (body.get('description') or '').strip()[:160]
                 amount = float(body.get('amount') or 0)
                 if not desc or amount <= 0:
                     self.send_json(400, {'error': 'Ingresa descripción y monto válido del gasto.'})
                     return
                 eid = 'exp_' + secrets.token_hex(6)
                 now_iso = utc_now().isoformat()
-                exp_date = (body.get('expense_date') or now_iso[:10]).strip()
+                exp_date = (body.get('expense_date') or now_iso[:10]).strip()[:16]
                 conn.execute(
                     '''INSERT INTO expenses (id, user_id, category, description, amount, expense_date, created_at)
                        VALUES (?, ?, ?, ?, ?, ?, ?)''',
-                    (eid, user['id'], (body.get('category') or 'Operativo').strip(), desc, amount, exp_date, now_iso)
+                    (eid, user['id'], (body.get('category') or 'Operativo').strip()[:60], desc, amount, exp_date, now_iso)
                 )
                 conn.commit()
                 exp_row = conn.execute('SELECT * FROM expenses WHERE id = ?', (eid,)).fetchone()
@@ -1451,11 +2022,11 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
                     (
                         cid, user['id'],
-                        (body.get('name') or '').strip(),
-                        (body.get('phone') or '').strip(),
-                        (body.get('address') or '').strip(),
-                        (body.get('handle') or '').strip(),
-                        (body.get('notes') or '').strip(),
+                        (body.get('name') or '').strip()[:100],
+                        (body.get('phone') or '').strip()[:40],
+                        (body.get('address') or '').strip()[:200],
+                        (body.get('handle') or '').strip()[:80],
+                        (body.get('notes') or '').strip()[:240],
                         now_iso
                     )
                 )
@@ -1477,30 +2048,34 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json(400, {'error': 'Agrega al menos un producto al pedido.'})
                     return
 
-                profile = conn.execute('SELECT next_folio_number FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
+                profile = conn.execute('SELECT next_folio_number, tax_rate FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
                 folio_num = (profile['next_folio_number'] if profile else 1001)
                 folio_str = '#' + str(folio_num).zfill(6)
                 oid = 'ord_' + secrets.token_hex(6)
                 tracking_code = 'PED-' + secrets.token_hex(3).upper()
                 now_iso = utc_now().isoformat()
 
-                cname = (body.get('customer_name') or 'Cliente').strip()
-                cphone = (body.get('customer_phone') or '').strip()
-                caddr = (body.get('customer_address') or '').strip()
-                chandle = (body.get('customer_handle') or '').strip()
+                cname = (body.get('customer_name') or 'Cliente').strip()[:100]
+                cphone = (body.get('customer_phone') or '').strip()[:40]
+                caddr = (body.get('customer_address') or '').strip()[:220]
+                chandle = (body.get('customer_handle') or '').strip()[:80]
+                shipping_cost = max(0.0, float(body.get('shipping_cost') or 0))
+                tax_amount = max(0.0, float(body.get('tax_amount') or 0))
+                delivery_method = 'pickup' if body.get('delivery_method') == 'pickup' else 'delivery'
+                payment_method = (body.get('payment_method') or 'mercadopago').strip()[:32]
 
                 total_cost = 0.0
                 enriched_items = []
                 for item in items:
-                    pname = (item.get('productName') or '').strip()
+                    pname = (item.get('productName') or '').strip()[:140]
                     base_name = pname.split(' (')[0].strip()
-                    variant_sel = (item.get('variantName') or '').strip()
-                    qty = int(item.get('quantity') or 1)
+                    variant_sel = (item.get('variantName') or '').strip()[:60]
+                    qty = max(1, int(item.get('quantity') or 1))
                     prod = conn.execute(
                         'SELECT id, stock, cost_price, variants_json FROM products WHERE user_id = ? AND (lower(name) = ? OR lower(name) = ?)',
                         (user['id'], pname.lower(), base_name.lower())
                     ).fetchone()
-                    unit_cost = float(prod['cost_price']) if prod else float(item.get('unitCost') or 0)
+                    unit_cost = float(prod['cost_price']) if prod else max(0.0, float(item.get('unitCost') or 0))
                     cost_sub = unit_cost * qty
                     total_cost += cost_sub
                     enriched = dict(item)
@@ -1523,27 +2098,33 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                         else:
                             conn.execute('UPDATE products SET stock = ? WHERE id = ?', (new_stock, prod['id']))
 
-                order_total = float(body.get('total') or 0)
-                net_profit = order_total - total_cost
+                order_total = max(0.0, float(body.get('total') or 0))
+                # Ganancia limpia sobre productos (sin inflar por el costo de correo que paga el cliente)
+                net_profit = (order_total - shipping_cost - tax_amount) - total_cost
 
                 conn.execute(
                     '''INSERT INTO orders (
                            id, user_id, tracking_code, folio_number, customer_name, customer_phone,
                            customer_address, customer_handle, items_json, subtotal, discount_amount,
-                           discount_label, total, total_cost, net_profit, payment_status, dispatch_status, notes, source, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pos', ?)''',
+                           discount_label, shipping_cost, tax_amount, total, total_cost, net_profit,
+                           payment_status, payment_method, delivery_method, dispatch_status, notes, source, created_at
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pos', ?)''',
                     (
                         oid, user['id'], tracking_code, folio_str, cname, cphone, caddr, chandle,
                         json.dumps(enriched_items, ensure_ascii=False),
-                        float(body.get('subtotal') or 0),
-                        float(body.get('discount_amount') or 0),
-                        (body.get('discount_label') or ''),
+                        max(0.0, float(body.get('subtotal') or 0)),
+                        max(0.0, float(body.get('discount_amount') or 0)),
+                        (body.get('discount_label') or '')[:80],
+                        shipping_cost,
+                        tax_amount,
                         order_total,
                         total_cost,
                         net_profit,
-                        body.get('payment_status') or 'pending',
+                        'paid' if body.get('payment_status') == 'paid' else 'pending',
+                        payment_method,
+                        delivery_method,
                         body.get('dispatch_status') or 'to_prepare',
-                        (body.get('notes') or '').strip(),
+                        (body.get('notes') or '').strip()[:300],
                         now_iso
                     )
                 )
@@ -1574,7 +2155,15 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         if path.startswith('/api/public/store/') and path.endswith('/checkout'):
-            slug = path.split('/')[4].strip().lower()
+            if not SHIELD.check_rate('public_checkout', ip, limit=8, window_sec=60):
+                self.send_json(429, {'error': 'Demasiados pedidos seguidos desde esta conexión. Aguarda un minuto.'})
+                return
+            # Honeypot anti-bots
+            if (body.get('website_hp') or '').strip():
+                self.send_json(400, {'error': 'Solicitud bloqueada por filtro anti-bots.'})
+                return
+
+            slug = re.sub(r'[^a-z0-9\-]', '', path.split('/')[4].strip().lower())[:64]
             conn = get_db()
             try:
                 profile = conn.execute('SELECT * FROM store_profiles WHERE lower(slug) = ?', (slug,)).fetchone()
@@ -1588,12 +2177,16 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
                 req_items = body.get('items') or []
-                cname = (body.get('customer_name') or '').strip()
-                cphone = (body.get('customer_phone') or '').strip()
-                caddr = (body.get('customer_address') or '').strip()
-                notes = (body.get('notes') or '').strip()
+                cname = (body.get('customer_name') or '').strip()[:100]
+                cphone = (body.get('customer_phone') or '').strip()[:40]
+                delivery_method = 'pickup' if body.get('delivery_method') == 'pickup' and bool(profile['allow_pickup']) else 'delivery'
+                caddr = (body.get('customer_address') or '').strip()[:220]
+                if delivery_method == 'pickup' and not caddr:
+                    caddr = 'Retiro en Local / Punto de Entrega'
+                notes = (body.get('notes') or '').strip()[:300]
+                payment_method = (body.get('payment_method') or 'mercadopago').strip()[:32]
 
-                if not cname or not cphone or not req_items:
+                if not cname or not cphone or not req_items or len(req_items) > 60:
                     self.send_json(400, {'error': 'Completa tu nombre, WhatsApp y al menos un producto.'})
                     return
 
@@ -1602,9 +2195,9 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 total_cost = 0.0
 
                 for ri in req_items:
-                    pid = ri.get('product_id')
-                    qty = max(1, int(ri.get('quantity') or 1))
-                    vname = (ri.get('variant_name') or '').strip()
+                    pid = str(ri.get('product_id') or '')[:40]
+                    qty = max(1, min(999, int(ri.get('quantity') or 1)))
+                    vname = (ri.get('variant_name') or '').strip()[:60]
                     prod = conn.execute('SELECT * FROM products WHERE id = ? AND user_id = ?', (pid, owner['id'])).fetchone()
                     if not prod:
                         continue
@@ -1629,7 +2222,6 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                         'costSubtotal': csub
                     })
 
-                    # Deduct stock
                     try:
                         vlist = json.loads(prod['variants_json'] or '[]')
                     except Exception:
@@ -1650,6 +2242,19 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_json(400, {'error': 'Productos inválidos.'})
                     return
 
+                flat_ship = float(profile['shipping_flat_rate'] or 0)
+                free_min = float(profile['free_shipping_min'] or 0)
+                if delivery_method == 'pickup':
+                    shipping_cost = 0.0
+                elif free_min > 0 and subtotal >= free_min:
+                    shipping_cost = 0.0
+                else:
+                    shipping_cost = max(0.0, flat_ship)
+
+                tax_rate = max(0.0, float(profile['tax_rate'] or 0))
+                tax_amount = round(subtotal * (tax_rate / 100.0), 2) if tax_rate > 0 else 0.0
+                grand_total = round(subtotal + shipping_cost + tax_amount, 2)
+
                 folio_num = int(profile['next_folio_number'] or 1001)
                 folio_str = '#' + str(folio_num).zfill(6)
                 oid = 'ord_' + secrets.token_hex(6)
@@ -1658,7 +2263,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 net_profit = subtotal - total_cost
 
                 mp_link = ''
-                mp_token = (profile['mp_access_token'] or '').strip()
+                mp_token = decrypt_secret(profile['mp_access_token'], conn)
                 if mp_token:
                     base_url = self.get_base_url(conn)
                     pref_payload = {
@@ -1666,8 +2271,8 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                             "id": tracking_code,
                             "title": f"Pedido {folio_str} - {profile['name']}",
                             "quantity": 1,
-                            "currency_id": "ARS",
-                            "unit_price": float(subtotal)
+                            "currency_id": resolve_mp_currency(profile),
+                            "unit_price": float(grand_total)
                         }],
                         "external_reference": f"order_{oid}",
                         "back_urls": {
@@ -1687,13 +2292,15 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     '''INSERT INTO orders (
                            id, user_id, tracking_code, folio_number, customer_name, customer_phone,
                            customer_address, customer_handle, items_json, subtotal, discount_amount,
-                           discount_label, total, total_cost, net_profit, payment_status, mp_payment_link,
+                           discount_label, shipping_cost, tax_amount, total, total_cost, net_profit,
+                           payment_status, payment_method, mp_payment_link, delivery_method,
                            dispatch_status, notes, source, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, 0, '', ?, ?, ?, 'pending', ?, 'to_prepare', ?, 'web_store', ?)''',
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, 0, '', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'to_prepare', ?, 'web_store', ?)''',
                     (
                         oid, owner['id'], tracking_code, folio_str, cname, cphone, caddr,
                         json.dumps(enriched_items, ensure_ascii=False),
-                        subtotal, subtotal, total_cost, net_profit, mp_link, notes, now_iso
+                        subtotal, shipping_cost, tax_amount, grand_total, total_cost, net_profit,
+                        payment_method, mp_link, delivery_method, notes, now_iso
                     )
                 )
                 conn.execute('UPDATE store_profiles SET next_folio_number = ? WHERE user_id = ?', (folio_num + 1, owner['id']))
@@ -1711,9 +2318,15 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     'order': {
                         'folio_number': folio_str,
                         'tracking_code': tracking_code,
-                        'total': subtotal
+                        'subtotal': subtotal,
+                        'shipping_cost': shipping_cost,
+                        'tax_amount': tax_amount,
+                        'total': grand_total
                     },
                     'payment_link': mp_link,
+                    'external_pay_link': profile['external_pay_link'] or '',
+                    'bank_alias': profile['bank_alias'] or '',
+                    'bank_holder': profile['bank_holder'] or '',
                     'tracking_url': f"/seguimiento.html?code={tracking_code}",
                     'store_phone': profile['phone']
                 })
@@ -1732,9 +2345,12 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 if not order:
                     self.send_json(404, {'error': 'Pedido no encontrado'})
                     return
-                profile = conn.execute('SELECT name, mp_access_token FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
-                mp_token = profile['mp_access_token'] if profile else ''
+                profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
+                mp_token = decrypt_secret(profile['mp_access_token'], conn) if profile else ''
                 if not mp_token:
+                    if profile and profile['external_pay_link']:
+                        self.send_json(200, {'payment_link': profile['external_pay_link'], 'mode': 'external'})
+                        return
                     self.send_json(400, {'error': 'Configura primero tu Access Token de Mercado Pago en Cobros MP.'})
                     return
 
@@ -1745,7 +2361,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                             "id": order['tracking_code'],
                             "title": f"Pedido {order['folio_number']} - {profile['name']}",
                             "quantity": 1,
-                            "currency_id": "ARS",
+                            "currency_id": resolve_mp_currency(profile),
                             "unit_price": float(order['total'])
                         }
                     ],
@@ -1853,7 +2469,15 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
     def do_PUT(self):
         parsed = urlparse(self.path)
         path = parsed.path
-        body = self.read_json_body()
+
+        if not self.check_global_shield(path):
+            return
+
+        try:
+            body = self.read_json_body()
+        except PayloadTooLargeError:
+            self.send_json(413, {'error': 'El tamaño de la solicitud supera el límite permitido.'})
+            return
 
         if path == '/api/store/profile':
             conn = get_db()
@@ -1861,14 +2485,27 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 user, _ = self.require_active_user(conn, owner_only=True)
                 if not user:
                     return
-                if 'slug' in body and body['slug'].strip():
-                    body['slug'] = ensure_unique_slug(conn, body['slug'], user['id'])
+                if 'slug' in body and str(body['slug']).strip():
+                    body['slug'] = ensure_unique_slug(conn, str(body['slug']), user['id'])
+
+                # Cifrar token de Mercado Pago antes de persistir; ignorar cadena vacía salvo clear_mp_token explícito
+                if body.get('clear_mp_token') is True:
+                    body['mp_access_token'] = ''
+                elif 'mp_access_token' in body:
+                    tok = str(body['mp_access_token'] or '').strip()
+                    if tok:
+                        body['mp_access_token'] = encrypt_secret(tok, conn)
+                    else:
+                        del body['mp_access_token']
 
                 fields = [
                     'name', 'slug', 'store_icon', 'logo_data_url', 'receipt_theme', 'app_palette',
-                    'custom_color', 'business_mode', 'phone', 'address',
-                    'instagram', 'website', 'currency_symbol', 'next_folio_number',
-                    'receipt_footer_message', 'mp_access_token', 'staff_pin', 'voice_accent', 'voice_template'
+                    'custom_color', 'business_mode', 'phone', 'address', 'instagram', 'website',
+                    'country_code', 'currency_code', 'currency_symbol', 'tax_label', 'tax_rate',
+                    'bank_alias', 'bank_holder', 'external_pay_link', 'cash_on_delivery',
+                    'shipping_flat_rate', 'free_shipping_min', 'allow_pickup',
+                    'next_folio_number', 'receipt_footer_message', 'mp_access_token',
+                    'staff_pin', 'voice_accent', 'voice_template'
                 ]
                 set_clauses = []
                 values = []
@@ -1880,10 +2517,10 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                     values.append(user['id'])
                     conn.execute(f"UPDATE store_profiles SET {', '.join(set_clauses)} WHERE user_id = ?", values)
                     if 'name' in body and body['name']:
-                        conn.execute('UPDATE users SET store_name = ? WHERE id = ?', (body['name'], user['id']))
+                        conn.execute('UPDATE users SET store_name = ? WHERE id = ?', (str(body['name'])[:80], user['id']))
                     conn.commit()
                 profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
-                self.send_json(200, {'profile': dict(profile)})
+                self.send_json(200, {'profile': sanitize_profile_for_client(profile, conn, is_staff=False)})
             finally:
                 conn.close()
             return
@@ -1896,7 +2533,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 if not user:
                     return
                 variants = body.get('variants') if isinstance(body.get('variants'), list) else None
-                stock_val = int(body.get('stock') or 0)
+                stock_val = max(0, int(body.get('stock') or 0))
                 if variants is not None and len(variants) > 0:
                     stock_val = sum(max(0, int(v.get('stock') or 0)) for v in variants)
 
@@ -1913,14 +2550,14 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                        SET name = ?, price = ?, cost_price = ?, category = ?, stock = ?, min_stock = ?, barcode = ?, sku = ?, image_url = ?, variants_json = ?
                        WHERE id = ? AND user_id = ?''',
                     (
-                        (body.get('name') or '').strip(),
-                        float(body.get('price') or 0),
-                        float(body.get('cost_price') or 0),
-                        (body.get('category') or 'General').strip(),
+                        (body.get('name') or '').strip()[:140],
+                        max(0.0, float(body.get('price') or 0)),
+                        max(0.0, float(body.get('cost_price') or 0)),
+                        (body.get('category') or 'General').strip()[:60],
                         stock_val,
-                        int(body.get('min_stock') or 3),
-                        (body.get('barcode') or '').strip(),
-                        (body.get('barcode') or '').strip(),
+                        max(0, int(body.get('min_stock') or 3)),
+                        (body.get('barcode') or '').strip()[:64],
+                        (body.get('barcode') or '').strip()[:64],
                         img_url or '',
                         var_json or '[]',
                         pid, user['id']
@@ -1938,7 +2575,15 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
     def do_PATCH(self):
         parsed = urlparse(self.path)
         path = parsed.path
-        body = self.read_json_body()
+
+        if not self.check_global_shield(path):
+            return
+
+        try:
+            body = self.read_json_body()
+        except PayloadTooLargeError:
+            self.send_json(413, {'error': 'Solicitud demasiado grande.'})
+            return
 
         if path.startswith('/api/products/'):
             pid = path.split('/')[-1]
@@ -1975,7 +2620,7 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
                 for f in allowed:
                     if f in body:
                         set_clauses.append(f"{f} = ?")
-                        values.append(body[f])
+                        values.append(str(body[f])[:200])
                 if set_clauses:
                     values.extend([oid, user['id']])
                     conn.execute(f"UPDATE orders SET {', '.join(set_clauses)} WHERE id = ? AND user_id = ?", values)
@@ -1991,6 +2636,9 @@ class SaaSHandler(http.server.SimpleHTTPRequestHandler):
     def do_DELETE(self):
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if not self.check_global_shield(path):
+            return
 
         if path.startswith('/api/products/'):
             pid = path.split('/')[-1]
@@ -2029,10 +2677,10 @@ def run():
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     socketserver.ThreadingTCPServer.daemon_threads = True
     with socketserver.ThreadingTCPServer(("", PORT), SaaSHandler) as httpd:
-        print("=" * 64)
-        print(f"[OK] VENTAFLOW POS SaaS v3.0 ACTIVO en http://localhost:{PORT}")
-        print("Motor DB:", "PostgreSQL" if IS_POSTGRES else f"SQLite ({DB_PATH})")
-        print("=" * 64)
+        print("=" * 66)
+        print(f"[OK] VENTAFLOW POS SaaS v4.0 SHIELD ACTIVO en http://localhost:{PORT}")
+        print("Motor DB:", "PostgreSQL (ThreadedPool)" if IS_POSTGRES else f"SQLite WAL ({DB_PATH})")
+        print("=" * 66)
         httpd.serve_forever()
 
 

@@ -16,6 +16,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
@@ -340,24 +341,34 @@
             <div class="min-w-0">
               <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                 <i data-lucide="user" class="w-4 h-4 text-purple-600 shrink-0"></i>
-                1. Cliente &amp; Envío
+                1. Cliente &amp; Entrega
               </h3>
-              <p class="text-[10px] text-slate-400 mt-0.5">Se guarda automáticamente para futuros pedidos.</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Autoguardado activo contra cortes de internet.</p>
             </div>
-            <button type="button" onclick="openCustomerPickerModal()" class="text-[11px] font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1 shrink-0">
-              <i data-lucide="users" class="w-3 h-3"></i>
-              <span>Clientes</span>
-            </button>
+            <div class="flex items-center gap-1 shrink-0">
+              <button type="button" onclick="clearSaleDraftForm()" class="text-[10px] font-bold text-slate-400 hover:text-rose-600 px-2 py-1.5 rounded-xl" title="Limpiar formulario">Limpiar</button>
+              <button type="button" onclick="openCustomerPickerModal()" class="text-[11px] font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1">
+                <i data-lucide="users" class="w-3 h-3"></i>
+                <span>Clientes</span>
+              </button>
+            </div>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <input type="text" id="client-name" placeholder="Nombre del cliente *" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
-            <input type="tel" id="client-phone" placeholder="WhatsApp (ej. 54911...)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800">
+            <input type="text" id="client-name" oninput="saveSaleDraft()" placeholder="Nombre del cliente *" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
+            <input type="tel" id="client-phone" oninput="saveSaleDraft()" placeholder="WhatsApp (c/ área)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800">
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <input type="text" id="client-address" placeholder="Dirección / Localidad" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
-            <input type="text" id="client-handle" placeholder="Referencia / @red (opc.)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+            <input type="text" id="client-address" oninput="saveSaleDraft()" placeholder="Dirección / Ciudad" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+            <input type="text" id="client-handle" oninput="saveSaleDraft()" placeholder="Referencia / @red (opc.)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+          </div>
+
+          <!-- Selector de Entrega y Costo de Envío -->
+          <div class="grid grid-cols-3 gap-1.5 pt-1 text-[11px]">
+            <button type="button" onclick="setSaleDeliveryMethod('delivery')" id="btn-sale-del-delivery" class="py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate">🚚 Envío</button>
+            <button type="button" onclick="setSaleDeliveryMethod('pickup')" id="btn-sale-del-pickup" class="py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate">🏪 Retiro</button>
+            <input type="number" id="sale-shipping-cost" oninput="updateTotals(); saveSaleDraft();" placeholder="Envío $0" class="w-full min-w-0 px-2.5 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl text-right font-bold text-slate-700 text-xs" title="Costo de envío">
           </div>
         </div>
 
@@ -421,9 +432,17 @@
 
         <!-- 3. Estado de Pago & Notas de Despacho -->
         <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5 text-xs">
-          <div>
-            <span class="font-bold text-slate-800 block uppercase tracking-wider">3. Estado del Abono &amp; Notas</span>
-            <p class="text-[10px] text-slate-400 mt-0.5">Define si ya abonó o si quedará pendiente para enviar Link de Pago.</p>
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="font-bold text-slate-800 block uppercase tracking-wider">3. Medio de Cobro &amp; Notas</span>
+              <p class="text-[10px] text-slate-400 mt-0.5">Elige estado del pago y medio preferido.</p>
+            </div>
+            <select id="sale-payment-method" onchange="saveSaleDraft()" class="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-xl font-bold text-[11px] text-purple-900 shrink-0">
+              <option value="mercadopago">💳 Mercado Pago</option>
+              <option value="transfer">🏦 Transferencia</option>
+              <option value="cash">💵 Efectivo</option>
+              <option value="external_link">🔗 Link Online</option>
+            </select>
           </div>
           <div class="grid grid-cols-2 gap-2">
             <button type="button" onclick="setInitialPaymentStatus('pending')" id="btn-pay-status-pending" class="py-2 px-2 rounded-xl border-2 border-amber-400 bg-amber-50 text-amber-900 font-bold text-center text-[11px]">
@@ -433,11 +452,11 @@
               ✅ Ya Abonado
             </button>
           </div>
-          <input type="text" id="sale-notes" placeholder="Indicaciones para el despacho (ej. Frágil, horario...)" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none">
+          <input type="text" id="sale-notes" oninput="saveSaleDraft()" placeholder="Indicaciones para el despacho (ej. Frágil, horario...)" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none">
         </div>
 
         <!-- Total & Crear Pedido -->
-        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2.5">
+        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-2">
           <div class="flex justify-between items-center text-xs text-slate-500">
             <span>Subtotal productos:</span>
             <span id="subtotal-display" class="font-bold text-slate-700">$ 0</span>
@@ -446,7 +465,15 @@
             <span id="discount-label-display">Descuento:</span>
             <span id="discount-amount-display">-$ 0</span>
           </div>
-          <div class="flex justify-between items-baseline pt-1 border-t border-purple-50">
+          <div id="row-shipping-display" class="flex justify-between items-center text-xs text-slate-500 hidden">
+            <span>Costo de envío:</span>
+            <span id="shipping-amount-display" class="font-bold text-slate-700">$ 0</span>
+          </div>
+          <div id="row-tax-display" class="flex justify-between items-center text-xs text-slate-500 hidden">
+            <span id="tax-label-display">Impuesto:</span>
+            <span id="tax-amount-display" class="font-bold text-slate-700">$ 0</span>
+          </div>
+          <div class="flex justify-between items-baseline pt-1.5 border-t border-purple-50">
             <span class="text-sm font-bold text-slate-800 font-serif">TOTAL PEDIDO:</span>
             <span id="total-grand" class="text-2xl font-black text-purple-700 tracking-tight">$ 0</span>
           </div>
@@ -459,13 +486,25 @@
       </div>
 
       <!-- TAB 2: DESPACHOS Y COBROS -->
-      <div id="tab-dispatches" class="space-y-3.5 hidden text-xs">
+      <div id="tab-dispatches" class="space-y-3 hidden text-xs">
         <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg flex items-center justify-between">
           <div>
-            <h3 class="font-bold text-sm font-serif">Despachos &amp; Cobros</h3>
-            <p class="text-[11px] text-white/85">Genera links de pago, verifica abonos y actualiza envíos.</p>
+            <h3 class="font-bold text-sm font-serif">Central de Despachos &amp; Cobros</h3>
+            <p class="text-[11px] text-white/85">Armado rápido, etiquetas en lote, guías y avisos WhatsApp.</p>
           </div>
           <span class="text-2xl">🚚</span>
+        </div>
+
+        <!-- Herramientas Ágiles de Despacho Masivo -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="openPickingListModal()" class="py-2.5 px-3 bg-white hover:bg-purple-50 text-purple-950 font-extrabold rounded-2xl border border-purple-200 shadow-sm flex items-center justify-center gap-1.5 text-[11px]">
+            <i data-lucide="clipboard-list" class="w-4 h-4 text-purple-600 shrink-0"></i>
+            <span class="truncate">Lista de Armado</span>
+          </button>
+          <button type="button" onclick="downloadBatchStickersPDF()" id="btn-batch-stickers" class="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl shadow-sm flex items-center justify-center gap-1.5 text-[11px]">
+            <i data-lucide="printer" class="w-4 h-4 text-amber-300 shrink-0"></i>
+            <span class="truncate">Pegatinas en Lote</span>
+          </button>
         </div>
 
         <div class="relative">
@@ -757,14 +796,77 @@
             </div>
           </div>
 
-          <div>
-            <label class="font-bold text-slate-700 block mb-1">Moneda</label>
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="setCurrencySymbol('$')" class="currency-btn px-3 py-1.5 rounded-xl border border-purple-300 bg-purple-100 text-purple-900 font-bold">$ Pesos</button>
-              <button type="button" onclick="setCurrencySymbol('US$')" class="currency-btn px-3 py-1.5 rounded-xl border border-purple-200 bg-white text-slate-700 font-bold">US$</button>
-              <button type="button" onclick="setCurrencySymbol('S/.')" class="currency-btn px-3 py-1.5 rounded-xl border border-purple-200 bg-white text-slate-700 font-bold">S/.</button>
+          <!-- Configuración Mundial: País, Moneda, Medios de Cobro & Tarifas de Envío -->
+          <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+            <div>
+              <span class="font-bold text-slate-800 block">🌍 País, Moneda, Cobros &amp; Envíos</span>
+              <span class="text-[10px] text-slate-500">Adapta cobros, impuestos y tarifas de envío para cualquier país</span>
             </div>
-            <input type="hidden" id="setting-currency" value="$">
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">País / Región</label>
+                <select id="setting-country" onchange="onCountryPresetChange(this.value)" class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-bold text-[11px] text-slate-800">
+                  <option value="AR">🇦🇷 Argentina (ARS)</option>
+                  <option value="MX">🇲🇽 México (MXN)</option>
+                  <option value="CL">🇨🇱 Chile (CLP)</option>
+                  <option value="CO">🇨🇴 Colombia (COP)</option>
+                  <option value="PE">🇵🇪 Perú (PEN)</option>
+                  <option value="UY">🇺🇾 Uruguay (UYU)</option>
+                  <option value="BR">🇧🇷 Brasil (BRL)</option>
+                  <option value="US">🇺🇸 EE. UU. / Intl (USD)</option>
+                  <option value="ES">🇪🇸 España / Europa (EUR)</option>
+                </select>
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Moneda Activa</label>
+                <div class="flex gap-1">
+                  <input type="text" id="setting-currency" value="$" placeholder="$" class="w-12 shrink-0 px-2 py-2 bg-white border border-slate-200 rounded-xl font-bold text-center">
+                  <input type="text" id="setting-currency-code" value="ARS" placeholder="ARS" class="flex-1 min-w-0 px-2 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold uppercase text-center">
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Alias / CBU / CLABE / Pix</label>
+                <input type="text" id="setting-bank-alias" placeholder="mi.tienda.mp" class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-mono text-[11px]">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Titular / Banco</label>
+                <input type="text" id="setting-bank-holder" placeholder="Nombre y Banco" class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-[11px]">
+              </div>
+            </div>
+
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Link de Pago Universal (PayPal / Stripe / Banco opc.)</label>
+              <input type="url" id="setting-ext-pay-link" placeholder="https://..." class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-[11px]">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/80">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Envío Estándar ($)</label>
+                <input type="number" id="setting-ship-flat" value="0" min="0" step="any" class="w-full min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-bold">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Envío Gratis desde ($)</label>
+                <input type="number" id="setting-ship-free" value="0" min="0" step="any" placeholder="0 = Desact." class="w-full min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-bold">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 items-end">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Impuesto / IVA Opc.</label>
+                <div class="flex gap-1">
+                  <input type="text" id="setting-tax-label" placeholder="IVA" class="w-14 shrink-0 px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] font-bold">
+                  <input type="number" id="setting-tax-rate" value="0" min="0" max="100" step="any" placeholder="%" class="flex-1 min-w-0 px-2 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-right">
+                </div>
+              </div>
+              <label class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-xl font-bold text-[11px] text-slate-700 cursor-pointer">
+                <input type="checkbox" id="setting-allow-pickup" checked>
+                <span>Retiro en Local</span>
+              </label>
+            </div>
           </div>
 
           <div>
@@ -873,6 +975,15 @@
               Actualizar Contraseña / PIN Secreto
             </button>
           </form>
+
+          <div class="grid grid-cols-2 gap-2 pt-2 border-t border-purple-50">
+            <button type="button" onclick="logoutOtherSessions()" class="py-2 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold rounded-xl border border-rose-200 text-[10px]">
+              🔒 Cerrar Otros Equipos
+            </button>
+            <button type="button" onclick="downloadStoreBackup()" class="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-200 text-[10px]">
+              📥 Backup Completo .JSON
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1245,24 +1356,89 @@
     </div>
   </div>
 
-  <!-- MODAL: TOKEN MP DEL COMERCIO (PARA COBRAR A SUS CLIENTES) -->
-  <div id="modal-mp-guide" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+  <!-- MODAL: TOKEN MP DEL COMERCIO (CIFRADO EXTREMO A EXTREMO EN SERVIDOR) -->
+  <div id="modal-mp-guide" class="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden no-print">
     <div class="bg-white w-full max-w-lg rounded-[32px] p-6 shadow-2xl space-y-4 text-xs">
       <div class="flex items-center justify-between border-b border-purple-100 pb-3">
-        <h3 class="font-bold text-sm text-slate-800 font-serif">Conectar Mercado Pago de tu Tienda</h3>
+        <h3 class="font-bold text-sm text-slate-800 font-serif">🔒 Mercado Pago de tu Tienda (Cifrado)</h3>
         <button onclick="closeMPGuideModal()" class="text-slate-400"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <p class="text-slate-600 leading-relaxed">
-        Con tu <strong>Access Token de Producción</strong> podrás generar Links de Pago directos para cada pedido y verificar automáticamente cuando tu cliente abone.
+        Tu <strong>Access Token de Producción</strong> se cifra con estándar bancario en la base de datos y nunca se expone en el navegador. Permite crear Links de Pago automáticos por pedido.
       </p>
+      <div id="mp-current-mask-box" class="hidden p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <span class="text-[10px] font-black uppercase text-emerald-700 block">✅ Cuenta Vinculada y Cifrada</span>
+          <span id="mp-current-mask-text" class="font-mono font-bold text-slate-800 text-xs"></span>
+        </div>
+        <button type="button" onclick="unlinkMPToken()" class="px-2.5 py-1.5 bg-rose-100 text-rose-700 font-bold rounded-xl text-[10px] shrink-0">Desvincular</button>
+      </div>
       <div>
-        <label class="font-bold text-slate-800 block mb-1">Tu Access Token de Producción:</label>
-        <input type="password" id="guide-mp-token-input" placeholder="APP_USR-xxxxxxxxxxxxxxxxxxxx" class="w-full px-3 py-2.5 bg-slate-50 border border-purple-300 rounded-xl font-mono text-xs">
+        <label class="font-bold text-slate-800 block mb-1">Pegar nuevo Access Token de Producción:</label>
+        <input type="password" id="guide-mp-token-input" placeholder="APP_USR-xxxxxxxxxxxxxxxxxxxx" class="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-purple-300 rounded-xl font-mono text-xs">
       </div>
       <div id="token-test-feedback" class="hidden p-2.5 rounded-xl"></div>
       <div class="flex gap-2">
-        <button onclick="testAndSaveToken()" class="flex-1 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-extrabold rounded-2xl">Guardar y Verificar</button>
+        <button onclick="testAndSaveToken()" class="flex-1 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-extrabold rounded-2xl">Guardar Cifrado</button>
         <button onclick="closeMPGuideModal()" class="py-3 px-4 border border-purple-200 rounded-2xl font-bold">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: LISTA DE ARMADO CONSOLIDADA (PICKING LIST) -->
+  <div id="modal-picking-list" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white w-full max-w-md rounded-[32px] p-5 shadow-2xl space-y-3.5 text-xs max-h-[88vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">📋 Lista Consolidada de Armado</h3>
+          <p id="picking-subtitle" class="text-[10px] text-slate-500">Artículos totales a retirar del estante para pedidos Por Preparar</p>
+        </div>
+        <button onclick="closePickingListModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="picking-items-box" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
+      <button onclick="closePickingListModal()" class="w-full py-2.5 bg-slate-900 text-white font-bold rounded-2xl">Listo</button>
+    </div>
+  </div>
+
+  <!-- MODAL: CARGAR CORREO Y Nº DE GUÍA + AVISO WHATSAPP -->
+  <div id="modal-shipping-guide" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-3.5 text-xs border border-purple-100">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">🚚 Despachar y Cargar Nº de Guía</h3>
+          <p class="text-[10px] text-slate-500">El cliente podrá rastrearlo en vivo desde su link</p>
+        </div>
+        <button onclick="closeShippingGuideModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <input type="hidden" id="sg-order-id">
+      <div>
+        <label class="font-bold text-slate-700 block mb-1">Empresa de Correo / Mensajería</label>
+        <select id="sg-carrier-select" onchange="onCarrierSelectChange(this.value)" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-slate-800 mb-1.5">
+          <option value="Correo Argentino">🇦🇷 Correo Argentino</option>
+          <option value="Andreani">🇦🇷 Andreani</option>
+          <option value="OCA">🇦🇷 OCA</option>
+          <option value="Vía Cargo">🇦🇷 Vía Cargo</option>
+          <option value="Moto / Cadetería">🛵 Moto / Cadetería Express</option>
+          <option value="DHL Express">🌍 DHL Express</option>
+          <option value="FedEx">🌍 FedEx</option>
+          <option value="UPS">🌍 UPS</option>
+          <option value="Estafeta">🇲🇽 Estafeta</option>
+          <option value="Chilexpress">🇨🇱 Chilexpress</option>
+          <option value="Blue Express">🇨🇱 Blue Express</option>
+          <option value="Servientrega">🇨🇴 Servientrega</option>
+          <option value="Correios">🇧🇷 Correios</option>
+          <option value="Correos">🇪🇸 Correos España</option>
+          <option value="custom">✏️ Otro transporte...</option>
+        </select>
+        <input type="text" id="sg-carrier-custom" placeholder="Nombre del transporte" class="hidden w-full min-w-0 px-3 py-2 bg-white border border-purple-200 rounded-xl font-semibold">
+      </div>
+      <div>
+        <label class="font-bold text-slate-700 block mb-1">Código de Seguimiento / Guía</label>
+        <input type="text" id="sg-tracking-input" placeholder="Ej: 360001928374" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold uppercase">
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button type="button" onclick="saveShippingGuideModal(false)" class="py-2.5 bg-slate-900 text-white font-bold rounded-xl">Solo Guardar</button>
+        <button type="button" onclick="saveShippingGuideModal(true)" class="py-2.5 bg-emerald-600 text-white font-extrabold rounded-xl">Guardar + WA 📲</button>
       </div>
     </div>
   </div>
@@ -1423,6 +1599,28 @@
   <!-- ================= APPLICATION JAVASCRIPT ================= -->
   <script>
     const SESSION_KEY = 'comprobantes_pos_session_v1';
+    const SALE_DRAFT_KEY = 'ventaflow_sale_draft_v4';
+
+    const COUNTRY_PRESETS = {
+      AR: { code: 'ARS', sym: '$' },
+      MX: { code: 'MXN', sym: '$' },
+      CL: { code: 'CLP', sym: '$' },
+      CO: { code: 'COP', sym: '$' },
+      PE: { code: 'PEN', sym: 'S/.' },
+      UY: { code: 'UYU', sym: '$U' },
+      BR: { code: 'BRL', sym: 'R$' },
+      US: { code: 'USD', sym: 'US$' },
+      ES: { code: 'EUR', sym: '€' }
+    };
+
+    function esc(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     const VOICE_PRESETS = {
       argentina: {
@@ -1448,6 +1646,7 @@
       currentCart: [],
       activeDiscount: null,
       initialPaymentStatus: 'pending',
+      deliveryMethod: 'delivery',
       dispatchFilter: 'all',
       stockFilter: 'all',
       scannerTarget: 'sale',
@@ -1476,8 +1675,85 @@
 
     function formatCurrency(amount) {
       const sym = state.profile.currency_symbol || '$';
+      const ccode = state.profile.currency_code || 'ARS';
       const num = Number(amount) || 0;
-      return `${sym} ${num.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+      const dec = (['USD', 'EUR', 'PEN', 'BRL'].includes(ccode) && num % 1 !== 0) ? 2 : 0;
+      return `${sym} ${num.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec })}`;
+    }
+
+    function saveSaleDraft() {
+      try {
+        const draft = {
+          userId: currentUser?.id || 0,
+          clientName: document.getElementById('client-name')?.value || '',
+          clientPhone: document.getElementById('client-phone')?.value || '',
+          clientAddress: document.getElementById('client-address')?.value || '',
+          clientHandle: document.getElementById('client-handle')?.value || '',
+          shippingCost: document.getElementById('sale-shipping-cost')?.value || '',
+          paymentMethod: document.getElementById('sale-payment-method')?.value || 'mercadopago',
+          deliveryMethod: state.deliveryMethod || 'delivery',
+          notes: document.getElementById('sale-notes')?.value || '',
+          cart: state.currentCart || []
+        };
+        localStorage.setItem(SALE_DRAFT_KEY, JSON.stringify(draft));
+      } catch (e) {}
+    }
+
+    function restoreSaleDraft() {
+      try {
+        const raw = localStorage.getItem(SALE_DRAFT_KEY);
+        if (!raw) {
+          if (Number(state.profile.shipping_flat_rate) > 0 && state.deliveryMethod === 'delivery') {
+            document.getElementById('sale-shipping-cost').value = state.profile.shipping_flat_rate;
+          }
+          return;
+        }
+        const d = JSON.parse(raw);
+        if (d.userId && currentUser && d.userId !== currentUser.id) return;
+        document.getElementById('client-name').value = d.clientName || '';
+        document.getElementById('client-phone').value = d.clientPhone || '';
+        document.getElementById('client-address').value = d.clientAddress || '';
+        document.getElementById('client-handle').value = d.clientHandle || '';
+        document.getElementById('sale-shipping-cost').value = d.shippingCost ?? (state.profile.shipping_flat_rate || '');
+        if (d.paymentMethod) document.getElementById('sale-payment-method').value = d.paymentMethod;
+        document.getElementById('sale-notes').value = d.notes || '';
+        if (Array.isArray(d.cart) && d.cart.length) state.currentCart = d.cart;
+        setSaleDeliveryMethod(d.deliveryMethod || 'delivery', false);
+      } catch (e) {}
+    }
+
+    function clearSaleDraftForm() {
+      state.currentCart = [];
+      state.activeDiscount = null;
+      ['client-name', 'client-phone', 'client-address', 'client-handle', 'sale-notes'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      setSaleDeliveryMethod('delivery', true);
+      setInitialPaymentStatus('pending');
+      try { localStorage.removeItem(SALE_DRAFT_KEY); } catch (e) {}
+      renderCart();
+      updateTotals();
+    }
+
+    function setSaleDeliveryMethod(mode, autoFillShip = true) {
+      state.deliveryMethod = mode === 'pickup' ? 'pickup' : 'delivery';
+      const bDel = document.getElementById('btn-sale-del-delivery');
+      const bPic = document.getElementById('btn-sale-del-pickup');
+      const shipInp = document.getElementById('sale-shipping-cost');
+      if (bDel && bPic) {
+        bDel.className = state.deliveryMethod === 'delivery'
+          ? 'py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate'
+          : 'py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate';
+        bPic.className = state.deliveryMethod === 'pickup'
+          ? 'py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate'
+          : 'py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate';
+      }
+      if (autoFillShip && shipInp) {
+        shipInp.value = state.deliveryMethod === 'pickup' ? '0' : (Number(state.profile.shipping_flat_rate) > 0 ? state.profile.shipping_flat_rate : '');
+      }
+      updateTotals();
+      saveSaleDraft();
     }
 
     function formatDate(dateStr) {
@@ -1739,6 +2015,7 @@
       updateHeaderLogo();
       updateMPUIStatus();
       refreshPublicStoreLinks();
+      restoreSaleDraft();
       if (isStaff && (state.activeTab === 'audit' || state.activeTab === 'settings')) {
         switchTab('sale');
       }
@@ -1991,9 +2268,9 @@
       document.getElementById('vp-options').innerHTML = vars.map((v, idx) => {
         const st = Number(v.stock) || 0;
         return `
-          <button type="button" onclick="chooseVariantForSale('${prod.id}', ${idx})" class="w-full p-2.5 rounded-2xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100 flex items-center justify-between font-bold text-slate-800">
-            <span>${v.name}</span>
-            <span class="text-[10px] px-2 py-0.5 rounded-full ${st > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'}">Stock: ${st}</span>
+          <button type="button" onclick="chooseVariantForSale('${esc(prod.id)}', ${idx})" class="w-full p-2.5 rounded-2xl border border-purple-100 bg-purple-50/50 hover:bg-purple-100 flex items-center justify-between font-bold text-slate-800">
+            <span class="truncate pr-2">${esc(v.name)}</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full shrink-0 ${st > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'}">Stock: ${st}</span>
           </button>
         `;
       }).join('');
@@ -2036,23 +2313,25 @@
       if (state.currentCart.length === 0) {
         container.innerHTML = '<div class="text-center py-4 text-purple-400"><span class="text-2xl block mb-1">📦</span><p class="text-xs font-medium">Aún no agregas productos para despachar</p></div>';
         document.getElementById('btn-emit').disabled = true;
+        saveSaleDraft();
         return;
       }
       container.innerHTML = state.currentCart.map((item, idx) => `
         <div class="flex items-center justify-between py-1.5 border-b border-purple-50 last:border-0 text-xs">
-          <div class="flex-1 pr-2">
-            <p class="font-bold text-slate-800">${item.productName}</p>
-            <p class="text-[11px] text-purple-500">${formatCurrency(item.unitPrice)} c/u</p>
+          <div class="flex-1 min-w-0 pr-2">
+            <p class="font-bold text-slate-800 truncate">${esc(item.productName)}</p>
+            <p class="text-[11px] text-purple-500">${esc(formatCurrency(item.unitPrice))} c/u</p>
           </div>
-          <div class="flex items-center gap-2 bg-purple-50/80 px-2.5 py-1 rounded-xl border border-purple-100">
+          <div class="flex items-center gap-2 bg-purple-50/80 px-2.5 py-1 rounded-xl border border-purple-100 shrink-0">
             <button onclick="changeCartQty(${idx}, -1)" class="w-5 h-5 font-bold text-slate-600">-</button>
-            <span class="font-bold w-4 text-center">${item.quantity}</span>
+            <span class="font-bold w-4 text-center">${Number(item.quantity)}</span>
             <button onclick="changeCartQty(${idx}, 1)" class="w-5 h-5 font-bold text-purple-600">+</button>
           </div>
-          <div class="w-20 text-right font-black text-slate-800">${formatCurrency(item.unitPrice * item.quantity)}</div>
+          <div class="w-20 text-right font-black text-slate-800 shrink-0">${esc(formatCurrency(item.unitPrice * item.quantity))}</div>
         </div>
       `).join('');
       document.getElementById('btn-emit').disabled = false;
+      saveSaleDraft();
     }
 
     function applyPromoOrDiscount(type) {
@@ -2102,14 +2381,40 @@
       return { amount: 0, label: '' };
     }
 
-    function updateTotals() {
+    function getComputedSaleTotals() {
       const subtotal = state.currentCart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
       const disc = calculateDiscount(subtotal, state.currentCart);
-      const total = Math.max(0, subtotal - disc.amount);
+      const afterDisc = Math.max(0, subtotal - disc.amount);
+      let ship = Math.max(0, parseFloat(document.getElementById('sale-shipping-cost')?.value) || 0);
+      const freeMin = Number(state.profile.free_shipping_min || 0);
+      if (state.deliveryMethod === 'pickup' || (freeMin > 0 && afterDisc >= freeMin)) {
+        ship = 0;
+      }
+      const taxRate = Math.max(0, Number(state.profile.tax_rate || 0));
+      const tax = taxRate > 0 ? Math.round(afterDisc * (taxRate / 100) * 100) / 100 : 0;
+      const total = Math.max(0, afterDisc + ship + tax);
+      return { subtotal, disc, ship, tax, total };
+    }
+
+    function updateTotals() {
+      const { subtotal, disc, ship, tax, total } = getComputedSaleTotals();
       document.getElementById('subtotal-display').innerText = formatCurrency(subtotal);
       document.getElementById('row-discount-display').classList.toggle('hidden', disc.amount <= 0);
       document.getElementById('discount-label-display').innerText = disc.label;
       document.getElementById('discount-amount-display').innerText = `-${formatCurrency(disc.amount)}`;
+
+      const shipRow = document.getElementById('row-shipping-display');
+      if (shipRow) {
+        shipRow.classList.toggle('hidden', ship <= 0);
+        document.getElementById('shipping-amount-display').innerText = formatCurrency(ship);
+      }
+      const taxRow = document.getElementById('row-tax-display');
+      if (taxRow) {
+        taxRow.classList.toggle('hidden', tax <= 0);
+        document.getElementById('tax-label-display').innerText = `${state.profile.tax_label || 'Impuesto'} (${state.profile.tax_rate}%):`;
+        document.getElementById('tax-amount-display').innerText = formatCurrency(tax);
+      }
+
       document.getElementById('active-discount-badge').innerText = disc.label;
       document.getElementById('active-discount-badge').classList.toggle('hidden', disc.amount <= 0);
       document.getElementById('btn-clear-discount').classList.toggle('hidden', disc.amount <= 0);
@@ -2120,14 +2425,13 @@
 
     async function emitAndOpenReceipt() {
       if (state.currentCart.length === 0) return;
-      const subtotal = state.currentCart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-      const disc = calculateDiscount(subtotal, state.currentCart);
-      const total = Math.max(0, subtotal - disc.amount);
+      const { subtotal, disc, ship, tax, total } = getComputedSaleTotals();
+      const addrVal = document.getElementById('client-address').value.trim() || (state.deliveryMethod === 'pickup' ? 'Retiro en Local' : '');
 
       const payload = {
         customer_name: document.getElementById('client-name').value.trim() || 'Cliente',
         customer_phone: document.getElementById('client-phone').value.trim(),
-        customer_address: document.getElementById('client-address').value.trim(),
+        customer_address: addrVal,
         customer_handle: document.getElementById('client-handle').value.trim(),
         items: state.currentCart.map(i => ({
           productName: i.productName,
@@ -2140,8 +2444,12 @@
         subtotal,
         discount_amount: disc.amount,
         discount_label: disc.label,
+        shipping_cost: ship,
+        tax_amount: tax,
         total,
         payment_status: state.initialPaymentStatus,
+        payment_method: document.getElementById('sale-payment-method')?.value || 'mercadopago',
+        delivery_method: state.deliveryMethod || 'delivery',
         dispatch_status: 'to_prepare',
         notes: document.getElementById('sale-notes').value.trim()
       };
@@ -2158,14 +2466,7 @@
         state.customers = boot.customers;
 
         playChimeSound();
-        state.currentCart = [];
-        state.activeDiscount = null;
-        ['client-name', 'client-phone', 'client-address', 'client-handle', 'sale-notes'].forEach(id => {
-          document.getElementById(id).value = '';
-        });
-        setInitialPaymentStatus('pending');
-        renderCart();
-        updateTotals();
+        clearSaleDraftForm();
         document.getElementById('label-next-folio').innerText = 'Pedido #' + String(state.profile.next_folio_number).padStart(6, '0');
         openReceiptModal(order);
       } catch (err) {
@@ -2218,13 +2519,13 @@
       document.getElementById('receipt-items-list').innerHTML = items.map(i => `
         <div class="flex justify-between items-center py-2 text-xs">
           <div class="flex items-start gap-2.5 pr-2">
-            <span class="font-extrabold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-md text-[11px] shrink-0">${i.quantity}x</span>
+            <span class="font-extrabold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-md text-[11px] shrink-0">${Number(i.quantity)}x</span>
             <div>
-              <p class="font-bold text-slate-800 leading-snug">${i.productName}</p>
-              <p class="text-[10px] text-slate-400">${formatCurrency(i.unitPrice)} c/u</p>
+              <p class="font-bold text-slate-800 leading-snug">${esc(i.productName)}</p>
+              <p class="text-[10px] text-slate-400">${esc(formatCurrency(i.unitPrice))} c/u</p>
             </div>
           </div>
-          <span class="font-extrabold text-slate-900 shrink-0">${formatCurrency(i.subtotal)}</span>
+          <span class="font-extrabold text-slate-900 shrink-0">${esc(formatCurrency(i.subtotal))}</span>
         </div>
       `).join('');
 
@@ -2265,8 +2566,8 @@
       document.getElementById('sticker-address').innerText = order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar';
       document.getElementById('sticker-checklist').innerHTML = items.map(i => `
         <div class="flex items-center gap-1.5 font-bold text-slate-900">
-          <span class="w-3.5 h-3.5 border-2 border-slate-900 rounded inline-block"></span>
-          <span>${i.quantity}x ${i.productName}</span>
+          <span class="w-3.5 h-3.5 border-2 border-slate-900 rounded inline-block shrink-0"></span>
+          <span>${Number(i.quantity)}x ${esc(i.productName)}</span>
         </div>
       `).join('');
 
@@ -2359,12 +2660,38 @@
       });
     }
 
-    async function captureFullReceiptCanvas() {
-      const order = state.activeSaleForReceipt;
+    function drawQRCodeOnCanvas(ctx, text, x, y, size) {
+      if (typeof qrcode !== 'function' || !text) return false;
+      try {
+        const qr = qrcode(0, 'M');
+        qr.addData(String(text));
+        qr.make();
+        const count = qr.getModuleCount();
+        const cell = size / count;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(x - 6, y - 6, size + 12, size + 12);
+        ctx.fillStyle = '#0F172A';
+        for (let r = 0; r < count; r++) {
+          for (let c = 0; c < count; c++) {
+            if (qr.isDark(r, c)) {
+              ctx.fillRect(x + c * cell, y + r * cell, Math.ceil(cell), Math.ceil(cell));
+            }
+          }
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function captureFullReceiptCanvas(customOrder = null, forceSticker = null) {
+      const order = customOrder || state.activeSaleForReceipt;
       if (!order) throw new Error('No hay pedido activo.');
-      const isSticker = state.currentReceiptView === 'sticker';
+      const isSticker = forceSticker !== null ? forceSticker : (state.currentReceiptView === 'sticker');
       const items = typeof order.items_json === 'string' ? JSON.parse(order.items_json) : (order.items || []);
       const logoImg = await loadImageSafe(state.profile.logo_data_url);
+      const trackUrl = `${window.location.origin}/seguimiento.html?code=${encodeURIComponent(order.tracking_code)}`;
+      const hasQrLib = typeof qrcode === 'function';
 
       const theme = state.profile.receipt_theme || 'coquette';
       const accentColor = theme === 'glam' ? '#E11D48' : (theme === 'minimal' ? '#0F172A' : (theme === 'neon' ? '#6D28D9' : '#7C3AED'));
@@ -2374,15 +2701,13 @@
       const pad = isSticker ? 36 : 56;
       const contentW = W - pad * 2;
 
-      // Measure canvas
       const mCanvas = document.createElement('canvas');
       const mCtx = mCanvas.getContext('2d');
 
       if (isSticker) {
-        // Measure Sticker Height
         let h = 40;
         if (logoImg) h += 100;
-        h += 140; // header + folio + tracking
+        h += 140;
         mCtx.font = 'bold 26px sans-serif';
         const addrLines = wrapCanvasLines(mCtx, order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar', contentW);
         h += 90 + addrLines.length * 34;
@@ -2391,7 +2716,7 @@
           const lines = wrapCanvasLines(mCtx, `[ ] ${i.quantity}x ${i.productName}`, contentW);
           h += lines.length * 36 + 12;
         });
-        h += 130;
+        h += hasQrLib ? 290 : 130;
 
         const canvas = document.createElement('canvas');
         canvas.width = W;
@@ -2463,38 +2788,44 @@
         ctx.strokeStyle = '#0F172A';
         ctx.lineWidth = 4;
         ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
-        y += 30;
+        y += 28;
 
         const isPaid = order.payment_status === 'paid';
         ctx.fillStyle = isPaid ? '#065F46' : '#92400E';
         ctx.font = '900 24px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(isPaid ? 'ABONADO - LISTO PARA ENVIO' : 'PENDIENTE DE ABONO', W / 2, y + 20);
+        y += 42;
+
+        if (hasQrLib) {
+          drawQRCodeOnCanvas(ctx, trackUrl, (W - 120) / 2, y, 120);
+          ctx.fillStyle = '#64748B';
+          ctx.font = 'bold 17px sans-serif';
+          ctx.fillText('Escanea para rastrear tu paquete', W / 2, y + 144);
+        }
         return canvas;
       }
 
       // Measure Full Boleta Height
-      let totalH = 32; // top bar + top margin
+      let totalH = 32;
       if (logoImg) totalH += 150;
       else totalH += 90;
 
       mCtx.font = 'bold 24px sans-serif';
       const contactText = [state.profile.phone, state.profile.instagram, state.profile.address].filter(Boolean).join(' • ');
       const contactLines = wrapCanvasLines(mCtx, contactText, contentW);
-      totalH += 65 + contactLines.length * 32 + 30; // brand name + contact + divider
+      totalH += 65 + contactLines.length * 32 + 30;
 
-      totalH += 110; // folio + date box
+      totalH += 110;
 
-      // Client box
       mCtx.font = '600 25px sans-serif';
-      const cAddrLines = order.customer_address ? wrapCanvasLines(mCtx, 'Envío: ' + order.customer_address, contentW - 48) : [];
+      const cAddrLines = order.customer_address ? wrapCanvasLines(mCtx, 'Entrega: ' + order.customer_address, contentW - 48) : [];
       let clientBoxH = 95;
       if (order.customer_phone) clientBoxH += 34;
       if (order.customer_handle) clientBoxH += 34;
       clientBoxH += cAddrLines.length * 34;
       totalH += clientBoxH + 36;
 
-      // Items header + items
       totalH += 56;
       mCtx.font = 'bold 28px sans-serif';
       const measuredItems = items.map(i => {
@@ -2503,36 +2834,34 @@
       });
       measuredItems.forEach(mi => { totalH += mi.h; });
 
-      // Totals + status
+      const shipAmt = Number(order.shipping_cost || 0);
+      const taxAmt = Number(order.tax_amount || 0);
       totalH += 190;
       if (order.discount_amount > 0) totalH += 44;
+      if (shipAmt > 0) totalH += 40;
+      if (taxAmt > 0) totalH += 40;
+      if (order.payment_status !== 'paid' && state.profile.bank_alias) totalH += 42;
 
-      // Notes
       mCtx.font = '600 24px sans-serif';
       const noteLines = order.notes ? wrapCanvasLines(mCtx, order.notes, contentW - 48) : [];
       if (noteLines.length) totalH += 60 + noteLines.length * 32 + 24;
 
-      // Footer
       mCtx.font = 'italic 24px sans-serif';
       const footerLines = wrapCanvasLines(mCtx, state.profile.receipt_footer_message || '', contentW - 20);
-      totalH += 110 + footerLines.length * 32 + 40;
+      totalH += 110 + footerLines.length * 32 + (hasQrLib ? 195 : 40);
 
-      // Create Full Boleta Canvas
       const canvas = document.createElement('canvas');
       canvas.width = W;
       canvas.height = totalH;
       const ctx = canvas.getContext('2d');
 
-      // White card background
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, W, totalH);
 
-      // Top accent bar
       ctx.fillStyle = accentColor;
       ctx.fillRect(0, 0, W, 18);
 
       let y = 48;
-      // Logo or Emoji Badge
       if (logoImg) {
         const ratio = Math.min(280 / logoImg.width, 130 / logoImg.height);
         const lw = logoImg.width * ratio, lh = logoImg.height * ratio;
@@ -2549,7 +2878,6 @@
         y += 96;
       }
 
-      // Brand Name & Contact
       ctx.textAlign = 'center';
       ctx.fillStyle = '#0F172A';
       ctx.font = '800 38px Georgia, serif';
@@ -2566,7 +2894,6 @@
       ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
       y += 24;
 
-      // Folio & Date box
       drawRoundedRect(ctx, pad, y, contentW, 92, 22);
       ctx.fillStyle = '#F8FAFC';
       ctx.fill();
@@ -2591,7 +2918,6 @@
       ctx.fillText(formatDate(order.created_at), W - pad - 24, y + 66);
       y += 116;
 
-      // Client Box
       drawRoundedRect(ctx, pad, y, contentW, clientBoxH, 24);
       ctx.fillStyle = softBg;
       ctx.fill();
@@ -2618,7 +2944,6 @@
       cAddrLines.forEach(l => { ctx.fillText(l, pad + 24, cy); cy += 34; });
       y += clientBoxH + 28;
 
-      // Items Header
       ctx.fillStyle = '#94A3B8';
       ctx.font = '800 20px sans-serif';
       ctx.textAlign = 'left';
@@ -2631,7 +2956,6 @@
       ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W - pad, y); ctx.stroke();
       y += 12;
 
-      // Items Rows
       measuredItems.forEach(mi => {
         drawRoundedRect(ctx, pad, y + 10, 62, 42, 12);
         ctx.fillStyle = softBg;
@@ -2662,7 +2986,6 @@
       });
       y += 22;
 
-      // Totals
       ctx.textAlign = 'left';
       ctx.fillStyle = '#64748B';
       ctx.font = '600 24px sans-serif';
@@ -2683,6 +3006,30 @@
         y += 44;
       }
 
+      if (shipAmt > 0) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#64748B';
+        ctx.font = '600 24px sans-serif';
+        ctx.fillText('Costo de Envío', pad, y + 22);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(formatCurrency(shipAmt), W - pad, y + 22);
+        y += 40;
+      }
+
+      if (taxAmt > 0) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#64748B';
+        ctx.font = '600 24px sans-serif';
+        ctx.fillText(state.profile.tax_label || 'Impuestos', pad, y + 22);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#334155';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText(formatCurrency(taxAmt), W - pad, y + 22);
+        y += 40;
+      }
+
       drawRoundedRect(ctx, pad, y + 4, contentW, 78, 22);
       ctx.fillStyle = softBg;
       ctx.fill();
@@ -2700,7 +3047,6 @@
       ctx.fillText(formatCurrency(order.total), W - pad - 24, y + 56);
       y += 102;
 
-      // Payment Status Pill
       const isPaid = order.payment_status === 'paid';
       ctx.textAlign = 'left';
       ctx.fillStyle = '#64748B';
@@ -2712,9 +3058,16 @@
       ctx.fillStyle = isPaid ? '#059669' : '#D97706';
       ctx.font = '800 24px sans-serif';
       ctx.fillText(statusTxt, W - pad, y + 26);
-      y += 52;
+      y += 46;
 
-      // Notes
+      if (!isPaid && state.profile.bank_alias) {
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#475569';
+        ctx.font = 'bold 21px sans-serif';
+        ctx.fillText(`Transferencia / Alias: ${state.profile.bank_alias}`, pad, y + 22);
+        y += 42;
+      }
+
       if (noteLines.length) {
         const nh = 54 + noteLines.length * 32;
         drawRoundedRect(ctx, pad, y, contentW, nh, 20);
@@ -2733,7 +3086,6 @@
         y += nh + 24;
       }
 
-      // Footer
       ctx.strokeStyle = '#E2E8F0';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(pad, y + 6); ctx.lineTo(W - pad, y + 6); ctx.stroke();
@@ -2748,6 +3100,14 @@
       ctx.fillStyle = '#64748B';
       ctx.font = 'italic 22px sans-serif';
       footerLines.forEach(l => { ctx.fillText(l, W / 2, y + 18); y += 32; });
+
+      if (hasQrLib) {
+        y += 18;
+        drawQRCodeOnCanvas(ctx, trackUrl, (W - 118) / 2, y, 118);
+        ctx.fillStyle = '#64748B';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText('Escanea el QR para seguimiento en vivo', W / 2, y + 144);
+      }
 
       return canvas;
     }
@@ -2935,44 +3295,135 @@
       container.innerHTML = filtered.map(o => {
         const items = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : [];
         const isPaid = o.payment_status === 'paid';
+        const safeId = esc(o.id);
         return `
           <div class="bg-white rounded-3xl p-4 border border-purple-100 shadow-sm space-y-2.5">
-            <div class="flex items-start justify-between">
-              <div>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
-                  <span class="font-mono font-black text-purple-700">${o.folio_number}</span>
-                  <span class="text-[10px] font-mono bg-purple-50 px-1.5 py-0.5 rounded text-purple-600">${o.tracking_code}</span>
+                  <span class="font-mono font-black text-purple-700">${esc(o.folio_number)}</span>
+                  <span class="text-[10px] font-mono bg-purple-50 px-1.5 py-0.5 rounded text-purple-600">${esc(o.tracking_code)}</span>
                   ${o.source === 'web_store' ? '<span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800">🌐 Tienda Web</span>' : ''}
                   <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
                     ${isPaid ? 'Abonado ✅' : 'Pend. Abono ⏳'}
                   </span>
                 </div>
-                <p class="font-bold text-slate-900 mt-1">${o.customer_name} ${o.customer_phone ? '• ' + o.customer_phone : ''}</p>
-                ${o.customer_address ? `<p class="text-[10px] text-slate-500">📍 ${o.customer_address}</p>` : ''}
+                <p class="font-bold text-slate-900 mt-1 truncate">${esc(o.customer_name)} ${o.customer_phone ? '• ' + esc(o.customer_phone) : ''}</p>
+                ${o.customer_address ? `<p class="text-[10px] text-slate-500 truncate">📍 ${esc(o.customer_address)}</p>` : ''}
               </div>
-              <span class="font-black text-sm text-purple-800">${formatCurrency(o.total)}</span>
+              <span class="font-black text-sm text-purple-800 shrink-0">${esc(formatCurrency(o.total))}</span>
             </div>
 
-            <p class="text-[11px] text-slate-600 bg-purple-50/40 p-2 rounded-xl">${items.map(i => `${i.quantity}x ${i.productName}`).join(', ')}</p>
+            <p class="text-[11px] text-slate-600 bg-purple-50/40 p-2 rounded-xl">${items.map(i => `${Number(i.quantity)}x ${esc(i.productName)}`).join(', ')}</p>
 
             <div class="grid grid-cols-2 gap-2">
-              <select onchange="updateOrderStatus('${o.id}', { dispatch_status: this.value })" class="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-xl font-bold text-[11px] text-purple-900">
+              <select onchange="updateOrderStatus('${safeId}', { dispatch_status: this.value })" class="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-xl font-bold text-[11px] text-purple-900">
                 ${Object.entries(dispatchLabels).map(([val, lbl]) => `<option value="${val}" ${o.dispatch_status === val ? 'selected' : ''}>${lbl}</option>`).join('')}
               </select>
-              <button onclick="openReceiptById('${o.id}')" class="px-2.5 py-1.5 bg-purple-600 text-white font-bold rounded-xl text-[11px]">🧾 Ver Boleta / WhatsApp</button>
+              <button onclick="openReceiptById('${safeId}')" class="px-2.5 py-1.5 bg-purple-600 text-white font-bold rounded-xl text-[11px] truncate">🧾 Boleta / Sticker</button>
             </div>
 
             <div class="flex flex-wrap gap-1.5 pt-1 border-t border-purple-50">
               ${!isPaid ? `
-                <button onclick="generatePaymentLinkForOrder('${o.id}')" class="px-2.5 py-1 bg-sky-100 text-sky-800 font-bold rounded-xl text-[10px]">🔗 ${o.mp_payment_link ? 'Copiar Link MP' : 'Crear Link MP'}</button>
-                <button onclick="verifyOrderPaymentMP('${o.id}')" class="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-xl text-[10px]">🔄 Verificar Pago MP</button>
-                <button onclick="markOrderPaid('${o.id}')" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-xl text-[10px]">✅ Marcar Abonado</button>
+                <button onclick="generatePaymentLinkForOrder('${safeId}')" class="px-2.5 py-1 bg-sky-100 text-sky-800 font-bold rounded-xl text-[10px]">🔗 ${o.mp_payment_link ? 'Copiar Link MP' : 'Link MP'}</button>
+                <button onclick="sendDispatchWhatsApp('${safeId}', 'pay')" class="px-2.5 py-1 bg-amber-100 text-amber-900 font-bold rounded-xl text-[10px]">💬 Cobrar WA</button>
+                <button onclick="verifyOrderPaymentMP('${safeId}')" class="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-xl text-[10px]">🔄 Verificar MP</button>
+                <button onclick="markOrderPaid('${safeId}')" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-xl text-[10px]">✅ Abonado</button>
               ` : ''}
-              <button onclick="editOrderTracking('${o.id}')" class="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold rounded-xl text-[10px]">🚚 ${o.shipping_tracking ? 'Guía: ' + o.shipping_tracking : '+ Cargar Nº Guía'}</button>
+              <button onclick="editOrderTracking('${safeId}')" class="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold rounded-xl text-[10px]">🚚 ${o.shipping_tracking ? 'Guía: ' + esc(o.shipping_tracking) : '+ Cargar Guía'}</button>
+              ${o.shipping_tracking ? `<button onclick="sendDispatchWhatsApp('${safeId}', 'shipped')" class="px-2.5 py-1 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">📲 Avisar Envío</button>` : ''}
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    function openPickingListModal() {
+      const pendingOrders = state.orders.filter(o => o.dispatch_status === 'to_prepare');
+      const map = new Map();
+      pendingOrders.forEach(o => {
+        const items = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : [];
+        items.forEach(i => {
+          const k = i.productName || 'Producto';
+          map.set(k, (map.get(k) || 0) + (Number(i.quantity) || 1));
+        });
+      });
+      const sub = document.getElementById('picking-subtitle');
+      const box = document.getElementById('picking-items-box');
+      if (sub) sub.innerText = `${pendingOrders.length} pedidos pendientes de armado`;
+      if (!map.size) {
+        box.innerHTML = '<p class="text-center text-slate-400 py-8">🎉 No hay pedidos pendientes "Por Preparar".</p>';
+      } else {
+        const sorted = [...map.entries()].sort((a, b) => b[1] - a[1]);
+        box.innerHTML = sorted.map(([name, qty]) => `
+          <div class="p-2.5 rounded-2xl bg-purple-50/50 border border-purple-100 flex items-center justify-between gap-2">
+            <span class="font-bold text-slate-800 truncate">${esc(name)}</span>
+            <span class="px-2.5 py-0.5 rounded-xl bg-purple-600 text-white font-black text-xs shrink-0">${qty} unid.</span>
+          </div>
+        `).join('');
+      }
+      document.getElementById('modal-picking-list').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closePickingListModal() {
+      document.getElementById('modal-picking-list').classList.add('hidden');
+    }
+
+    async function downloadBatchStickersPDF() {
+      const targets = state.orders.filter(o => o.dispatch_status === 'to_prepare' || o.dispatch_status === 'packed').slice(0, 35);
+      if (!targets.length) {
+        alert('No hay pedidos en estado "Por Preparar" o "Empacado" para generar etiquetas en lote.');
+        return;
+      }
+      const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (!jsPDFCtor) { alert('Cargando motor PDF, intenta en 2 segundos.'); return; }
+
+      const btn = document.getElementById('btn-batch-stickers');
+      const oldHtml = btn ? btn.innerHTML : '';
+      if (btn) btn.innerText = `Generando ${targets.length}... ⏳`;
+
+      try {
+        let doc = null;
+        for (let idx = 0; idx < targets.length; idx++) {
+          const canvas = await captureFullReceiptCanvas(targets[idx], true);
+          const imgData = canvas.toDataURL('image/png');
+          const pdfW = 58;
+          const pdfH = Math.max(60, (canvas.height * pdfW) / canvas.width);
+          if (!doc) {
+            doc = new jsPDFCtor({ unit: 'mm', format: [pdfW, pdfH], orientation: 'portrait' });
+          } else {
+            doc.addPage([pdfW, pdfH], 'portrait');
+          }
+          doc.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH);
+        }
+        doc.save(`Lote_Pegatinas_58mm_${new Date().toISOString().slice(0, 10)}.pdf`);
+      } catch (err) {
+        alert('Error generando lote de pegatinas: ' + err.message);
+      } finally {
+        if (btn && oldHtml) btn.innerHTML = oldHtml;
+        lucide.createIcons();
+      }
+    }
+
+    function sendDispatchWhatsApp(orderId, kind) {
+      const o = state.orders.find(x => x.id === orderId);
+      if (!o) return;
+      const trackUrl = `${window.location.origin}/seguimiento.html?code=${encodeURIComponent(o.tracking_code)}`;
+      let msg = '';
+      if (kind === 'pay') {
+        msg = `¡Hola *${o.customer_name}*! 👋 Te compartimos el resumen de tu Pedido *${o.folio_number}* en *${state.profile.name || 'nuestra tienda'}* por *${formatCurrency(o.total)}*.\n`;
+        if (o.mp_payment_link) msg += `\n💳 Link Mercado Pago: ${o.mp_payment_link}`;
+        if (state.profile.bank_alias) msg += `\n🏦 Alias / Cuenta: *${state.profile.bank_alias}* ${state.profile.bank_holder ? `(${state.profile.bank_holder})` : ''}`;
+        msg += `\n🚚 Seguimiento en vivo: ${trackUrl}`;
+      } else {
+        msg = `¡Hola *${o.customer_name}*! 🚚✨ Tu pedido *${o.folio_number}* ya fue despachado.\n`;
+        if (o.shipping_carrier) msg += `• Transporte: *${o.shipping_carrier}*\n`;
+        if (o.shipping_tracking) msg += `• Nº de Guía: *${o.shipping_tracking}*\n`;
+        msg += `\n🔎 Sigue tu paquete en vivo aquí: ${trackUrl}`;
+      }
+      const phone = String(o.customer_phone || '').replace(/\D/g, '');
+      window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
     }
 
     function openReceiptById(id) {
@@ -3009,13 +3460,49 @@
       } catch (err) { alert(err.message); }
     }
 
-    async function editOrderTracking(id) {
+    function editOrderTracking(id) {
       const o = state.orders.find(x => x.id === id);
-      const carrier = prompt('Transporte / Correo (ej. Andreani, Correo Argentino, Moto):', o?.shipping_carrier || '');
-      if (carrier === null) return;
-      const tracking = prompt('Código de seguimiento / guía:', o?.shipping_tracking || '');
-      if (tracking === null) return;
-      await updateOrderStatus(id, { shipping_carrier: carrier.trim(), shipping_tracking: tracking.trim(), dispatch_status: 'dispatched' });
+      if (!o) return;
+      document.getElementById('sg-order-id').value = id;
+      const sel = document.getElementById('sg-carrier-select');
+      const cust = document.getElementById('sg-carrier-custom');
+      const existingCarrier = o.shipping_carrier || 'Correo Argentino';
+      const hasOpt = [...sel.options].some(opt => opt.value === existingCarrier);
+      if (hasOpt) {
+        sel.value = existingCarrier;
+        cust.classList.add('hidden');
+      } else {
+        sel.value = 'custom';
+        cust.value = existingCarrier;
+        cust.classList.remove('hidden');
+      }
+      document.getElementById('sg-tracking-input').value = o.shipping_tracking || '';
+      document.getElementById('modal-shipping-guide').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function onCarrierSelectChange(val) {
+      document.getElementById('sg-carrier-custom').classList.toggle('hidden', val !== 'custom');
+    }
+
+    function closeShippingGuideModal() {
+      document.getElementById('modal-shipping-guide').classList.add('hidden');
+    }
+
+    async function saveShippingGuideModal(alsoWhatsApp = false) {
+      const id = document.getElementById('sg-order-id').value;
+      const selVal = document.getElementById('sg-carrier-select').value;
+      const carrier = selVal === 'custom'
+        ? document.getElementById('sg-carrier-custom').value.trim()
+        : selVal;
+      const tracking = document.getElementById('sg-tracking-input').value.trim();
+      await updateOrderStatus(id, {
+        shipping_carrier: carrier,
+        shipping_tracking: tracking,
+        dispatch_status: 'dispatched'
+      });
+      closeShippingGuideModal();
+      if (alsoWhatsApp) sendDispatchWhatsApp(id, 'shipped');
     }
 
     // ================= CRM CLIENTES =================
@@ -3032,12 +3519,12 @@
         return;
       }
       box.innerHTML = filtered.map(c => `
-        <div onclick="selectCustomer('${c.id}')" class="p-3 bg-purple-50/50 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer flex justify-between items-center text-xs">
-          <div>
-            <p class="font-bold text-slate-800">${c.name}</p>
-            <p class="text-[10px] text-slate-500">${c.phone || ''} ${c.address ? '• ' + c.address : ''}</p>
+        <div onclick="selectCustomer('${esc(c.id)}')" class="p-3 bg-purple-50/50 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer flex justify-between items-center text-xs">
+          <div class="min-w-0 pr-2">
+            <p class="font-bold text-slate-800 truncate">${esc(c.name)}</p>
+            <p class="text-[10px] text-slate-500 truncate">${esc(c.phone || '')} ${c.address ? '• ' + esc(c.address) : ''}</p>
           </div>
-          <span class="text-purple-600 font-bold">Elegir →</span>
+          <span class="text-purple-600 font-bold shrink-0">Elegir →</span>
         </div>
       `).join('');
     }
@@ -3088,8 +3575,9 @@
         const badge = st <= 0 ? '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">🔴 Agotado</span>'
           : (st <= min ? `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⚠️ Quedan ${st}</span>`
             : `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">🟢 ${st}</span>`);
+        const safeId = esc(p.id);
         const thumb = p.image_url
-          ? `<img src="${p.image_url}" class="w-11 h-11 rounded-2xl object-cover border border-purple-100 shrink-0 bg-slate-50">`
+          ? `<img src="${esc(p.image_url)}" class="w-11 h-11 rounded-2xl object-cover border border-purple-100 shrink-0 bg-slate-50">`
           : `<div class="w-11 h-11 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-lg shrink-0">🛍️</div>`;
 
         return `
@@ -3098,25 +3586,25 @@
               <div class="flex items-center gap-2.5 min-w-0">
                 ${thumb}
                 <div class="min-w-0">
-                  <div class="flex items-center gap-1.5 flex-wrap"><p class="font-bold text-slate-800 truncate">${p.name}</p>${badge}</div>
-                  <p class="text-[10px] text-slate-400 truncate">${p.category || 'General'} ${p.barcode ? '• ' + p.barcode : ''}</p>
-                  ${vars.length ? `<p class="text-[10px] text-purple-700 font-semibold truncate">Variantes: ${vars.map(v => `${v.name} (${v.stock})`).join(', ')}</p>` : ''}
-                  ${!isStaff ? `<p class="text-[10px] mt-0.5 text-slate-500">Costo: <strong>${formatCurrency(cost)}</strong> • Ganancia: <strong class="text-emerald-700">+${formatCurrency(profit)}</strong></p>` : ''}
+                  <div class="flex items-center gap-1.5 flex-wrap"><p class="font-bold text-slate-800 truncate">${esc(p.name)}</p>${badge}</div>
+                  <p class="text-[10px] text-slate-400 truncate">${esc(p.category || 'General')} ${p.barcode ? '• ' + esc(p.barcode) : ''}</p>
+                  ${vars.length ? `<p class="text-[10px] text-purple-700 font-semibold truncate">Variantes: ${vars.map(v => `${esc(v.name)} (${Number(v.stock)})`).join(', ')}</p>` : ''}
+                  ${!isStaff ? `<p class="text-[10px] mt-0.5 text-slate-500">Costo: <strong>${esc(formatCurrency(cost))}</strong> • Ganancia: <strong class="text-emerald-700">+${esc(formatCurrency(profit))}</strong></p>` : ''}
                 </div>
               </div>
-              <span class="font-black text-sm text-purple-700 shrink-0">${formatCurrency(price)}</span>
+              <span class="font-black text-sm text-purple-700 shrink-0">${esc(formatCurrency(price))}</span>
             </div>
             <div class="flex items-center justify-between pt-1.5 border-t border-purple-50">
               <div class="flex items-center gap-1 bg-purple-50 px-2 py-1 rounded-xl border border-purple-100">
-                <button onclick="adjustProductStock('${p.id}', -1)" class="w-5 font-bold">-</button>
+                <button onclick="adjustProductStock('${safeId}', -1)" class="w-5 font-bold">-</button>
                 <span class="font-black w-6 text-center">${st}</span>
-                <button onclick="adjustProductStock('${p.id}', 1)" class="w-5 font-bold text-purple-700">+</button>
+                <button onclick="adjustProductStock('${safeId}', 1)" class="w-5 font-bold text-purple-700">+</button>
               </div>
               <div class="flex items-center gap-1.5">
-                <button onclick="downloadProductBarcodeLabel('${p.id}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[10px]" title="Descargar Etiqueta 58mm con Código de Barras">🏷️ Etiqueta</button>
+                <button onclick="downloadProductBarcodeLabel('${safeId}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-[10px]" title="Descargar Etiqueta 58mm con Código de Barras">🏷️ Etiqueta</button>
                 ${!isStaff ? `
-                  <button onclick="openEditProductModal('${p.id}')" class="p-1.5 text-slate-400 hover:text-purple-700" title="Editar"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
-                  <button onclick="deleteProduct('${p.id}')" class="p-1.5 text-slate-300 hover:text-rose-500" title="Eliminar"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                  <button onclick="openEditProductModal('${safeId}')" class="p-1.5 text-slate-400 hover:text-purple-700" title="Editar"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                  <button onclick="deleteProduct('${safeId}')" class="p-1.5 text-slate-300 hover:text-rose-500" title="Eliminar"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
                 ` : ''}
               </div>
             </div>
@@ -3430,12 +3918,12 @@
       box.innerHTML = filtered.map(p => {
         const vars = parseProductVariants(p);
         return `
-          <div onclick="selectProductForSale('${p.id}')" class="flex items-center justify-between p-3 bg-purple-50/40 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer text-xs">
+          <div onclick="selectProductForSale('${esc(p.id)}')" class="flex items-center justify-between p-3 bg-purple-50/40 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer text-xs">
             <div class="min-w-0 pr-2">
-              <p class="font-bold text-slate-800 truncate">${p.name}</p>
-              <p class="text-[10px] text-purple-500 truncate">${p.category} • Stock: ${p.stock} ${vars.length ? `• ${vars.length} variantes` : ''}</p>
+              <p class="font-bold text-slate-800 truncate">${esc(p.name)}</p>
+              <p class="text-[10px] text-purple-500 truncate">${esc(p.category)} • Stock: ${Number(p.stock)} ${vars.length ? `• ${vars.length} variantes` : ''}</p>
             </div>
-            <span class="font-black text-purple-700 shrink-0">${formatCurrency(p.price)}</span>
+            <span class="font-black text-purple-700 shrink-0">${esc(formatCurrency(p.price))}</span>
           </div>
         `;
       }).join('');
@@ -3518,7 +4006,7 @@
 
       const needy = state.products.filter(p => Number(p.stock) <= (Number(p.min_stock) || 3));
       document.getElementById('restock-needed-list').innerHTML = needy.length
-        ? needy.map(p => `<div class="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 flex justify-between text-xs"><span class="font-bold truncate pr-2">${p.name}</span><span class="text-rose-700 font-bold shrink-0">Stock: ${p.stock}</span></div>`).join('')
+        ? needy.map(p => `<div class="p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 flex justify-between text-xs"><span class="font-bold truncate pr-2">${esc(p.name)}</span><span class="text-rose-700 font-bold shrink-0">Stock: ${Number(p.stock)}</span></div>`).join('')
         : '<div class="p-3 bg-emerald-50 rounded-2xl text-emerald-700 font-bold text-center">🎉 Todo el inventario está saludable</div>';
     }
 
@@ -3532,12 +4020,12 @@
       box.innerHTML = state.expenses.map(e => `
         <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2 text-xs">
           <div class="min-w-0">
-            <p class="font-bold text-slate-800 truncate">${e.description}</p>
-            <p class="text-[10px] text-slate-400">${e.category} • ${e.expense_date}</p>
+            <p class="font-bold text-slate-800 truncate">${esc(e.description)}</p>
+            <p class="text-[10px] text-slate-400">${esc(e.category)} • ${esc(e.expense_date)}</p>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <span class="font-extrabold text-rose-600">-${formatCurrency(e.amount)}</span>
-            <button type="button" onclick="deleteExpense('${e.id}')" class="text-slate-300 hover:text-rose-600 font-bold">✕</button>
+            <span class="font-extrabold text-rose-600">-${esc(formatCurrency(e.amount))}</span>
+            <button type="button" onclick="deleteExpense('${esc(e.id)}')" class="text-slate-300 hover:text-rose-600 font-bold">✕</button>
           </div>
         </div>
       `).join('');
@@ -3643,6 +4131,14 @@
       }
     }
 
+    function onCountryPresetChange(cc) {
+      const preset = COUNTRY_PRESETS[cc];
+      if (preset) {
+        document.getElementById('setting-currency-code').value = preset.code;
+        document.getElementById('setting-currency').value = preset.sym;
+      }
+    }
+
     function populateSettingsFields() {
       document.getElementById('setting-name').value = state.profile.name || '';
       const slugEl = document.getElementById('setting-slug');
@@ -3654,8 +4150,20 @@
       document.getElementById('setting-address').value = state.profile.address || '';
       document.getElementById('setting-folio').value = state.profile.next_folio_number || 1001;
       document.getElementById('setting-footer').value = state.profile.receipt_footer_message || '';
+
+      if (document.getElementById('setting-country')) document.getElementById('setting-country').value = state.profile.country_code || 'AR';
+      if (document.getElementById('setting-currency')) document.getElementById('setting-currency').value = state.profile.currency_symbol || '$';
+      if (document.getElementById('setting-currency-code')) document.getElementById('setting-currency-code').value = state.profile.currency_code || 'ARS';
+      if (document.getElementById('setting-bank-alias')) document.getElementById('setting-bank-alias').value = state.profile.bank_alias || '';
+      if (document.getElementById('setting-bank-holder')) document.getElementById('setting-bank-holder').value = state.profile.bank_holder || '';
+      if (document.getElementById('setting-ext-pay-link')) document.getElementById('setting-ext-pay-link').value = state.profile.external_pay_link || '';
+      if (document.getElementById('setting-ship-flat')) document.getElementById('setting-ship-flat').value = state.profile.shipping_flat_rate || 0;
+      if (document.getElementById('setting-ship-free')) document.getElementById('setting-ship-free').value = state.profile.free_shipping_min || 0;
+      if (document.getElementById('setting-tax-label')) document.getElementById('setting-tax-label').value = state.profile.tax_label || '';
+      if (document.getElementById('setting-tax-rate')) document.getElementById('setting-tax-rate').value = state.profile.tax_rate || 0;
+      if (document.getElementById('setting-allow-pickup')) document.getElementById('setting-allow-pickup').checked = state.profile.allow_pickup !== 0 && state.profile.allow_pickup !== false;
+
       selectStoreEmoji(state.profile.store_icon || '🛍️');
-      setCurrencySymbol(state.profile.currency_symbol || '$');
       applyReceiptTheme(state.profile.receipt_theme || 'coquette', false);
       if (state.profile.logo_data_url) {
         document.getElementById('setting-logo-preview').src = state.profile.logo_data_url;
@@ -3829,7 +4337,17 @@
             phone: document.getElementById('setting-phone').value.trim(),
             instagram: document.getElementById('setting-instagram').value.trim(),
             address: document.getElementById('setting-address').value.trim(),
-            currency_symbol: document.getElementById('setting-currency').value || '$',
+            country_code: document.getElementById('setting-country')?.value || 'AR',
+            currency_symbol: document.getElementById('setting-currency')?.value.trim() || '$',
+            currency_code: (document.getElementById('setting-currency-code')?.value.trim() || 'ARS').toUpperCase(),
+            bank_alias: document.getElementById('setting-bank-alias')?.value.trim() || '',
+            bank_holder: document.getElementById('setting-bank-holder')?.value.trim() || '',
+            external_pay_link: document.getElementById('setting-ext-pay-link')?.value.trim() || '',
+            shipping_flat_rate: parseFloat(document.getElementById('setting-ship-flat')?.value) || 0,
+            free_shipping_min: parseFloat(document.getElementById('setting-ship-free')?.value) || 0,
+            tax_label: document.getElementById('setting-tax-label')?.value.trim() || '',
+            tax_rate: parseFloat(document.getElementById('setting-tax-rate')?.value) || 0,
+            allow_pickup: document.getElementById('setting-allow-pickup')?.checked ? 1 : 0,
             next_folio_number: parseInt(document.getElementById('setting-folio').value) || 1001,
             receipt_footer_message: document.getElementById('setting-footer').value.trim()
           })
@@ -3844,7 +4362,29 @@
         applyAppPalette(state.profile.app_palette || 'violet', state.profile.custom_color || '#7C3AED');
         updateHeaderLogo();
         refreshPublicStoreLinks();
-        alert('¡Configuración guardada en la nube! 💖');
+        updateTotals();
+        alert('¡Configuración guardada y protegida en la nube! 💖');
+      } catch (err) { alert(err.message); }
+    }
+
+    async function logoutOtherSessions() {
+      if (!confirm('¿Cerrar todas las demás sesiones abiertas (empleados u otros dispositivos) manteniendo solo este equipo conectado?')) return;
+      try {
+        await api('/api/auth/logout-all', { method: 'POST' });
+        alert('🔒 ¡Listo! Todas las demás sesiones fueron cerradas de inmediato.');
+      } catch (err) { alert(err.message); }
+    }
+
+    async function downloadStoreBackup() {
+      try {
+        const data = await api('/api/store/backup');
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Respaldo_${state.profile.slug || 'comercio'}_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 2500);
       } catch (err) { alert(err.message); }
     }
 
@@ -3908,21 +4448,41 @@
     }
 
     function openMPGuideModal() {
-      document.getElementById('guide-mp-token-input').value = state.profile.mp_access_token || '';
+      document.getElementById('guide-mp-token-input').value = '';
+      document.getElementById('token-test-feedback').classList.add('hidden');
+      const maskBox = document.getElementById('mp-current-mask-box');
+      if (state.profile.mp_connected) {
+        document.getElementById('mp-current-mask-text').innerText = state.profile.mp_token_masked || 'APP_USR-••••••••';
+        maskBox.classList.remove('hidden');
+      } else {
+        maskBox.classList.add('hidden');
+      }
       document.getElementById('modal-mp-guide').classList.remove('hidden');
     }
     function closeMPGuideModal() { document.getElementById('modal-mp-guide').classList.add('hidden'); }
 
+    async function unlinkMPToken() {
+      if (!confirm('¿Desvincular tu Access Token de Mercado Pago?')) return;
+      try {
+        const res = await api('/api/store/profile', { method: 'PUT', body: JSON.stringify({ clear_mp_token: true }) });
+        state.profile = res.profile;
+        updateMPUIStatus();
+        openMPGuideModal();
+      } catch (err) { alert(err.message); }
+    }
+
     async function testAndSaveToken() {
       const token = document.getElementById('guide-mp-token-input').value.trim();
       const fb = document.getElementById('token-test-feedback');
-      if (!token) { alert('Pega tu Access Token'); return; }
+      if (!token) { alert('Pega tu Access Token de Producción'); return; }
       try {
         const res = await api('/api/store/profile', { method: 'PUT', body: JSON.stringify({ mp_access_token: token }) });
         state.profile = res.profile;
+        document.getElementById('guide-mp-token-input').value = '';
         updateMPUIStatus();
+        openMPGuideModal();
         fb.className = 'p-2.5 rounded-xl bg-emerald-50 text-emerald-800 font-bold';
-        fb.innerText = '✅ Token guardado. Ya puedes crear Links de Pago para tus clientes.';
+        fb.innerText = '🔒 Token cifrado y guardado. Ya puedes crear Links de Pago.';
         fb.classList.remove('hidden');
       } catch (err) {
         fb.className = 'p-2.5 rounded-xl bg-rose-50 text-rose-800';
@@ -3932,7 +4492,7 @@
     }
 
     function updateMPUIStatus() {
-      const ok = !!state.profile.mp_access_token;
+      const ok = !!(state.profile.mp_connected || state.profile.mp_access_token);
       document.getElementById('mp-status-text').innerText = ok ? 'MP Activo ✅' : 'Cobros MP';
     }
 
@@ -3956,26 +4516,28 @@
             ? 'bg-emerald-100 text-emerald-800'
             : (st === 'trial' ? 'bg-amber-100 text-amber-900' : 'bg-rose-100 text-rose-800');
           const badgeTxt = st === 'trial'
-            ? `PRUEBA (${u.days_left}d)`
-            : (st === 'active' ? `ACTIVO (${u.days_left}d)` : 'VENCIDO');
+            ? `PRUEBA (${Number(u.days_left || 0)}d)`
+            : (st === 'active' ? `ACTIVO (${Number(u.days_left || 0)}d)` : 'VENCIDO');
           const cleanPhone = String(u.store_phone || '').replace(/\D/g, '');
+          const safeEmailJs = esc(String(u.email || '').replace(/'/g, ''));
+          const safeStoreJs = esc(String(u.store_name || '').replace(/'/g, ''));
           return `
             <div class="p-3 bg-purple-50/40 rounded-2xl border border-purple-100 space-y-2">
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
-                  <p class="font-bold text-slate-900 truncate">${u.store_name} <span class="text-[10px] text-slate-500">(${u.email})</span></p>
+                  <p class="font-bold text-slate-900 truncate">${esc(u.store_name)} <span class="text-[10px] text-slate-500">(${esc(u.email)})</span></p>
                   <div class="flex items-center gap-1.5 flex-wrap mt-0.5">
                     <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full ${badgeCls}">${badgeTxt}</span>
-                    ${u.store_slug ? `<a href="/tienda/${u.store_slug}" target="_blank" class="text-[10px] font-mono text-purple-700 hover:underline">/tienda/${u.store_slug}</a>` : ''}
+                    ${u.store_slug ? `<a href="/tienda/${encodeURIComponent(u.store_slug)}" target="_blank" class="text-[10px] font-mono text-purple-700 hover:underline">/tienda/${esc(u.store_slug)}</a>` : ''}
                   </div>
                 </div>
               </div>
               ${u.role !== 'admin' ? `
                 <div class="flex flex-wrap gap-1.5 pt-1 border-t border-purple-100/60">
-                  <button onclick="adminActivateUser(${u.id}, 'activate')" class="px-2.5 py-1 bg-emerald-600 text-white font-bold rounded-xl text-[10px]">+90 días</button>
-                  <button onclick="adminActivateUser(${u.id}, 'suspend')" class="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-xl text-[10px]">Suspender</button>
-                  <button onclick="adminResetUserPassword(${u.id}, '${u.email.replace(/'/g, '')}')" class="px-2.5 py-1 bg-slate-200 text-slate-800 font-bold rounded-xl text-[10px]" title="Reseteo manual opcional de respaldo">🔑 Clave</button>
-                  ${cleanPhone ? `<button onclick="adminSendWhatsAppReminder('${cleanPhone}', '${u.store_name.replace(/'/g, '')}', ${u.days_left || 0})" class="px-2.5 py-1 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">📲 WhatsApp</button>` : ''}
+                  <button onclick="adminActivateUser(${Number(u.id)}, 'activate')" class="px-2.5 py-1 bg-emerald-600 text-white font-bold rounded-xl text-[10px]">+90 días</button>
+                  <button onclick="adminActivateUser(${Number(u.id)}, 'suspend')" class="px-2.5 py-1 bg-rose-100 text-rose-700 font-bold rounded-xl text-[10px]">Suspender</button>
+                  <button onclick="adminResetUserPassword(${Number(u.id)}, '${safeEmailJs}')" class="px-2.5 py-1 bg-slate-200 text-slate-800 font-bold rounded-xl text-[10px]" title="Reseteo manual opcional de respaldo">🔑 Clave</button>
+                  ${cleanPhone ? `<button onclick="adminSendWhatsAppReminder('${cleanPhone}', '${safeStoreJs}', ${Number(u.days_left || 0)})" class="px-2.5 py-1 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">📲 WhatsApp</button>` : ''}
                 </div>
               ` : ''}
             </div>
