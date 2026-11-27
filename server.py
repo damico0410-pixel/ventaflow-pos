@@ -4,6 +4,7 @@ import os
 import sys
 import re
 import hmac
+import math
 import json
 import time
 import base64
@@ -33,12 +34,12 @@ PORT = int(os.environ.get('PORT', 8080))
 SUBSCRIPTION_PRICE = 10000
 SUBSCRIPTION_DAYS = 90  # 3 meses
 DEFAULT_TRIAL_DAYS = 3  # 3 días de prueba gratis automática al registrarse
-MAX_BODY_BYTES = 2_600_000  # Límite estricto anti-saturación de memoria (~2.5 MB)
+MAX_BODY_BYTES = 2_800_000  # Límite estricto anti-saturación de memoria (~2.7 MB)
 
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 IS_POSTGRES = bool(DATABASE_URL)
 
-# Lista blanca estricta de archivos estáticos públicos (impide robo de server.py, .db, .json, .env, .git)
+# Lista blanca estricta de archivos estáticos públicos
 PUBLIC_STATIC_FILES = {
     '/index.html': 'text/html; charset=utf-8',
     '/tienda.html': 'text/html; charset=utf-8',
@@ -64,6 +65,22 @@ def slugify(text):
     return (s[:48].strip('-')) or ('tienda-' + secrets.token_hex(3))
 
 
+def append_timeline_event(existing_json, status, title, detail=''):
+    try:
+        events = json.loads(existing_json or '[]')
+        if not isinstance(events, list):
+            events = []
+    except Exception:
+        events = []
+    events.append({
+        'status': str(status)[:32],
+        'title': str(title)[:120],
+        'detail': str(detail)[:220],
+        'at': utc_now().isoformat()
+    })
+    return json.dumps(events[-30:], ensure_ascii=False)
+
+
 # ================= CRIPTOGRAFÍA AUTENTICADA (PBKDF2 + AES-STREAM/HMAC-SHA256) =================
 
 _CACHED_MASTER_KEY = None
@@ -82,7 +99,6 @@ def verify_password(password, stored_hash):
         return False
     try:
         salt, _ = stored_hash.split('$', 1)
-        # Soporta hashes de 120k (v3) y 150k (v4)
         cand_150 = hash_password(str(password), salt)
         if secrets.compare_digest(cand_150, stored_hash):
             return True
@@ -170,7 +186,7 @@ def decrypt_secret(stored: str, conn=None) -> str:
         return ''
     s = str(stored)
     if not s.startswith('enc:v1:'):
-        return s  # Compatibilidad transparente con valores previos a v4.0
+        return s
     try:
         parts = s.split(':')
         if len(parts) != 5:
@@ -220,7 +236,6 @@ class SecurityShield:
             if len(dq) >= limit:
                 return False
             dq.append(now)
-            # Limpieza ocasional para evitar crecimiento infinito
             if len(self._ip_hits) > 4000:
                 stale_keys = [k for k, v in self._ip_hits.items() if not v or v[-1] < cutoff]
                 for sk in stale_keys:
@@ -250,12 +265,12 @@ class SecurityShield:
         with self._lock:
             for k in keys:
                 dq = self._failed_auth[k]
-                cutoff = now - 300  # ventana 5 minutos
+                cutoff = now - 300
                 while dq and dq[0] < cutoff:
                     dq.popleft()
                 dq.append(now)
                 if len(dq) >= 6:
-                    self._lockouts[k] = now + 300  # Bloqueo 5 minutos
+                    self._lockouts[k] = now + 300
 
     def clear_auth_failures(self, ip: str, identifier: str = ''):
         with self._lock:
@@ -331,7 +346,6 @@ class PgConnWrapper:
         self._pool = _get_pg_pool()
         self._from_pool = True
         conn = self._pool.getconn()
-        # Verifica si el servidor cerró la conexión SSL inactiva
         try:
             if conn.closed:
                 self._pool.putconn(conn, close=True)
@@ -492,6 +506,69 @@ def ensure_unique_slug(conn, desired_slug, exclude_user_id=None):
         counter += 1
 
 
+def restock_order_items(conn, user_id, items_json_str):
+    try:
+        items = json.loads(items_json_str or '[]')
+    except Exception:
+        items = []
+    for item in items:
+        pname = (item.get('productName') or '').strip()
+        base_name = pname.split(' (')[0].strip()
+        variant_sel = (item.get('variantName') or '').strip()
+        qty = max(1, int(item.get('quantity') or 1))
+        prod = conn.execute(
+            'SELECT id, stock, variants_json FROM products WHERE user_id = ? AND (lower(name) = ? OR lower(name) = ?)',
+            (user_id, pname.lower(), base_name.lower())
+        ).fetchone()
+        if prod:
+            try:
+                vlist = json.loads(prod['variants_json'] or '[]')
+            except Exception:
+                vlist = []
+            if vlist and variant_sel:
+                matched = False
+                for v in vlist:
+                    if str(v.get('name', '')).lower() == variant_sel.lower():
+                        v['stock'] = int(v.get('stock') or 0) + qty
+                        matched = True
+                if matched:
+                    new_stock = sum(max(0, int(v.get('stock') or 0)) for v in vlist)
+                    conn.execute('UPDATE products SET stock = ?, variants_json = ? WHERE id = ?', (new_stock, json.dumps(vlist, ensure_ascii=False), prod['id']))
+                    continue
+            conn.execute('UPDATE products SET stock = ? WHERE id = ?', (int(prod['stock'] or 0) + qty, prod['id']))
+
+
+def upsert_customer_record(conn, user_id, cname, cphone, caddr, chandle='', ccp='', ccity='', cprov='', inc_order=True):
+    if not cname or cname.strip().lower() == 'cliente':
+        return
+    cname_clean = cname.strip()[:100]
+    existing = conn.execute(
+        'SELECT * FROM customers WHERE user_id = ? AND lower(name) = ?',
+        (user_id, cname_clean.lower())
+    ).fetchone()
+    now_iso = utc_now().isoformat()
+    if existing:
+        new_count = int(existing['orders_count'] if 'orders_count' in existing.keys() and existing['orders_count'] else 1) + (1 if inc_order else 0)
+        conn.execute(
+            '''UPDATE customers
+               SET phone = COALESCE(NULLIF(?, ''), phone),
+                   address = COALESCE(NULLIF(?, ''), address),
+                   handle = COALESCE(NULLIF(?, ''), handle),
+                   postal_code = COALESCE(NULLIF(?, ''), postal_code),
+                   city = COALESCE(NULLIF(?, ''), city),
+                   province = COALESCE(NULLIF(?, ''), province),
+                   orders_count = ?
+               WHERE id = ?''',
+            (cphone, caddr, chandle, ccp, ccity, cprov, new_count, existing['id'])
+        )
+    else:
+        conn.execute(
+            '''INSERT INTO customers (id, user_id, name, phone, address, handle, postal_code, city, province, orders_count, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)''',
+            ('cust_' + secrets.token_hex(6), user_id, cname_clean, cphone, caddr, chandle, ccp, ccity, cprov, now_iso)
+        )
+
+
 def init_db():
     conn = get_db()
     c = conn.cursor()
@@ -542,6 +619,8 @@ def init_db():
             business_mode TEXT DEFAULT 'NUEVO PEDIDO PARA DESPACHO',
             phone TEXT DEFAULT '',
             address TEXT DEFAULT '',
+            origin_postal_code TEXT DEFAULT '',
+            origin_province TEXT DEFAULT '',
             instagram TEXT DEFAULT '',
             website TEXT DEFAULT '',
             country_code TEXT DEFAULT 'AR',
@@ -554,6 +633,7 @@ def init_db():
             external_pay_link TEXT DEFAULT '',
             cash_on_delivery INTEGER DEFAULT 1,
             shipping_flat_rate REAL DEFAULT 0,
+            shipping_branch_rate REAL DEFAULT 0,
             free_shipping_min REAL DEFAULT 0,
             allow_pickup INTEGER DEFAULT 1,
             next_folio_number INTEGER DEFAULT 1001,
@@ -589,8 +669,12 @@ def init_db():
             name TEXT NOT NULL,
             phone TEXT DEFAULT '',
             address TEXT DEFAULT '',
+            postal_code TEXT DEFAULT '',
+            city TEXT DEFAULT '',
+            province TEXT DEFAULT '',
             handle TEXT DEFAULT '',
             notes TEXT DEFAULT '',
+            orders_count INTEGER DEFAULT 1,
             created_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
@@ -603,6 +687,10 @@ def init_db():
             customer_name TEXT NOT NULL,
             customer_phone TEXT DEFAULT '',
             customer_address TEXT DEFAULT '',
+            customer_postal_code TEXT DEFAULT '',
+            customer_city TEXT DEFAULT '',
+            customer_province TEXT DEFAULT '',
+            branch_name TEXT DEFAULT '',
             customer_handle TEXT DEFAULT '',
             items_json TEXT NOT NULL,
             subtotal REAL NOT NULL,
@@ -617,10 +705,13 @@ def init_db():
             payment_method TEXT DEFAULT 'mercadopago',
             mp_payment_id TEXT DEFAULT '',
             mp_payment_link TEXT DEFAULT '',
+            transfer_proof_url TEXT DEFAULT '',
+            transfer_reference TEXT DEFAULT '',
             delivery_method TEXT DEFAULT 'delivery',
             dispatch_status TEXT DEFAULT 'to_prepare',
             shipping_carrier TEXT DEFAULT '',
             shipping_tracking TEXT DEFAULT '',
+            timeline_json TEXT DEFAULT '[]',
             notes TEXT DEFAULT '',
             source TEXT DEFAULT 'pos',
             created_at TEXT NOT NULL,
@@ -658,6 +749,10 @@ def init_db():
         "ALTER TABLE products ADD COLUMN cost_price REAL DEFAULT 0",
         "ALTER TABLE products ADD COLUMN image_url TEXT DEFAULT ''",
         "ALTER TABLE products ADD COLUMN variants_json TEXT DEFAULT '[]'",
+        "ALTER TABLE customers ADD COLUMN postal_code TEXT DEFAULT ''",
+        "ALTER TABLE customers ADD COLUMN city TEXT DEFAULT ''",
+        "ALTER TABLE customers ADD COLUMN province TEXT DEFAULT ''",
+        "ALTER TABLE customers ADD COLUMN orders_count INTEGER DEFAULT 1",
         "ALTER TABLE orders ADD COLUMN total_cost REAL DEFAULT 0",
         "ALTER TABLE orders ADD COLUMN net_profit REAL DEFAULT 0",
         "ALTER TABLE orders ADD COLUMN source TEXT DEFAULT 'pos'",
@@ -665,6 +760,13 @@ def init_db():
         "ALTER TABLE orders ADD COLUMN tax_amount REAL DEFAULT 0",
         "ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'mercadopago'",
         "ALTER TABLE orders ADD COLUMN delivery_method TEXT DEFAULT 'delivery'",
+        "ALTER TABLE orders ADD COLUMN customer_postal_code TEXT DEFAULT ''",
+        "ALTER TABLE orders ADD COLUMN customer_city TEXT DEFAULT ''",
+        "ALTER TABLE orders ADD COLUMN customer_province TEXT DEFAULT ''",
+        "ALTER TABLE orders ADD COLUMN branch_name TEXT DEFAULT ''",
+        "ALTER TABLE orders ADD COLUMN transfer_proof_url TEXT DEFAULT ''",
+        "ALTER TABLE orders ADD COLUMN transfer_reference TEXT DEFAULT ''",
+        "ALTER TABLE orders ADD COLUMN timeline_json TEXT DEFAULT '[]'",
         "ALTER TABLE store_profiles ADD COLUMN app_palette TEXT DEFAULT 'violet'",
         "ALTER TABLE store_profiles ADD COLUMN custom_color TEXT DEFAULT '#7C3AED'",
         "ALTER TABLE store_profiles ADD COLUMN business_mode TEXT DEFAULT 'NUEVO PEDIDO PARA DESPACHO'",
@@ -679,8 +781,11 @@ def init_db():
         "ALTER TABLE store_profiles ADD COLUMN external_pay_link TEXT DEFAULT ''",
         "ALTER TABLE store_profiles ADD COLUMN cash_on_delivery INTEGER DEFAULT 1",
         "ALTER TABLE store_profiles ADD COLUMN shipping_flat_rate REAL DEFAULT 0",
+        "ALTER TABLE store_profiles ADD COLUMN shipping_branch_rate REAL DEFAULT 0",
         "ALTER TABLE store_profiles ADD COLUMN free_shipping_min REAL DEFAULT 0",
         "ALTER TABLE store_profiles ADD COLUMN allow_pickup INTEGER DEFAULT 1",
+        "ALTER TABLE store_profiles ADD COLUMN origin_postal_code TEXT DEFAULT ''",
+        "ALTER TABLE store_profiles ADD COLUMN origin_province TEXT DEFAULT ''",
     ]
     for alter_sql in migrations:
         try:
@@ -690,7 +795,6 @@ def init_db():
             if IS_POSTGRES:
                 conn.rollback()
 
-    # Índices de alta velocidad para cero retrasos en consultas
     indexes = [
         "CREATE INDEX IF NOT EXISTS idx_products_user ON products(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_orders_user_created ON orders(user_id, created_at)",
@@ -708,7 +812,6 @@ def init_db():
             if IS_POSTGRES:
                 conn.rollback()
 
-    # Inicializar llave maestra de cifrado y migrar tokens en texto plano existentes a formato cifrado
     get_master_key(conn)
     plain_tokens = conn.execute(
         "SELECT user_id, mp_access_token FROM store_profiles WHERE mp_access_token IS NOT NULL AND mp_access_token != ''"
@@ -722,14 +825,12 @@ def init_db():
             )
     conn.commit()
 
-    # Populate missing slugs on existing store_profiles
     missing_slugs = conn.execute("SELECT user_id, name FROM store_profiles WHERE slug IS NULL OR slug = ''").fetchall()
     for row in missing_slugs:
         new_slug = ensure_unique_slug(conn, row['name'], row['user_id'])
         conn.execute('UPDATE store_profiles SET slug = ? WHERE user_id = ?', (new_slug, row['user_id']))
     conn.commit()
 
-    # Ensure default admin user exists
     cfg = load_config(conn)
     admin_email = cfg['ADMIN_EMAIL'].strip().lower()
     existing = c.execute('SELECT id FROM users WHERE email = ?', (admin_email,)).fetchone()
@@ -746,7 +847,6 @@ def init_db():
         c.execute('INSERT INTO store_profiles (user_id, name, slug) VALUES (?, ?, ?)', (admin_id, 'Admin Central POS', admin_slug))
         conn.commit()
 
-    # Eliminar archivo local config.json inseguro si existía tras migrar a DB cifrada
     if os.path.exists(CONFIG_PATH):
         try:
             with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
@@ -766,7 +866,7 @@ def sanitize_profile_for_client(profile_row, conn=None, is_staff=False):
     raw_mp = decrypt_secret(d.get('mp_access_token') or '', conn)
     d['mp_connected'] = bool(raw_mp)
     d['mp_token_masked'] = mask_secret(raw_mp) if not is_staff else ''
-    d['mp_access_token'] = ''  # JAMÁS exponer el Access Token real al navegador
+    d['mp_access_token'] = ''
     if is_staff:
         d['staff_pin'] = ''
     return d
@@ -783,7 +883,7 @@ def mp_api_request(method, path, token, payload=None):
     headers = {
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
-        'User-Agent': 'VentaFlowPOS-SaaS/4.0'
+        'User-Agent': 'VentaFlowPOS-SaaS/5.0'
     }
     req = urllib.request.Request(url, data=data, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=15) as resp:
@@ -887,7 +987,7 @@ def start_keepalive_daemon():
                 cfg = load_config()
                 base = (cfg.get('PUBLIC_BASE_URL') or os.environ.get('RENDER_EXTERNAL_URL') or '').rstrip('/')
                 if base.startswith('https://'):
-                    req = urllib.request.Request(f"{base}/api/health", headers={'User-Agent': 'VentaFlow-KeepAlive/4.0'})
+                    req = urllib.request.Request(f"{base}/api/health", headers={'User-Agent': 'VentaFlow-KeepAlive/5.0'})
                     with urllib.request.urlopen(req, timeout=10) as _:
                         pass
             except Exception:
@@ -902,7 +1002,7 @@ class PayloadTooLargeError(Exception):
 
 
 class SaaSHandler(http.server.BaseHTTPRequestHandler):
-    server_version = "VentaFlowSecure/4.0"
+    server_version = "VentaFlowSecure/5.0"
     sys_version = ""
 
     def setup(self):
@@ -913,7 +1013,6 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
             pass
 
     def log_message(self, fmt, *args):
-        # Registro limpio sin exponer tokens ni cabeceras sensibles
         sys.stdout.write("%s - [%s] %s\n" % (self.get_client_ip(), self.log_date_time_string(), fmt % args))
 
     def get_client_ip(self) -> str:
@@ -1025,7 +1124,6 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
         ).fetchone()
         if not row:
             return None, None
-        # Validación estricta de expiración de sesión
         try:
             exp_dt = datetime.fromisoformat(row['session_expires_at'])
             if exp_dt.tzinfo is None:
@@ -1095,7 +1193,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 trial_days = int(cfg.get('TRIAL_DAYS') or DEFAULT_TRIAL_DAYS)
                 self.send_json(200, {
                     'ok': True,
-                    'version': '4.0-shield',
+                    'version': '5.0-autopilot',
                     'database': 'postgresql' if IS_POSTGRES else 'sqlite',
                     'mp_platform_configured': bool(cfg.get('PLATFORM_MP_ACCESS_TOKEN') or cfg.get('PLATFORM_MP_PAY_LINK')),
                     'smtp_configured': bool(cfg.get('SMTP_HOST') and cfg.get('SMTP_USER')),
@@ -1171,7 +1269,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 is_staff = (scope == 'staff' and user['role'] != 'admin')
                 profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
                 products = conn.execute('SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
-                customers = conn.execute('SELECT * FROM customers WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
+                customers = conn.execute('SELECT * FROM customers WHERE user_id = ? ORDER BY orders_count DESC, created_at DESC', (user['id'],)).fetchall()
                 orders = conn.execute('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 300', (user['id'],)).fetchall()
                 expenses = conn.execute('SELECT * FROM expenses WHERE user_id = ? ORDER BY expense_date DESC, created_at DESC LIMIT 300', (user['id'],)).fetchall()
 
@@ -1200,6 +1298,59 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 conn.close()
             return
 
+        if path == '/api/orders/poll-payments':
+            conn = get_db()
+            try:
+                user, scope = self.require_active_user(conn)
+                if not user:
+                    return
+                is_staff = (scope == 'staff' and user['role'] != 'admin')
+                profile = conn.execute('SELECT mp_access_token FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
+                mp_token = decrypt_secret(profile['mp_access_token'], conn) if profile else ''
+                newly_paid_ids = []
+
+                # Si tiene MP conectado, consulta pagos recientes aprobados en MP para pedidos pendientes con link
+                if mp_token:
+                    pendings = conn.execute(
+                        "SELECT id, timeline_json FROM orders WHERE user_id = ? AND payment_status = 'pending' AND mp_payment_link != '' ORDER BY created_at DESC LIMIT 6",
+                        (user['id'],)
+                    ).fetchall()
+                    if pendings:
+                        try:
+                            _, res = mp_api_request('GET', '/v1/payments/search?sort=date_created&criteria=desc&limit=15&status=approved', mp_token)
+                            approved_by_ref = {}
+                            for p in (res.get('results') or []):
+                                ref = str(p.get('external_reference') or '')
+                                if ref.startswith('order_'):
+                                    approved_by_ref[ref[6:]] = p
+                            for po in pendings:
+                                if po['id'] in approved_by_ref:
+                                    pay_obj = approved_by_ref[po['id']]
+                                    new_tl = append_timeline_event(po['timeline_json'], 'paid', 'Pago acreditado automáticamente por Mercado Pago', f"Operación #{pay_obj.get('id', '')}")
+                                    conn.execute(
+                                        "UPDATE orders SET payment_status = 'paid', mp_payment_id = ?, timeline_json = ? WHERE id = ?",
+                                        (str(pay_obj.get('id', '')), new_tl, po['id'])
+                                    )
+                                    newly_paid_ids.append(po['id'])
+                            if newly_paid_ids:
+                                conn.commit()
+                        except Exception:
+                            pass
+
+                recent_orders = conn.execute(
+                    'SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 60',
+                    (user['id'],)
+                ).fetchall()
+                out_orders = [dict(o) for o in recent_orders]
+                if is_staff:
+                    for o in out_orders:
+                        o['total_cost'] = 0
+                        o['net_profit'] = 0
+                self.send_json(200, {'orders': out_orders, 'newly_paid_ids': newly_paid_ids})
+            finally:
+                conn.close()
+            return
+
         if path == '/api/store/backup':
             conn = get_db()
             try:
@@ -1212,7 +1363,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 orders = conn.execute('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
                 expenses = conn.execute('SELECT * FROM expenses WHERE user_id = ? ORDER BY expense_date DESC', (user['id'],)).fetchall()
                 self.send_json(200, {
-                    'backup_version': '4.0',
+                    'backup_version': '5.0',
                     'exported_at': utc_now().isoformat(),
                     'store': sanitize_profile_for_client(profile, conn, is_staff=True),
                     'products': [dict(p) for p in products],
@@ -1249,9 +1400,10 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     results = res.get('results', [])
                     if results:
                         p = results[0]
+                        new_tl = append_timeline_event(order['timeline_json'], 'paid', 'Pago verificado en Mercado Pago', f"Operación #{p.get('id', '')}")
                         conn.execute(
-                            "UPDATE orders SET payment_status = 'paid', mp_payment_id = ? WHERE id = ?",
-                            (str(p.get('id', '')), order_id)
+                            "UPDATE orders SET payment_status = 'paid', mp_payment_id = ?, timeline_json = ? WHERE id = ?",
+                            (str(p.get('id', '')), new_tl, order_id)
                         )
                         conn.commit()
                         updated = conn.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
@@ -1290,38 +1442,74 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith('/api/public/track/'):
             tracking_code = re.sub(r'[^A-Z0-9\-]', '', path.split('/')[-1].strip().upper())[:24]
+            query = parse_qs(parsed.query)
+            ret_payment_id = (query.get('payment_id', [None])[0] or query.get('collection_id', [None])[0] or '').strip()
             conn = get_db()
             try:
                 order = conn.execute('SELECT * FROM orders WHERE tracking_code = ?', (tracking_code,)).fetchone()
                 if not order:
                     self.send_json(404, {'error': 'Pedido no encontrado'})
                     return
+                profile_full = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (order['user_id'],)).fetchone()
+
+                # Verificación automática instantánea al volver el cliente desde Mercado Pago
+                if ret_payment_id and ret_payment_id != 'null' and order['payment_status'] != 'paid' and profile_full:
+                    mp_tok = decrypt_secret(profile_full['mp_access_token'], conn)
+                    if mp_tok:
+                        try:
+                            c_mp, pdata = mp_api_request('GET', f'/v1/payments/{ret_payment_id}', mp_tok)
+                            if c_mp == 200 and pdata.get('status') == 'approved' and pdata.get('external_reference') == f"order_{order['id']}":
+                                new_tl = append_timeline_event(order['timeline_json'], 'paid', 'Pago confirmado automáticamente por Mercado Pago', f"Operación #{ret_payment_id}")
+                                conn.execute(
+                                    "UPDATE orders SET payment_status = 'paid', mp_payment_id = ?, timeline_json = ? WHERE id = ?",
+                                    (str(ret_payment_id), new_tl, order['id'])
+                                )
+                                conn.commit()
+                                order = conn.execute('SELECT * FROM orders WHERE id = ?', (order['id'],)).fetchone()
+                        except Exception:
+                            pass
+
                 profile = conn.execute(
                     '''SELECT name, slug, store_icon, logo_data_url, phone, address, instagram,
-                              currency_symbol, currency_code, bank_alias, bank_holder, external_pay_link, tax_label
+                              currency_symbol, currency_code, bank_alias, bank_holder, external_pay_link,
+                              tax_label, shipping_flat_rate, shipping_branch_rate, free_shipping_min, allow_pickup
                        FROM store_profiles WHERE user_id = ?''',
                     (order['user_id'],)
                 ).fetchone()
+                try:
+                    tl = json.loads(order['timeline_json'] or '[]')
+                except Exception:
+                    tl = []
+                if not tl:
+                    tl = [{'status': 'created', 'title': 'Pedido registrado', 'detail': f"Folio {order['folio_number']}", 'at': order['created_at']}]
+
                 self.send_json(200, {
                     'order': {
                         'tracking_code': order['tracking_code'],
                         'folio_number': order['folio_number'],
                         'customer_name': order['customer_name'],
                         'customer_address': order['customer_address'],
+                        'customer_postal_code': order['customer_postal_code'] or '',
+                        'customer_city': order['customer_city'] or '',
+                        'customer_province': order['customer_province'] or '',
+                        'branch_name': order['branch_name'] or '',
                         'items': json.loads(order['items_json']),
                         'subtotal': order['subtotal'],
                         'discount_amount': order['discount_amount'],
                         'discount_label': order['discount_label'],
-                        'shipping_cost': order['shipping_cost'] if 'shipping_cost' in order.keys() else 0,
-                        'tax_amount': order['tax_amount'] if 'tax_amount' in order.keys() else 0,
+                        'shipping_cost': order['shipping_cost'] or 0,
+                        'tax_amount': order['tax_amount'] or 0,
                         'total': order['total'],
                         'payment_status': order['payment_status'],
-                        'payment_method': order['payment_method'] if 'payment_method' in order.keys() else 'mercadopago',
+                        'payment_method': order['payment_method'] or 'mercadopago',
                         'mp_payment_link': order['mp_payment_link'],
-                        'delivery_method': order['delivery_method'] if 'delivery_method' in order.keys() else 'delivery',
+                        'has_transfer_proof': bool(order['transfer_proof_url']),
+                        'transfer_reference': order['transfer_reference'] or '',
+                        'delivery_method': order['delivery_method'] or 'delivery',
                         'dispatch_status': order['dispatch_status'],
                         'shipping_carrier': order['shipping_carrier'],
                         'shipping_tracking': order['shipping_tracking'],
+                        'timeline': tl,
                         'notes': order['notes'],
                         'created_at': order['created_at']
                     },
@@ -1384,6 +1572,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         'external_pay_link': profile['external_pay_link'] or '',
                         'cash_on_delivery': bool(profile['cash_on_delivery']),
                         'shipping_flat_rate': float(profile['shipping_flat_rate'] or 0),
+                        'shipping_branch_rate': float(profile['shipping_branch_rate'] or 0),
                         'free_shipping_min': float(profile['free_shipping_min'] or 0),
                         'allow_pickup': bool(profile['allow_pickup']),
                         'mp_enabled': bool(mp_tok)
@@ -1445,7 +1634,6 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(404, {'error': 'Ruta API no encontrada'})
             return
 
-        # Rutas limpias hacia la Lista Blanca estricta de vistas públicas
         if path in ('/', ''):
             route = '/index.html'
         elif path == '/seguimiento':
@@ -1918,6 +2106,44 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(200, {'received': True})
             return
 
+        # Webhook automático por pedido de cada comercio
+        if path.startswith('/api/webhooks/mp-order/'):
+            try:
+                owner_id = int(path.split('/')[-1])
+            except Exception:
+                self.send_json(200, {'received': True})
+                return
+            query = parse_qs(parsed.query)
+            payment_id = (
+                query.get('id', [None])[0]
+                or query.get('data.id', [None])[0]
+                or (body.get('data') or {}).get('id')
+            )
+            conn = get_db()
+            try:
+                prof = conn.execute('SELECT mp_access_token FROM store_profiles WHERE user_id = ?', (owner_id,)).fetchone()
+                mp_token = decrypt_secret(prof['mp_access_token'], conn) if prof else ''
+                if mp_token and payment_id:
+                    code, pdata = mp_api_request('GET', f'/v1/payments/{payment_id}', mp_token)
+                    if code == 200 and pdata.get('status') == 'approved':
+                        ref = str(pdata.get('external_reference') or '')
+                        if ref.startswith('order_'):
+                            oid = ref[6:]
+                            ord_row = conn.execute('SELECT id, payment_status, timeline_json FROM orders WHERE id = ? AND user_id = ?', (oid, owner_id)).fetchone()
+                            if ord_row and ord_row['payment_status'] != 'paid':
+                                new_tl = append_timeline_event(ord_row['timeline_json'], 'paid', 'Pago acreditado automáticamente por Mercado Pago', f"Operación #{payment_id}")
+                                conn.execute(
+                                    "UPDATE orders SET payment_status = 'paid', mp_payment_id = ?, timeline_json = ? WHERE id = ?",
+                                    (str(payment_id), new_tl, oid)
+                                )
+                                conn.commit()
+            except Exception as e:
+                print("Order MP webhook error:", e)
+            finally:
+                conn.close()
+            self.send_json(200, {'received': True})
+            return
+
         if path == '/api/products':
             conn = get_db()
             try:
@@ -1951,6 +2177,44 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 conn.commit()
                 prod = conn.execute('SELECT * FROM products WHERE id = ?', (pid,)).fetchone()
                 self.send_json(201, {'product': dict(prod)})
+            finally:
+                conn.close()
+            return
+
+        if path == '/api/products/bulk-price':
+            conn = get_db()
+            try:
+                user, _ = self.require_active_user(conn, owner_only=True)
+                if not user:
+                    return
+                pct = float(body.get('percent') or 0)
+                if pct == 0 or pct < -95 or pct > 500:
+                    self.send_json(400, {'error': 'Ingresa un porcentaje válido entre -95% y +500%.'})
+                    return
+                cat = (body.get('category') or 'ALL').strip()
+                round_to = max(0, int(body.get('round_to') or 0))
+                apply_cost = bool(body.get('apply_to_cost'))
+
+                if cat and cat != 'ALL':
+                    prods = conn.execute('SELECT id, price, cost_price FROM products WHERE user_id = ? AND category = ?', (user['id'], cat)).fetchall()
+                else:
+                    prods = conn.execute('SELECT id, price, cost_price FROM products WHERE user_id = ?', (user['id'],)).fetchall()
+
+                factor = 1.0 + (pct / 100.0)
+                for p in prods:
+                    np = max(0.0, float(p['price'] or 0) * factor)
+                    nc = max(0.0, float(p['cost_price'] or 0) * factor) if apply_cost else float(p['cost_price'] or 0)
+                    if round_to > 1:
+                        np = round(np / round_to) * round_to
+                        if apply_cost:
+                            nc = round(nc / round_to) * round_to
+                    else:
+                        np = round(np, 2)
+                        nc = round(nc, 2)
+                    conn.execute('UPDATE products SET price = ?, cost_price = ? WHERE id = ? AND user_id = ?', (np, nc, p['id'], user['id']))
+                conn.commit()
+                updated_prods = conn.execute('SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
+                self.send_json(200, {'updated_count': len(prods), 'products': [dict(x) for x in updated_prods]})
             finally:
                 conn.close()
             return
@@ -2018,13 +2282,16 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 cid = 'cust_' + secrets.token_hex(6)
                 now_iso = utc_now().isoformat()
                 conn.execute(
-                    '''INSERT INTO customers (id, user_id, name, phone, address, handle, notes, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                    '''INSERT INTO customers (id, user_id, name, phone, address, postal_code, city, province, handle, notes, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (
                         cid, user['id'],
                         (body.get('name') or '').strip()[:100],
                         (body.get('phone') or '').strip()[:40],
                         (body.get('address') or '').strip()[:200],
+                        (body.get('postal_code') or '').strip()[:16],
+                        (body.get('city') or '').strip()[:80],
+                        (body.get('province') or '').strip()[:80],
                         (body.get('handle') or '').strip()[:80],
                         (body.get('notes') or '').strip()[:240],
                         now_iso
@@ -2058,11 +2325,17 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 cname = (body.get('customer_name') or 'Cliente').strip()[:100]
                 cphone = (body.get('customer_phone') or '').strip()[:40]
                 caddr = (body.get('customer_address') or '').strip()[:220]
+                ccp = (body.get('customer_postal_code') or '').strip()[:16]
+                ccity = (body.get('customer_city') or '').strip()[:80]
+                cprov = (body.get('customer_province') or '').strip()[:80]
+                branch_name = (body.get('branch_name') or '').strip()[:120]
                 chandle = (body.get('customer_handle') or '').strip()[:80]
                 shipping_cost = max(0.0, float(body.get('shipping_cost') or 0))
                 tax_amount = max(0.0, float(body.get('tax_amount') or 0))
-                delivery_method = 'pickup' if body.get('delivery_method') == 'pickup' else 'delivery'
+                del_raw = body.get('delivery_method') or 'delivery'
+                delivery_method = del_raw if del_raw in ('delivery', 'pickup', 'branch') else 'delivery'
                 payment_method = (body.get('payment_method') or 'mercadopago').strip()[:32]
+                pay_status = 'paid' if body.get('payment_status') == 'paid' else 'pending'
 
                 total_cost = 0.0
                 enriched_items = []
@@ -2099,18 +2372,23 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                             conn.execute('UPDATE products SET stock = ? WHERE id = ?', (new_stock, prod['id']))
 
                 order_total = max(0.0, float(body.get('total') or 0))
-                # Ganancia limpia sobre productos (sin inflar por el costo de correo que paga el cliente)
                 net_profit = (order_total - shipping_cost - tax_amount) - total_cost
+
+                tl_json = append_timeline_event('[]', 'created', 'Pedido registrado en tienda', f"Comprobante {folio_str}")
+                if pay_status == 'paid':
+                    tl_json = append_timeline_event(tl_json, 'paid', 'Abono confirmado', '')
 
                 conn.execute(
                     '''INSERT INTO orders (
                            id, user_id, tracking_code, folio_number, customer_name, customer_phone,
-                           customer_address, customer_handle, items_json, subtotal, discount_amount,
+                           customer_address, customer_postal_code, customer_city, customer_province, branch_name,
+                           customer_handle, items_json, subtotal, discount_amount,
                            discount_label, shipping_cost, tax_amount, total, total_cost, net_profit,
-                           payment_status, payment_method, delivery_method, dispatch_status, notes, source, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pos', ?)''',
+                           payment_status, payment_method, delivery_method, dispatch_status, timeline_json, notes, source, created_at
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pos', ?)''',
                     (
-                        oid, user['id'], tracking_code, folio_str, cname, cphone, caddr, chandle,
+                        oid, user['id'], tracking_code, folio_str, cname, cphone,
+                        caddr, ccp, ccity, cprov, branch_name, chandle,
                         json.dumps(enriched_items, ensure_ascii=False),
                         max(0.0, float(body.get('subtotal') or 0)),
                         max(0.0, float(body.get('discount_amount') or 0)),
@@ -2120,32 +2398,18 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         order_total,
                         total_cost,
                         net_profit,
-                        'paid' if body.get('payment_status') == 'paid' else 'pending',
+                        pay_status,
                         payment_method,
                         delivery_method,
                         body.get('dispatch_status') or 'to_prepare',
+                        tl_json,
                         (body.get('notes') or '').strip()[:300],
                         now_iso
                     )
                 )
 
                 conn.execute('UPDATE store_profiles SET next_folio_number = ? WHERE user_id = ?', (folio_num + 1, user['id']))
-
-                if cname and cname.lower() != 'cliente' and (cphone or caddr):
-                    existing_cust = conn.execute(
-                        'SELECT id FROM customers WHERE user_id = ? AND lower(name) = ?',
-                        (user['id'], cname.lower())
-                    ).fetchone()
-                    if existing_cust:
-                        conn.execute(
-                            'UPDATE customers SET phone = COALESCE(NULLIF(?, ""), phone), address = COALESCE(NULLIF(?, ""), address), handle = COALESCE(NULLIF(?, ""), handle) WHERE id = ?',
-                            (cphone, caddr, chandle, existing_cust['id'])
-                        )
-                    else:
-                        conn.execute(
-                            'INSERT INTO customers (id, user_id, name, phone, address, handle, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                            ('cust_' + secrets.token_hex(6), user['id'], cname, cphone, caddr, chandle, now_iso)
-                        )
+                upsert_customer_record(conn, user['id'], cname, cphone, caddr, chandle, ccp, ccity, cprov, inc_order=True)
 
                 conn.commit()
                 order = conn.execute('SELECT * FROM orders WHERE id = ?', (oid,)).fetchone()
@@ -2154,11 +2418,204 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 conn.close()
             return
 
+        # Anular pedido y devolver automáticamente todo el stock (incluyendo variantes)
+        if path.startswith('/api/orders/') and path.endswith('/cancel-restock'):
+            order_id = path.split('/')[3]
+            conn = get_db()
+            try:
+                user, _ = self.require_active_user(conn)
+                if not user:
+                    return
+                order = conn.execute('SELECT * FROM orders WHERE id = ? AND user_id = ?', (order_id, user['id'])).fetchone()
+                if not order:
+                    self.send_json(404, {'error': 'Pedido no encontrado'})
+                    return
+                if order['dispatch_status'] == 'cancelled':
+                    self.send_json(400, {'error': 'Este pedido ya fue anulado anteriormente.'})
+                    return
+
+                restock_order_items(conn, user['id'], order['items_json'])
+                new_tl = append_timeline_event(order['timeline_json'], 'cancelled', 'Pedido anulado y stock devuelto al catálogo', '')
+                conn.execute(
+                    "UPDATE orders SET dispatch_status = 'cancelled', payment_status = 'cancelled', total = 0, total_cost = 0, net_profit = 0, timeline_json = ? WHERE id = ?",
+                    (new_tl, order_id)
+                )
+                conn.commit()
+                updated = conn.execute('SELECT * FROM orders WHERE id = ?', (order_id,)).fetchone()
+                prods = conn.execute('SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
+                self.send_json(200, {'order': dict(updated), 'products': [dict(p) for p in prods]})
+            finally:
+                conn.close()
+            return
+
+        # Unificar varios pedidos ("Bolsita abierta" -> un solo paquete y un solo envío)
+        if path == '/api/orders/merge':
+            conn = get_db()
+            try:
+                user, _ = self.require_active_user(conn)
+                if not user:
+                    return
+                order_ids = body.get('order_ids') or []
+                if not isinstance(order_ids, list) or len(order_ids) < 2:
+                    self.send_json(400, {'error': 'Selecciona al menos 2 pedidos para unificarlos en un solo envío.'})
+                    return
+
+                rows = []
+                for oid in order_ids[:15]:
+                    r = conn.execute("SELECT * FROM orders WHERE id = ? AND user_id = ? AND dispatch_status != 'cancelled'", (str(oid), user['id'])).fetchone()
+                    if r:
+                        rows.append(r)
+                if len(rows) < 2:
+                    self.send_json(400, {'error': 'No se encontraron pedidos activos válidos para unificar.'})
+                    return
+
+                primary = rows[0]
+                absorbed = rows[1:]
+                merged_items = []
+                for r in rows:
+                    try:
+                        its = json.loads(r['items_json'] or '[]')
+                    except Exception:
+                        its = []
+                    merged_items.extend(its)
+
+                new_subtotal = sum(float(r['subtotal'] or 0) for r in rows)
+                new_disc = sum(float(r['discount_amount'] or 0) for r in rows)
+                # Cobra UN SOLO envío (el mayor entre los pedidos combinados)
+                new_ship = max(float(r['shipping_cost'] or 0) for r in rows)
+                new_tax = sum(float(r['tax_amount'] or 0) for r in rows)
+                new_cost = sum(float(r['total_cost'] or 0) for r in rows)
+                new_total = max(0.0, (new_subtotal - new_disc) + new_ship + new_tax)
+                new_profit = (new_total - new_ship - new_tax) - new_cost
+                all_paid = all(r['payment_status'] == 'paid' for r in rows)
+                absorbed_folios = ', '.join(r['folio_number'] for r in absorbed)
+                new_tl = append_timeline_event(primary['timeline_json'], 'merged', 'Pedidos unificados en un único envío', f"Sumó: {absorbed_folios}")
+
+                conn.execute(
+                    '''UPDATE orders
+                       SET items_json = ?, subtotal = ?, discount_amount = ?, shipping_cost = ?,
+                           tax_amount = ?, total = ?, total_cost = ?, net_profit = ?,
+                           payment_status = ?, mp_payment_link = '', timeline_json = ?
+                       WHERE id = ? AND user_id = ?''',
+                    (
+                        json.dumps(merged_items, ensure_ascii=False),
+                        new_subtotal, new_disc, new_ship, new_tax, new_total, new_cost, new_profit,
+                        'paid' if all_paid else 'pending', new_tl, primary['id'], user['id']
+                    )
+                )
+                for r in absorbed:
+                    conn.execute('DELETE FROM orders WHERE id = ? AND user_id = ?', (r['id'], user['id']))
+                conn.commit()
+
+                all_orders = conn.execute('SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 300', (user['id'],)).fetchall()
+                self.send_json(200, {'merged_order_id': primary['id'], 'orders': [dict(o) for o in all_orders]})
+            finally:
+                conn.close()
+            return
+
+        # Autogestión del comprador en seguimiento.html: completar/corregir dirección y CP para Correo Argentino
+        if path.startswith('/api/public/track/') and path.endswith('/update-address'):
+            if not SHIELD.check_rate('track_addr', ip, limit=10, window_sec=60):
+                self.send_json(429, {'error': 'Demasiados intentos. Aguarda un minuto.'})
+                return
+            tcode = re.sub(r'[^A-Z0-9\-]', '', path.split('/')[4].strip().upper())[:24]
+            conn = get_db()
+            try:
+                order = conn.execute('SELECT * FROM orders WHERE tracking_code = ?', (tcode,)).fetchone()
+                if not order:
+                    self.send_json(404, {'error': 'Pedido no encontrado'})
+                    return
+                if order['dispatch_status'] in ('dispatched', 'delivered', 'cancelled'):
+                    self.send_json(400, {'error': 'El paquete ya salió a despacho y no admite cambio de domicilio.'})
+                    return
+
+                caddr = (body.get('customer_address') or '').strip()[:220]
+                ccp = (body.get('customer_postal_code') or '').strip()[:16]
+                ccity = (body.get('customer_city') or '').strip()[:80]
+                cprov = (body.get('customer_province') or '').strip()[:80]
+                branch = (body.get('branch_name') or '').strip()[:120]
+                cphone = (body.get('customer_phone') or order['customer_phone'] or '').strip()[:40]
+                del_mode = body.get('delivery_method') or order['delivery_method'] or 'delivery'
+                if del_mode not in ('delivery', 'branch', 'pickup'):
+                    del_mode = 'delivery'
+
+                if del_mode == 'delivery' and (not caddr or not ccp):
+                    self.send_json(400, {'error': 'Completa calle/altura y Código Postal para el envío.'})
+                    return
+
+                full_display_addr = ', '.join(x for x in [caddr, ccity, cprov, f"CP {ccp}" if ccp else ''] if x) or order['customer_address']
+                if del_mode == 'branch' and branch:
+                    full_display_addr = f"Sucursal Correo: {branch}" + (f" (CP {ccp} - {cprov})" if ccp or cprov else '')
+
+                new_tl = append_timeline_event(order['timeline_json'], 'address_updated', 'Datos de envío y CP confirmados por el cliente', full_display_addr)
+                conn.execute(
+                    '''UPDATE orders
+                       SET customer_address = ?, customer_postal_code = ?, customer_city = ?,
+                           customer_province = ?, branch_name = ?, customer_phone = ?,
+                           delivery_method = ?, timeline_json = ?
+                       WHERE id = ?''',
+                    (full_display_addr, ccp, ccity, cprov, branch, cphone, del_mode, new_tl, order['id'])
+                )
+                upsert_customer_record(conn, order['user_id'], order['customer_name'], cphone, full_display_addr, order['customer_handle'], ccp, ccity, cprov, inc_order=False)
+                conn.commit()
+                self.send_json(200, {'ok': True, 'customer_address': full_display_addr})
+            finally:
+                conn.close()
+            return
+
+        # Autogestión del comprador en seguimiento.html: subir comprobante de transferencia bancaria
+        if path.startswith('/api/public/track/') and path.endswith('/upload-proof'):
+            if not SHIELD.check_rate('track_proof', ip, limit=6, window_sec=60):
+                self.send_json(429, {'error': 'Demasiados intentos. Aguarda un minuto.'})
+                return
+            tcode = re.sub(r'[^A-Z0-9\-]', '', path.split('/')[4].strip().upper())[:24]
+            proof_data = str(body.get('proof_data_url') or '').strip()
+            ref_txt = (body.get('transfer_reference') or '').strip()[:120]
+            if not proof_data.startswith('data:image/') or len(proof_data) > 950_000:
+                self.send_json(400, {'error': 'Adjunta una imagen válida del comprobante.'})
+                return
+            conn = get_db()
+            try:
+                order = conn.execute('SELECT * FROM orders WHERE tracking_code = ?', (tcode,)).fetchone()
+                if not order:
+                    self.send_json(404, {'error': 'Pedido no encontrado'})
+                    return
+                new_tl = append_timeline_event(order['timeline_json'], 'proof_uploaded', 'Comprobante de transferencia adjuntado por el cliente', ref_txt or 'En revisión por la tienda')
+                conn.execute(
+                    "UPDATE orders SET transfer_proof_url = ?, transfer_reference = ?, payment_method = 'transfer', timeline_json = ? WHERE id = ?",
+                    (proof_data, ref_txt, new_tl, order['id'])
+                )
+                conn.commit()
+                self.send_json(200, {'ok': True})
+            finally:
+                conn.close()
+            return
+
+        # Confirmación de recepción del paquete por el comprador
+        if path.startswith('/api/public/track/') and path.endswith('/confirm-received'):
+            if not SHIELD.check_rate('track_recv', ip, limit=6, window_sec=60):
+                self.send_json(429, {'error': 'Aguarda unos segundos.'})
+                return
+            tcode = re.sub(r'[^A-Z0-9\-]', '', path.split('/')[4].strip().upper())[:24]
+            conn = get_db()
+            try:
+                order = conn.execute('SELECT * FROM orders WHERE tracking_code = ?', (tcode,)).fetchone()
+                if not order:
+                    self.send_json(404, {'error': 'Pedido no encontrado'})
+                    return
+                if order['dispatch_status'] == 'dispatched':
+                    new_tl = append_timeline_event(order['timeline_json'], 'delivered', 'Recepción del paquete confirmada por el cliente', '¡Entregado con éxito!')
+                    conn.execute("UPDATE orders SET dispatch_status = 'delivered', timeline_json = ? WHERE id = ?", (new_tl, order['id']))
+                    conn.commit()
+                self.send_json(200, {'ok': True})
+            finally:
+                conn.close()
+            return
+
         if path.startswith('/api/public/store/') and path.endswith('/checkout'):
             if not SHIELD.check_rate('public_checkout', ip, limit=8, window_sec=60):
                 self.send_json(429, {'error': 'Demasiados pedidos seguidos desde esta conexión. Aguarda un minuto.'})
                 return
-            # Honeypot anti-bots
             if (body.get('website_hp') or '').strip():
                 self.send_json(400, {'error': 'Solicitud bloqueada por filtro anti-bots.'})
                 return
@@ -2179,10 +2636,27 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 req_items = body.get('items') or []
                 cname = (body.get('customer_name') or '').strip()[:100]
                 cphone = (body.get('customer_phone') or '').strip()[:40]
-                delivery_method = 'pickup' if body.get('delivery_method') == 'pickup' and bool(profile['allow_pickup']) else 'delivery'
-                caddr = (body.get('customer_address') or '').strip()[:220]
-                if delivery_method == 'pickup' and not caddr:
-                    caddr = 'Retiro en Local / Punto de Entrega'
+                raw_del = body.get('delivery_method') or 'delivery'
+                if raw_del == 'pickup' and bool(profile['allow_pickup']):
+                    delivery_method = 'pickup'
+                elif raw_del == 'branch' and float(profile['shipping_branch_rate'] or 0) > 0:
+                    delivery_method = 'branch'
+                else:
+                    delivery_method = 'delivery'
+
+                cstreet = (body.get('customer_address') or '').strip()[:180]
+                ccp = (body.get('customer_postal_code') or '').strip()[:16]
+                ccity = (body.get('customer_city') or '').strip()[:80]
+                cprov = (body.get('customer_province') or '').strip()[:80]
+                branch_name = (body.get('branch_name') or '').strip()[:120]
+
+                if delivery_method == 'pickup':
+                    caddr = cstreet or 'Retiro en Local / Punto de Entrega'
+                elif delivery_method == 'branch':
+                    caddr = f"Sucursal Correo: {branch_name or ccity}" + (f" (CP {ccp} - {cprov})" if ccp or cprov else '')
+                else:
+                    caddr = ', '.join(x for x in [cstreet, ccity, cprov, f"CP {ccp}" if ccp else ''] if x)
+
                 notes = (body.get('notes') or '').strip()[:300]
                 payment_method = (body.get('payment_method') or 'mercadopago').strip()[:32]
 
@@ -2243,11 +2717,14 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     return
 
                 flat_ship = float(profile['shipping_flat_rate'] or 0)
+                branch_ship = float(profile['shipping_branch_rate'] or 0)
                 free_min = float(profile['free_shipping_min'] or 0)
                 if delivery_method == 'pickup':
                     shipping_cost = 0.0
                 elif free_min > 0 and subtotal >= free_min:
                     shipping_cost = 0.0
+                elif delivery_method == 'branch':
+                    shipping_cost = max(0.0, branch_ship)
                 else:
                     shipping_cost = max(0.0, flat_ship)
 
@@ -2282,37 +2759,35 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         },
                         "auto_return": "approved"
                     }
+                    if base_url.startswith('https://'):
+                        pref_payload["notification_url"] = f"{base_url}/api/webhooks/mp-order/{owner['id']}"
                     try:
                         _, pref = mp_api_request('POST', '/checkout/preferences', mp_token, pref_payload)
                         mp_link = pref.get('init_point') or pref.get('sandbox_init_point') or ''
                     except Exception:
                         mp_link = ''
 
+                tl_json = append_timeline_event('[]', 'created', 'Pedido recibido desde Tienda Online', f"Folio {folio_str}")
+
                 conn.execute(
                     '''INSERT INTO orders (
                            id, user_id, tracking_code, folio_number, customer_name, customer_phone,
-                           customer_address, customer_handle, items_json, subtotal, discount_amount,
+                           customer_address, customer_postal_code, customer_city, customer_province, branch_name,
+                           customer_handle, items_json, subtotal, discount_amount,
                            discount_label, shipping_cost, tax_amount, total, total_cost, net_profit,
                            payment_status, payment_method, mp_payment_link, delivery_method,
-                           dispatch_status, notes, source, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, ?, 0, '', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'to_prepare', ?, 'web_store', ?)''',
+                           dispatch_status, timeline_json, notes, source, created_at
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, 0, '', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'to_prepare', ?, ?, 'web_store', ?)''',
                     (
-                        oid, owner['id'], tracking_code, folio_str, cname, cphone, caddr,
+                        oid, owner['id'], tracking_code, folio_str, cname, cphone,
+                        caddr, ccp, ccity, cprov, branch_name,
                         json.dumps(enriched_items, ensure_ascii=False),
                         subtotal, shipping_cost, tax_amount, grand_total, total_cost, net_profit,
-                        payment_method, mp_link, delivery_method, notes, now_iso
+                        payment_method, mp_link, delivery_method, tl_json, notes, now_iso
                     )
                 )
                 conn.execute('UPDATE store_profiles SET next_folio_number = ? WHERE user_id = ?', (folio_num + 1, owner['id']))
-
-                existing_cust = conn.execute('SELECT id FROM customers WHERE user_id = ? AND lower(name) = ?', (owner['id'], cname.lower())).fetchone()
-                if existing_cust:
-                    conn.execute('UPDATE customers SET phone = ?, address = COALESCE(NULLIF(?, ""), address) WHERE id = ?', (cphone, caddr, existing_cust['id']))
-                else:
-                    conn.execute(
-                        'INSERT INTO customers (id, user_id, name, phone, address, handle, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                        ('cust_' + secrets.token_hex(6), owner['id'], cname, cphone, caddr, 'Tienda Web', now_iso)
-                    )
+                upsert_customer_record(conn, owner['id'], cname, cphone, caddr, 'Tienda Web', ccp, ccity, cprov, inc_order=True)
                 conn.commit()
                 self.send_json(201, {
                     'order': {
@@ -2373,6 +2848,8 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     },
                     "auto_return": "approved"
                 }
+                if base_url.startswith('https://'):
+                    pref_payload["notification_url"] = f"{base_url}/api/webhooks/mp-order/{user['id']}"
                 try:
                     _, pref = mp_api_request('POST', '/checkout/preferences', mp_token, pref_payload)
                     link = pref.get('init_point') or pref.get('sandbox_init_point') or ''
@@ -2488,7 +2965,6 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 if 'slug' in body and str(body['slug']).strip():
                     body['slug'] = ensure_unique_slug(conn, str(body['slug']), user['id'])
 
-                # Cifrar token de Mercado Pago antes de persistir; ignorar cadena vacía salvo clear_mp_token explícito
                 if body.get('clear_mp_token') is True:
                     body['mp_access_token'] = ''
                 elif 'mp_access_token' in body:
@@ -2500,11 +2976,11 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
 
                 fields = [
                     'name', 'slug', 'store_icon', 'logo_data_url', 'receipt_theme', 'app_palette',
-                    'custom_color', 'business_mode', 'phone', 'address', 'instagram', 'website',
-                    'country_code', 'currency_code', 'currency_symbol', 'tax_label', 'tax_rate',
-                    'bank_alias', 'bank_holder', 'external_pay_link', 'cash_on_delivery',
-                    'shipping_flat_rate', 'free_shipping_min', 'allow_pickup',
-                    'next_folio_number', 'receipt_footer_message', 'mp_access_token',
+                    'custom_color', 'business_mode', 'phone', 'address', 'origin_postal_code', 'origin_province',
+                    'instagram', 'website', 'country_code', 'currency_code', 'currency_symbol',
+                    'tax_label', 'tax_rate', 'bank_alias', 'bank_holder', 'external_pay_link',
+                    'cash_on_delivery', 'shipping_flat_rate', 'shipping_branch_rate', 'free_shipping_min',
+                    'allow_pickup', 'next_folio_number', 'receipt_footer_message', 'mp_access_token',
                     'staff_pin', 'voice_accent', 'voice_template'
                 ]
                 set_clauses = []
@@ -2614,17 +3090,39 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 user, _ = self.require_active_user(conn)
                 if not user:
                     return
-                allowed = ['payment_status', 'dispatch_status', 'shipping_carrier', 'shipping_tracking', 'notes']
-                set_clauses = []
-                values = []
+                existing = conn.execute('SELECT * FROM orders WHERE id = ? AND user_id = ?', (oid, user['id'])).fetchone()
+                if not existing:
+                    self.send_json(404, {'error': 'Pedido no encontrado'})
+                    return
+
+                tl_json = existing['timeline_json'] or '[]'
+                if 'payment_status' in body and body['payment_status'] == 'paid' and existing['payment_status'] != 'paid':
+                    tl_json = append_timeline_event(tl_json, 'paid', 'Abono verificado y aprobado por la tienda', '')
+                if 'dispatch_status' in body and body['dispatch_status'] != existing['dispatch_status']:
+                    st = body['dispatch_status']
+                    carrier = str(body.get('shipping_carrier') or existing['shipping_carrier'] or '').strip()
+                    trk = str(body.get('shipping_tracking') or existing['shipping_tracking'] or '').strip()
+                    if st == 'packed':
+                        tl_json = append_timeline_event(tl_json, 'packed', 'Paquete preparado y empacado', 'Listo para despacho')
+                    elif st == 'dispatched':
+                        det = ' — '.join(x for x in [carrier, f"Guía: {trk}" if trk else ''] if x)
+                        tl_json = append_timeline_event(tl_json, 'dispatched', 'Paquete despachado en correo / transporte', det)
+                    elif st == 'delivered':
+                        tl_json = append_timeline_event(tl_json, 'delivered', 'Paquete entregado', '')
+
+                allowed = [
+                    'payment_status', 'dispatch_status', 'shipping_carrier', 'shipping_tracking',
+                    'customer_address', 'customer_postal_code', 'customer_city', 'customer_province', 'branch_name', 'notes'
+                ]
+                set_clauses = ['timeline_json = ?']
+                values = [tl_json]
                 for f in allowed:
                     if f in body:
                         set_clauses.append(f"{f} = ?")
-                        values.append(str(body[f])[:200])
-                if set_clauses:
-                    values.extend([oid, user['id']])
-                    conn.execute(f"UPDATE orders SET {', '.join(set_clauses)} WHERE id = ? AND user_id = ?", values)
-                    conn.commit()
+                        values.append(str(body[f])[:220])
+                values.extend([oid, user['id']])
+                conn.execute(f"UPDATE orders SET {', '.join(set_clauses)} WHERE id = ? AND user_id = ?", values)
+                conn.commit()
                 order = conn.execute('SELECT * FROM orders WHERE id = ? AND user_id = ?', (oid, user['id'])).fetchone()
                 self.send_json(200, {'order': dict(order) if order else None})
             finally:
@@ -2678,7 +3176,7 @@ def run():
     socketserver.ThreadingTCPServer.daemon_threads = True
     with socketserver.ThreadingTCPServer(("", PORT), SaaSHandler) as httpd:
         print("=" * 66)
-        print(f"[OK] VENTAFLOW POS SaaS v4.0 SHIELD ACTIVO en http://localhost:{PORT}")
+        print(f"[OK] VENTAFLOW POS SaaS v5.0 AUTOPILOT ACTIVO en http://localhost:{PORT}")
         print("Motor DB:", "PostgreSQL (ThreadedPool)" if IS_POSTGRES else f"SQLite WAL ({DB_PATH})")
         print("=" * 66)
         httpd.serve_forever()

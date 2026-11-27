@@ -1,4 +1,4 @@
-const CACHE_NAME = 'comprobantes-pos-v1';
+const CACHE_NAME = 'ventaflow-pos-v5';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

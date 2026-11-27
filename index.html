@@ -65,6 +65,33 @@
       background-size: 10px 1px;
       background-repeat: repeat-x;
     }
+    .vf-help-tip {
+      background: linear-gradient(135deg, #F5F3FF 0%, #FAF5FF 100%);
+      border: 1px solid #DDD6FE;
+      border-left: 4px solid var(--vf-accent, #7C3AED);
+      border-radius: 16px;
+      padding: 10px 12px;
+      font-size: 11px;
+      line-height: 1.45;
+      color: #3B0764;
+    }
+    body.hide-help-tips .vf-help-tip {
+      display: none !important;
+    }
+    details.vf-section > summary {
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+    }
+    details.vf-section > summary::-webkit-details-marker {
+      display: none;
+    }
+    details.vf-section .vf-chevron {
+      transition: transform 0.2s ease;
+    }
+    details.vf-section[open] .vf-chevron {
+      transform: rotate(180deg);
+    }
     @media print {
       @page { margin: 4mm; size: auto; }
       body {
@@ -76,7 +103,10 @@
       #auth-screen, #paywall-screen, #app-container, #live-alert-toast,
       #modal-barcode-scanner, #modal-customers, #modal-custom-discount,
       #modal-catalog, #modal-product-form, #modal-voice-studio,
-      #modal-mp-guide, #modal-admin, .no-print {
+      #modal-mp-guide, #modal-admin, #modal-picking-list, #modal-shipping-guide,
+      #modal-forgot-password, #modal-staff-login, #modal-variant-picker,
+      #modal-guide, #modal-onboarding-tour, #modal-transfer-proof,
+      #modal-rapid-tracking, #modal-merge-orders, #modal-bulk-price, .no-print {
         display: none !important;
       }
       #modal-receipt {
@@ -276,17 +306,21 @@
         </div>
       </div>
 
-      <div class="flex items-center gap-1.5 shrink-0">
-        <button onclick="openAdminModal()" id="btn-open-admin" class="hidden px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 text-white shadow-sm">
+      <div class="flex items-center gap-1 shrink-0">
+        <button onclick="openAdminModal()" id="btn-open-admin" class="hidden px-2 py-1.5 rounded-xl text-[10px] font-bold bg-slate-900 text-white shadow-sm">
           Admin
         </button>
-        <button onclick="openGuideModal()" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200" title="Guía de funciones">
+        <button onclick="toggleHelpHints()" id="btn-toggle-help" class="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200" title="Mostrar u ocultar todas las explicaciones paso a paso">
+          <span>💡</span>
+          <span id="help-toggle-label">Ayudas ON</span>
+        </button>
+        <button onclick="openGuideModal()" class="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[10px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200" title="Manual y Tutorial interactivo">
           <i data-lucide="help-circle" class="w-3.5 h-3.5 text-purple-600"></i>
           <span>Guía</span>
         </button>
-        <button onclick="openMPGuideModal()" id="mp-status-pill" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-violet-100 hover:bg-violet-200 text-violet-800 border border-violet-200">
-          <i data-lucide="key" class="w-3.5 h-3.5 text-violet-600"></i>
-          <span id="mp-status-text">Cobros MP</span>
+        <button onclick="openMPGuideModal()" id="mp-status-pill" class="flex items-center gap-1 px-2 py-1.5 rounded-xl text-[10px] font-bold bg-violet-100 hover:bg-violet-200 text-violet-800 border border-violet-200">
+          <i data-lucide="key" class="w-3 h-3 text-violet-600"></i>
+          <span id="mp-status-text">MP</span>
         </button>
         <button onclick="logoutUser()" class="p-1.5 rounded-xl text-slate-400 hover:text-rose-600" title="Cerrar sesión">
           <i data-lucide="log-out" class="w-4 h-4"></i>
@@ -325,14 +359,36 @@
       <!-- TAB 1: NUEVO PEDIDO / DESPACHO -->
       <div id="tab-sale" class="space-y-3.5">
 
-        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg shadow-purple-600/25 flex items-center justify-between">
-          <div>
-            <span id="label-business-mode" class="text-[10px] font-black uppercase tracking-wider text-white/80">NUEVO PEDIDO PARA DESPACHO</span>
+        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg shadow-purple-600/25 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <span id="label-business-mode" class="text-[10px] font-black uppercase tracking-wider text-white/80 block truncate">NUEVO PEDIDO PARA DESPACHO</span>
             <p id="label-next-folio" class="text-xl font-black font-mono mt-0.5 tracking-tight">Pedido #001001</p>
           </div>
-          <button onclick="switchTab('dispatches')" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-xs font-bold border border-white/30">
+          <button onclick="switchTab('dispatches')" class="px-3 py-1.5 bg-white/20 hover:bg-white/30 backdrop-blur-md rounded-xl text-xs font-bold border border-white/30 shrink-0">
             Ver Despachos →
           </button>
+        </div>
+
+        <!-- Atajo Directo: Enviar Link de la App Exclusiva del Cliente -->
+        <div class="bg-gradient-to-r from-emerald-50 via-teal-50 to-purple-50 rounded-3xl p-3.5 border border-emerald-200 shadow-sm space-y-2">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <span class="text-[10px] font-black uppercase tracking-wider text-emerald-800 block">📲 App Exclusiva para tu Cliente (Automática)</span>
+              <p class="text-[11px] text-slate-600 leading-snug mt-0.5">Envíale tu link: el cliente elige productos, escribe su dirección/CP, paga en Mercado Pago y el pedido entra solo a <strong>Despachos</strong> listo para empacar.</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5 text-[11px]">
+            <button type="button" onclick="sendBuyerAppWhatsApp()" class="col-span-2 py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl shadow-sm flex items-center justify-center gap-1.5 truncate">
+              <span>💬 Enviar Link al Cliente</span>
+            </button>
+            <button type="button" onclick="copyPublicStoreUrl()" class="py-2 px-2 bg-white hover:bg-emerald-50 text-emerald-900 font-bold rounded-xl border border-emerald-200 truncate">
+              📋 Copiar Link
+            </button>
+          </div>
+        </div>
+
+        <div class="vf-help-tip">
+          <strong>💡 ¿Cuándo usar esta pestaña "Pedido"?</strong> Úsala cuando vendas en mostrador, showroom, vivo de TikTok/Instagram o tomes un pedido tú mismo por teléfono. Si quieres que el comprador arme su carrito, cargue su Código Postal y abone solo, envíale arriba el <strong>Link de la App del Cliente</strong>. <em>(Puedes ocultar todas estas ayudas tocando "💡 Ayudas ON" arriba).</em>
         </div>
 
         <!-- 1. Cliente & Datos de Envío -->
@@ -343,7 +399,7 @@
                 <i data-lucide="user" class="w-4 h-4 text-purple-600 shrink-0"></i>
                 1. Cliente &amp; Entrega
               </h3>
-              <p class="text-[10px] text-slate-400 mt-0.5">Autoguardado activo contra cortes de internet.</p>
+              <p class="text-[10px] text-slate-400 mt-0.5">Autoguardado activo y compatible con Correo Argentino.</p>
             </div>
             <div class="flex items-center gap-1 shrink-0">
               <button type="button" onclick="clearSaleDraftForm()" class="text-[10px] font-bold text-slate-400 hover:text-rose-600 px-2 py-1.5 rounded-xl" title="Limpiar formulario">Limpiar</button>
@@ -355,20 +411,33 @@
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <input type="text" id="client-name" oninput="saveSaleDraft()" placeholder="Nombre del cliente *" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
-            <input type="tel" id="client-phone" oninput="saveSaleDraft()" placeholder="WhatsApp (c/ área)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800">
+            <input type="text" id="client-name" oninput="saveSaleDraft()" placeholder="Nombre y Apellido *" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-semibold">
+            <input type="tel" id="client-phone" oninput="saveSaleDraft()" placeholder="WhatsApp (c/ cód área)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500 font-bold text-slate-800">
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
-            <input type="text" id="client-address" oninput="saveSaleDraft()" placeholder="Dirección / Ciudad" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
-            <input type="text" id="client-handle" oninput="saveSaleDraft()" placeholder="Referencia / @red (opc.)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
-          </div>
-
-          <!-- Selector de Entrega y Costo de Envío -->
-          <div class="grid grid-cols-3 gap-1.5 pt-1 text-[11px]">
-            <button type="button" onclick="setSaleDeliveryMethod('delivery')" id="btn-sale-del-delivery" class="py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate">🚚 Envío</button>
+          <!-- Selector de Entrega (Domicilio / Sucursal Correo / Retiro) -->
+          <div class="grid grid-cols-3 gap-1.5 pt-0.5 text-[11px]">
+            <button type="button" onclick="setSaleDeliveryMethod('delivery')" id="btn-sale-del-delivery" class="py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate">🚚 Domicilio</button>
+            <button type="button" onclick="setSaleDeliveryMethod('branch')" id="btn-sale-del-branch" class="py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate">📮 Sucursal</button>
             <button type="button" onclick="setSaleDeliveryMethod('pickup')" id="btn-sale-del-pickup" class="py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate">🏪 Retiro</button>
-            <input type="number" id="sale-shipping-cost" oninput="updateTotals(); saveSaleDraft();" placeholder="Envío $0" class="w-full min-w-0 px-2.5 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl text-right font-bold text-slate-700 text-xs" title="Costo de envío">
+          </div>
+
+          <div id="sale-shipping-fields" class="space-y-2">
+            <div class="grid grid-cols-2 gap-2">
+              <input type="text" id="client-address" oninput="saveSaleDraft()" placeholder="Calle, altura, piso/dpto" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+              <input type="text" id="client-branch" oninput="saveSaleDraft()" placeholder="Sucursal Correo (si aplica)" class="hidden w-full min-w-0 px-3 py-2 text-xs bg-amber-50/60 border border-amber-300 rounded-xl focus:outline-none font-semibold">
+              <input type="text" id="client-handle" oninput="saveSaleDraft()" placeholder="Referencia / @usuario (opc.)" class="w-full min-w-0 px-3 py-2 text-xs bg-purple-50/40 border border-purple-200 rounded-xl focus:outline-none focus:border-purple-500">
+            </div>
+            <div class="grid grid-cols-3 gap-1.5">
+              <input type="text" id="client-cp" oninput="saveSaleDraft()" placeholder="Cód. Postal" class="w-full min-w-0 px-2.5 py-1.5 text-xs bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold">
+              <input type="text" id="client-city" oninput="saveSaleDraft()" placeholder="Localidad" class="w-full min-w-0 px-2.5 py-1.5 text-xs bg-purple-50/40 border border-purple-200 rounded-xl">
+              <input type="text" id="client-province" oninput="saveSaleDraft()" placeholder="Provincia" class="w-full min-w-0 px-2.5 py-1.5 text-xs bg-purple-50/40 border border-purple-200 rounded-xl">
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-2 pt-0.5">
+            <span class="text-[11px] font-bold text-slate-600">Costo de envío aplicado ($):</span>
+            <input type="number" id="sale-shipping-cost" oninput="updateTotals(); saveSaleDraft();" placeholder="Envío $0" class="w-28 shrink-0 px-2.5 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl text-right font-bold text-slate-700 text-xs" title="Costo de envío">
           </div>
         </div>
 
@@ -487,15 +556,26 @@
 
       <!-- TAB 2: DESPACHOS Y COBROS -->
       <div id="tab-dispatches" class="space-y-3 hidden text-xs">
-        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg flex items-center justify-between">
-          <div>
-            <h3 class="font-bold text-sm font-serif">Central de Despachos &amp; Cobros</h3>
-            <p class="text-[11px] text-white/85">Armado rápido, etiquetas en lote, guías y avisos WhatsApp.</p>
+        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-sm font-serif truncate">Central de Despachos &amp; Correo</h3>
+              <span id="radar-live-pill" class="text-[9px] font-extrabold bg-emerald-400/25 border border-emerald-300/50 text-emerald-100 px-2 py-0.5 rounded-full shrink-0">📡 Radar MP Activo</span>
+            </div>
+            <p class="text-[11px] text-white/85 mt-0.5">Escanear → Empacar → Despachar con Correo Argentino sin demoras.</p>
           </div>
-          <span class="text-2xl">🚚</span>
+          <span class="text-2xl shrink-0">🚚</span>
         </div>
 
-        <!-- Herramientas Ágiles de Despacho Masivo -->
+        <div class="vf-help-tip space-y-1">
+          <p class="font-extrabold text-purple-950">📦 Flujo Automático del Despachador (4 pasos simples):</p>
+          <p><strong>1. Cobro solo:</strong> Cuando el cliente paga en Mercado Pago desde su App, el pedido pasa solo a <strong>Abonado ✅</strong> (con alerta de voz). Si pagó por transferencia y subió foto, verás el botón <strong>🧾 Ver Comprobante</strong>.</p>
+          <p><strong>2. Correo Argentino Web:</strong> Toca <strong>📮 Exportar MiCorreo .CSV</strong> (o <strong>📋 Copiar p/ Correo</strong> en un pedido) para cargar tus envíos en Correo Argentino sin tipear a mano.</p>
+          <p><strong>3. Empaque:</strong> Mira la <strong>📋 Lista de Armado</strong> para sacar todo del estante e imprime las <strong>🖨️ Pegatinas 58mm</strong> con checklist y QR.</p>
+          <p><strong>4. Código de Seguimiento:</strong> Toca <strong>⚡ Ráfaga de Guías</strong> o <strong>📷 Escanear Guía</strong> para leer con la cámara el código de barras del ticket de Correo Argentino y avisar por WhatsApp en 1 toque.</p>
+        </div>
+
+        <!-- Herramientas Ágiles de Despacho Masivo (2x2 + Unificar) -->
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="openPickingListModal()" class="py-2.5 px-3 bg-white hover:bg-purple-50 text-purple-950 font-extrabold rounded-2xl border border-purple-200 shadow-sm flex items-center justify-center gap-1.5 text-[11px]">
             <i data-lucide="clipboard-list" class="w-4 h-4 text-purple-600 shrink-0"></i>
@@ -503,21 +583,34 @@
           </button>
           <button type="button" onclick="downloadBatchStickersPDF()" id="btn-batch-stickers" class="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl shadow-sm flex items-center justify-center gap-1.5 text-[11px]">
             <i data-lucide="printer" class="w-4 h-4 text-amber-300 shrink-0"></i>
-            <span class="truncate">Pegatinas en Lote</span>
+            <span class="truncate">Pegatinas 58mm</span>
+          </button>
+          <button type="button" onclick="exportMiCorreoCSV()" class="py-2.5 px-3 bg-sky-50 hover:bg-sky-100 text-sky-950 font-extrabold rounded-2xl border border-sky-200 shadow-sm flex items-center justify-center gap-1.5 text-[11px]">
+            <span>📮</span>
+            <span class="truncate">MiCorreo .CSV</span>
+          </button>
+          <button type="button" onclick="openRapidTrackingModal()" class="py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 font-extrabold rounded-2xl border border-emerald-200 shadow-sm flex items-center justify-center gap-1.5 text-[11px]">
+            <span>⚡</span>
+            <span class="truncate">Ráfaga de Guías</span>
           </button>
         </div>
 
+        <button type="button" onclick="openMergeOrdersModal()" class="w-full py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-2xl border border-purple-200 text-[11px] flex items-center justify-center gap-1.5">
+          <span>🛍️ Unificar 2 o más pedidos del mismo cliente en 1 solo envío ("Bolsita")</span>
+        </button>
+
         <div class="relative">
           <i data-lucide="search" class="w-4 h-4 text-purple-400 absolute left-3.5 top-3"></i>
-          <input type="text" id="dispatch-search" oninput="renderDispatchesList()" placeholder="Buscar por folio, código PED- o cliente..." class="w-full pl-9 pr-3 py-2.5 text-xs bg-white border border-purple-100 rounded-2xl shadow-sm focus:outline-none">
+          <input type="text" id="dispatch-search" oninput="renderDispatchesList()" placeholder="Buscar por folio, código PED-, guía o cliente..." class="w-full pl-9 pr-3 py-2.5 text-xs bg-white border border-purple-100 rounded-2xl shadow-sm focus:outline-none">
         </div>
 
         <div class="flex gap-1.5 overflow-x-auto pb-1">
-          <button onclick="setDispatchFilter('all')" id="df-all" class="px-2.5 py-1.5 rounded-xl font-bold bg-purple-600 text-white shrink-0">Todos</button>
+          <button onclick="setDispatchFilter('all')" id="df-all" class="px-2.5 py-1.5 rounded-xl font-bold bg-purple-600 text-white shrink-0">Activos</button>
           <button onclick="setDispatchFilter('pending_pay')" id="df-pending_pay" class="px-2.5 py-1.5 rounded-xl font-bold bg-amber-100 text-amber-800 shrink-0">⏳ Pend. Abono</button>
           <button onclick="setDispatchFilter('to_prepare')" id="df-to_prepare" class="px-2.5 py-1.5 rounded-xl font-bold bg-purple-100 text-purple-800 shrink-0">📦 Por Preparar</button>
           <button onclick="setDispatchFilter('packed')" id="df-packed" class="px-2.5 py-1.5 rounded-xl font-bold bg-sky-100 text-sky-800 shrink-0">🎁 Empacado</button>
           <button onclick="setDispatchFilter('dispatched')" id="df-dispatched" class="px-2.5 py-1.5 rounded-xl font-bold bg-emerald-100 text-emerald-800 shrink-0">🚚 Despachado</button>
+          <button onclick="setDispatchFilter('cancelled')" id="df-cancelled" class="px-2.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 shrink-0">❌ Anulados</button>
         </div>
 
         <div id="dispatches-list" class="space-y-2.5"></div>
@@ -551,14 +644,19 @@
           </div>
         </div>
 
-        <div id="catalog-owner-actions" class="grid grid-cols-2 gap-2">
-          <button type="button" onclick="shareCatalogToWhatsApp()" class="py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold rounded-2xl shadow flex items-center justify-center gap-1.5 text-xs">
-            <i data-lucide="share-2" class="w-4 h-4"></i>
-            <span>Catálogo WhatsApp</span>
+        <div class="vf-help-tip">
+          <strong>🛍️ ¿Cómo funciona tu Catálogo?</strong> Todo lo que cargues aquí con foto, stock y variantes (talles/colores) aparece al instante en la <strong>App de Compra de tu Cliente</strong> y se descuenta automáticamente en cada venta. Usa <strong>🏷️ Etiqueta</strong> en cada producto para imprimir códigos de barras escaneables de 58mm, y <strong>📈 Ajustar Precios %</strong> cuando aumente tu proveedor.
+        </div>
+
+        <div id="catalog-owner-actions" class="grid grid-cols-3 gap-1.5">
+          <button type="button" onclick="shareCatalogToWhatsApp()" class="py-2.5 px-2 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold rounded-2xl shadow flex items-center justify-center gap-1 text-[11px] truncate">
+            <span>💬 WhatsApp</span>
           </button>
-          <button type="button" onclick="loadSampleProducts()" class="py-2.5 px-3 bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold rounded-2xl border border-purple-200 flex items-center justify-center gap-1.5 text-xs">
-            <i data-lucide="sparkles" class="w-4 h-4 text-purple-600"></i>
-            <span>Cargar Ejemplos</span>
+          <button type="button" onclick="openBulkPriceModal()" class="py-2.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-950 font-extrabold rounded-2xl border border-amber-200 flex items-center justify-center gap-1 text-[11px] truncate">
+            <span>📈 Precios %</span>
+          </button>
+          <button type="button" onclick="loadSampleProducts()" class="py-2.5 px-2 bg-purple-100 hover:bg-purple-200 text-purple-800 font-bold rounded-2xl border border-purple-200 flex items-center justify-center gap-1 text-[11px] truncate">
+            <span>✨ Ejemplos</span>
           </button>
         </div>
 
@@ -592,6 +690,10 @@
             <i data-lucide="download" class="w-3.5 h-3.5"></i>
             <span>Excel .CSV</span>
           </button>
+        </div>
+
+        <div class="vf-help-tip">
+          <strong>📊 ¿Cómo se calcula tu Ganancia Limpia?</strong> El sistema toma únicamente tus <strong>pedidos activos</strong> (los pedidos anulados se excluyen automáticamente), resta el <strong>Costo de Reposición</strong> cargado en cada producto y resta tus <strong>Gastos Operativos</strong> (bolsas, envíos, publicidad, alquiler). Toca <strong>Excel .CSV</strong> arriba para descargar toda la contabilidad lista para abrir en Excel.
         </div>
 
         <!-- Balance de Hoy -->
@@ -715,98 +817,180 @@
         </div>
       </div>
 
-      <!-- TAB 5: CONFIGURACIÓN DE COMPROBANTE & MI TIENDA -->
-      <div id="tab-settings" class="space-y-3.5 hidden text-xs pb-6">
-        <div class="bg-gradient-to-r from-violet-600 via-fuchsia-600 to-purple-700 rounded-3xl p-4 text-white shadow-lg space-y-1">
-          <div class="flex items-center gap-2">
-            <span class="text-xl">🧾</span>
-            <h3 class="font-extrabold text-sm font-serif">Mi Tienda &amp; Comprobante</h3>
+      <!-- TAB 5: CONFIGURACIÓN DE COMPROBANTE & MI TIENDA (ORGANIZADA EN 4 BLOQUES CLAROS) -->
+      <div id="tab-settings" class="space-y-3 hidden text-xs pb-6">
+        <div class="vf-brand-grad rounded-3xl p-4 text-white shadow-lg space-y-1">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">⚙️</span>
+              <h3 class="font-extrabold text-sm font-serif">Configuración Ordenada de tu Negocio</h3>
+            </div>
+            <button type="button" onclick="openOnboardingTour(true)" class="px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-xl text-[10px] font-extrabold border border-white/30 shrink-0">🎓 Ver Tutorial</button>
           </div>
-          <p class="text-[11px] text-purple-100">Personaliza tu marca, logo y diseño de boletas PDF.</p>
+          <p class="text-[11px] text-white/85">Toca cada sección para abrirla o cerrarla sin marearte. Al terminar toca Guardar.</p>
         </div>
 
-        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
-          <div>
-            <label class="font-bold text-slate-700 block mb-1">Nombre de tu Tienda</label>
-            <input type="text" id="setting-name" oninput="updateReceiptLivePreview()" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-950">
-          </div>
+        <div class="vf-help-tip">
+          <strong>🧭 Configuración en 4 bloques sin confusiones:</strong> Hemos agrupado todos los ajustes en 4 pasos desplegables (<strong>1. Marca y Link del Cliente</strong>, <strong>2. Correo Argentino y Cobros</strong>, <strong>3. Diseño y Empleados</strong>, <strong>4. Seguridad y Respaldo</strong>). Toca el título de cualquier bloque para desplegarlo.
+        </div>
 
-          <!-- Link Personalizado Tienda Online -->
-          <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-100 space-y-1.5">
-            <label class="font-bold text-slate-800 block">🌐 Link de Tu Tienda Online con Carrito</label>
-            <p class="text-[10px] text-slate-500">Personaliza el nombre corto de tu link público para compartir en redes.</p>
-            <div class="flex items-center gap-1.5">
-              <span class="text-[10px] font-mono text-slate-400 shrink-0">/tienda/</span>
-              <input type="text" id="setting-slug" placeholder="mi-comercio" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-purple-200 rounded-xl font-mono font-bold text-purple-800 text-xs">
-              <button type="button" onclick="copyPublicStoreUrl()" class="px-2.5 py-1.5 bg-purple-100 text-purple-900 font-bold rounded-xl text-[10px] shrink-0">Copiar</button>
-              <button type="button" onclick="openPublicStoreUrl()" class="px-2.5 py-1.5 vf-brand-grad text-white font-bold rounded-xl text-[10px] shrink-0">Abrir</button>
+        <!-- BLOQUE 1: IDENTIDAD, LOGO Y LINK DE LA APP DEL CLIENTE -->
+        <details class="vf-section bg-white rounded-3xl shadow-sm border border-purple-100 overflow-hidden" open>
+          <summary class="p-4 flex items-center justify-between gap-2 bg-purple-50/40">
+            <div class="min-w-0">
+              <span class="font-extrabold text-slate-900 text-xs block">🏪 1. Marca, Logo y Link de la App del Cliente</span>
+              <span class="text-[10px] text-slate-500 block">Nombre, link público de compra, WhatsApp y código postal de origen</span>
             </div>
-          </div>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-purple-600 vf-chevron shrink-0"></i>
+          </summary>
+          <div class="p-4 space-y-3 border-t border-purple-100">
+            <div class="vf-help-tip">
+              <strong>📌 Cómo configurar este bloque:</strong> Escribe el nombre de tu tienda, sube tu logo y define tu <strong>Link Corto</strong> (ej. <code>mi-marca</code>). Ese será el enlace exclusivo que enviarás a tus clientes para que compren solos desde su celular. Completa también tu <strong>CP y Provincia de origen</strong> para las planillas de Correo Argentino.
+            </div>
 
-          <div class="p-3 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-2">
-            <div class="flex items-center justify-between">
-              <div>
-                <label class="font-bold text-slate-700 block">Logo Real de tu Tienda</label>
-                <span class="text-[10px] text-slate-400">Aparece en boletas PDF y seguimiento</span>
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Nombre de tu Tienda / Marca</label>
+              <input type="text" id="setting-name" oninput="updateReceiptLivePreview()" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-950">
+            </div>
+
+            <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-1.5">
+              <label class="font-bold text-emerald-950 block">🌐 Link de la App Exclusiva para tus Clientes</label>
+              <p class="text-[10px] text-slate-600">Cuando el cliente entra a este link, elige productos, completa calle/CP, paga en Mercado Pago y el pedido te llega listo para empacar.</p>
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-mono text-slate-500 shrink-0">/tienda/</span>
+                <input type="text" id="setting-slug" placeholder="mi-comercio" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-emerald-300 rounded-xl font-mono font-bold text-emerald-900 text-xs">
+                <button type="button" onclick="copyPublicStoreUrl()" class="px-2.5 py-1.5 bg-white border border-emerald-300 text-emerald-900 font-bold rounded-xl text-[10px] shrink-0">Copiar</button>
+                <button type="button" onclick="openPublicStoreUrl()" class="px-2.5 py-1.5 bg-emerald-600 text-white font-bold rounded-xl text-[10px] shrink-0">Ver App</button>
               </div>
-              <button type="button" onclick="document.getElementById('setting-logo-file').click()" class="px-2.5 py-1.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white rounded-xl font-bold text-[11px] flex items-center gap-1">
-                <i data-lucide="image" class="w-3.5 h-3.5"></i>
-                <span>Subir Logo</span>
-              </button>
-              <input type="file" id="setting-logo-file" accept="image/*" class="hidden" onchange="handleLogoUpload(event)">
             </div>
-            <div class="flex items-center gap-3">
-              <img id="setting-logo-preview" src="" class="h-10 w-10 object-contain rounded-xl border border-purple-200 bg-white p-1 hidden">
-              <button type="button" id="btn-remove-logo" onclick="removeStoreLogo()" class="text-rose-600 text-[10px] font-bold hover:underline hidden">✕ Quitar Logo</button>
-            </div>
-          </div>
 
-          <div>
-            <label class="font-bold text-slate-700 block mb-1">Ícono alternativo</label>
-            <div class="flex gap-2">
-              <button type="button" onclick="selectStoreEmoji('🛍️')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">🛍️</button>
-              <button type="button" onclick="selectStoreEmoji('✨')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">✨</button>
-              <button type="button" onclick="selectStoreEmoji('📦')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">📦</button>
-              <button type="button" onclick="selectStoreEmoji('💄')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">💄</button>
-              <button type="button" onclick="selectStoreEmoji('🌸')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">🌸</button>
-              <button type="button" onclick="selectStoreEmoji('👑')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">👑</button>
+            <div class="p-3 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="font-bold text-slate-700 block">Logo Real de tu Tienda</label>
+                  <span class="text-[10px] text-slate-400">Se muestra en la App del Cliente, boletas y seguimiento</span>
+                </div>
+                <button type="button" onclick="document.getElementById('setting-logo-file').click()" class="px-2.5 py-1.5 vf-brand-grad text-white rounded-xl font-bold text-[11px] flex items-center gap-1">
+                  <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                  <span>Subir Logo</span>
+                </button>
+                <input type="file" id="setting-logo-file" accept="image/*" class="hidden" onchange="handleLogoUpload(event)">
+              </div>
+              <div class="flex items-center gap-3">
+                <img id="setting-logo-preview" src="" class="h-10 w-10 object-contain rounded-xl border border-purple-200 bg-white p-1 hidden">
+                <button type="button" id="btn-remove-logo" onclick="removeStoreLogo()" class="text-rose-600 text-[10px] font-bold hover:underline hidden">✕ Quitar Logo</button>
+              </div>
             </div>
-            <input type="hidden" id="setting-store-icon" value="🛍️">
-          </div>
 
-          <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="font-bold text-slate-700 block mb-1">WhatsApp Tienda</label>
-              <input type="text" id="setting-phone" oninput="updateReceiptLivePreview()" placeholder="+54 9 11..." class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
-            </div>
-            <div>
-              <label class="font-bold text-slate-700 block mb-1">Instagram / Web</label>
-              <input type="text" id="setting-instagram" oninput="updateReceiptLivePreview()" placeholder="@mitienda" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="font-bold text-slate-700 block mb-1">Ciudad / Despachos</label>
-              <input type="text" id="setting-address" oninput="updateReceiptLivePreview()" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
-            </div>
-            <div>
-              <label class="font-bold text-slate-700 block mb-1">Próximo Folio</label>
-              <input type="number" id="setting-folio" oninput="updateReceiptLivePreview()" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold text-purple-700">
-            </div>
-          </div>
-
-          <!-- Configuración Mundial: País, Moneda, Medios de Cobro & Tarifas de Envío -->
-          <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-            <div>
-              <span class="font-bold text-slate-800 block">🌍 País, Moneda, Cobros &amp; Envíos</span>
-              <span class="text-[10px] text-slate-500">Adapta cobros, impuestos y tarifas de envío para cualquier país</span>
+              <label class="font-bold text-slate-700 block mb-1">Ícono si no usas logo</label>
+              <div class="flex gap-2">
+                <button type="button" onclick="selectStoreEmoji('🛍️')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">🛍️</button>
+                <button type="button" onclick="selectStoreEmoji('✨')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">✨</button>
+                <button type="button" onclick="selectStoreEmoji('📦')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">📦</button>
+                <button type="button" onclick="selectStoreEmoji('💄')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">💄</button>
+                <button type="button" onclick="selectStoreEmoji('🌸')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">🌸</button>
+                <button type="button" onclick="selectStoreEmoji('👑')" class="store-emoji-btn w-9 h-9 rounded-xl border border-purple-200 bg-white text-base flex items-center justify-center">👑</button>
+              </div>
+              <input type="hidden" id="setting-store-icon" value="🛍️">
             </div>
 
             <div class="grid grid-cols-2 gap-2">
               <div>
+                <label class="font-bold text-slate-700 block mb-1">WhatsApp Atención</label>
+                <input type="text" id="setting-phone" oninput="updateReceiptLivePreview()" placeholder="54911..." class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Instagram / Red</label>
+                <input type="text" id="setting-instagram" oninput="updateReceiptLivePreview()" placeholder="@mitienda" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Dirección / Punto Retiro</label>
+                <input type="text" id="setting-address" oninput="updateReceiptLivePreview()" placeholder="Av. Siempreviva 742, CABA" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Próximo Nº Folio</label>
+                <input type="number" id="setting-folio" oninput="updateReceiptLivePreview()" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold text-purple-700">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">CP Origen (Tu Ciudad)</label>
+                <input type="text" id="setting-origin-cp" placeholder="Ej: 1425" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Provincia de Origen</label>
+                <input type="text" id="setting-origin-prov" placeholder="Ej: Buenos Aires" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- BLOQUE 2: TARIFAS CORREO ARGENTINO, ENVÍOS Y MEDIOS DE COBRO -->
+        <details class="vf-section bg-white rounded-3xl shadow-sm border border-purple-100 overflow-hidden">
+          <summary class="p-4 flex items-center justify-between gap-2 bg-sky-50/50">
+            <div class="min-w-0">
+              <span class="font-extrabold text-slate-900 text-xs block">🚚 2. Envíos (Correo Argentino) y Cobros (MP / Alias)</span>
+              <span class="text-[10px] text-slate-500 block">Tarifas a domicilio/sucursal, envío gratis, Mercado Pago y transferencia</span>
+            </div>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-sky-700 vf-chevron shrink-0"></i>
+          </summary>
+          <div class="p-4 space-y-3 border-t border-purple-100">
+            <div class="vf-help-tip">
+              <strong>💳 ¿Cómo se automatizan tus cobros y envíos?</strong><br>
+              • <strong>Mercado Pago Automático:</strong> Toca abajo <em>"Vincular Access Token MP"</em>. Cuando el cliente compre en su App, será redirigido solo a Mercado Pago, abonará y volverá automáticamente con el pedido ya marcado como <strong>Abonado ✅</strong>.<br>
+              • <strong>Tarifas Correo:</strong> Define cuánto cobras por <strong>Envío a Domicilio</strong>, cuánto a <strong>Sucursal Correo Argentino</strong> (pon <code>0</code> si no ofreces sucursal) y desde qué monto regalas <strong>Envío Gratis</strong>.
+            </div>
+
+            <button type="button" onclick="openMPGuideModal()" class="w-full py-2.5 px-3 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-2xl shadow-sm flex items-center justify-center gap-2 text-xs">
+              <i data-lucide="key" class="w-4 h-4"></i>
+              <span>🔒 Configurar / Revisar Token de Mercado Pago</span>
+            </button>
+
+            <div class="grid grid-cols-3 gap-2 pt-1">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1 text-[10px]">🚚 A Domicilio ($)</label>
+                <input type="number" id="setting-ship-flat" value="0" min="0" step="any" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1 text-[10px]">📮 A Sucursal ($)</label>
+                <input type="number" id="setting-ship-branch" value="0" min="0" step="any" placeholder="0 = Oculto" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1 text-[10px]">🎁 Gratis desde ($)</label>
+                <input type="number" id="setting-ship-free" value="0" min="0" step="any" placeholder="0 = No" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold">
+              </div>
+            </div>
+
+            <label class="flex items-center gap-2 p-2.5 bg-purple-50/50 border border-purple-200 rounded-xl font-bold text-[11px] text-slate-800 cursor-pointer">
+              <input type="checkbox" id="setting-allow-pickup" checked>
+              <span>🏪 Permitir también "Retiro Gratis en Local / Punto de Entrega"</span>
+            </label>
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Alias / CBU / CVU (Transferencia)</label>
+                <input type="text" id="setting-bank-alias" placeholder="mi.tienda.mp" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px]">
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Titular y Banco / Billetera</label>
+                <input type="text" id="setting-bank-holder" placeholder="Juan Pérez - Mercado Pago" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px]">
+              </div>
+            </div>
+
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Link de Pago Alternativo Opcional (PayPal / Stripe / Otro)</label>
+              <input type="url" id="setting-ext-pay-link" placeholder="https://..." class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-[11px]">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+              <div>
                 <label class="font-bold text-slate-700 block mb-1">País / Región</label>
-                <select id="setting-country" onchange="onCountryPresetChange(this.value)" class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-bold text-[11px] text-slate-800">
+                <select id="setting-country" onchange="onCountryPresetChange(this.value)" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-[11px] text-slate-800">
                   <option value="AR">🇦🇷 Argentina (ARS)</option>
                   <option value="MX">🇲🇽 México (MXN)</option>
                   <option value="CL">🇨🇱 Chile (CLP)</option>
@@ -819,172 +1003,154 @@
                 </select>
               </div>
               <div>
-                <label class="font-bold text-slate-700 block mb-1">Moneda Activa</label>
+                <label class="font-bold text-slate-700 block mb-1">Moneda e Impuesto Opc.</label>
                 <div class="flex gap-1">
-                  <input type="text" id="setting-currency" value="$" placeholder="$" class="w-12 shrink-0 px-2 py-2 bg-white border border-slate-200 rounded-xl font-bold text-center">
-                  <input type="text" id="setting-currency-code" value="ARS" placeholder="ARS" class="flex-1 min-w-0 px-2 py-2 bg-white border border-slate-200 rounded-xl font-mono font-bold uppercase text-center">
+                  <input type="text" id="setting-currency" value="$" placeholder="$" class="w-9 shrink-0 px-1.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-center">
+                  <input type="text" id="setting-currency-code" value="ARS" placeholder="ARS" class="w-14 shrink-0 px-1.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold uppercase text-center">
+                  <input type="hidden" id="setting-tax-label" value="IVA">
+                  <input type="number" id="setting-tax-rate" value="0" min="0" max="100" step="any" placeholder="IVA %" class="flex-1 min-w-0 px-2 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-right" title="Porcentaje de impuesto opcional (0 = sin recargo)">
                 </div>
               </div>
             </div>
+          </div>
+        </details>
 
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="font-bold text-slate-700 block mb-1">Alias / CBU / CLABE / Pix</label>
-                <input type="text" id="setting-bank-alias" placeholder="mi.tienda.mp" class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl font-mono text-[11px]">
-              </div>
-              <div>
-                <label class="font-bold text-slate-700 block mb-1">Titular / Banco</label>
-                <input type="text" id="setting-bank-holder" placeholder="Nombre y Banco" class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-[11px]">
-              </div>
+        <!-- BLOQUE 3: DISEÑO DE BOLETA, COLOR MARCA BLANCA, VOZ Y EMPLEADOS -->
+        <details class="vf-section bg-white rounded-3xl shadow-sm border border-purple-100 overflow-hidden">
+          <summary class="p-4 flex items-center justify-between gap-2 bg-fuchsia-50/40">
+            <div class="min-w-0">
+              <span class="font-extrabold text-slate-900 text-xs block">🎨 3. Diseño de Boleta, Color de App y PIN Empleados</span>
+              <span class="text-[10px] text-slate-500 block">Estilos visuales, vista previa, alerta de voz y acceso para despachadores</span>
+            </div>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-fuchsia-700 vf-chevron shrink-0"></i>
+          </summary>
+          <div class="p-4 space-y-3 border-t border-purple-100">
+            <div class="vf-help-tip">
+              <strong>👷 ¿Tienes alguien que te ayuda a empacar y despachar?</strong> Escribe abajo un <strong>PIN de Empleado</strong> (ej. <code>1234</code>). Tu ayudante podrá entrar desde la pantalla inicial tocando <em>"Ingreso Empleado"</em> con el link de tu tienda + ese PIN: verá únicamente <strong>Pedidos, Despachos y Stock</strong>, sin ver jamás tus ganancias ni tu configuración.
             </div>
 
             <div>
-              <label class="font-bold text-slate-700 block mb-1">Link de Pago Universal (PayPal / Stripe / Banco opc.)</label>
-              <input type="url" id="setting-ext-pay-link" placeholder="https://..." class="w-full min-w-0 px-2.5 py-2 bg-white border border-slate-200 rounded-xl text-[11px]">
+              <label class="font-bold text-slate-700 block mb-1">Mensaje al pie de la boleta</label>
+              <textarea id="setting-footer" oninput="updateReceiptLivePreview()" rows="2" placeholder="¡Gracias por elegirnos! Cambios dentro de los 15 días." class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl"></textarea>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/80">
-              <div>
-                <label class="font-bold text-slate-700 block mb-1">Envío Estándar ($)</label>
-                <input type="number" id="setting-ship-flat" value="0" min="0" step="any" class="w-full min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-bold">
-              </div>
-              <div>
-                <label class="font-bold text-slate-700 block mb-1">Envío Gratis desde ($)</label>
-                <input type="number" id="setting-ship-free" value="0" min="0" step="any" placeholder="0 = Desact." class="w-full min-w-0 px-2.5 py-1.5 bg-white border border-slate-200 rounded-xl font-bold">
+            <div>
+              <label class="font-bold text-slate-700 block mb-1">Estilo Visual del Comprobante</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="applyReceiptTheme('coquette')" class="theme-btn p-2.5 rounded-2xl border-2 border-purple-600 bg-purple-50 text-left" data-theme="coquette">🌸 <strong class="text-xs">Lila Coquette</strong></button>
+                <button type="button" onclick="applyReceiptTheme('glam')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="glam">💖 <strong class="text-xs">Rosa Glam</strong></button>
+                <button type="button" onclick="applyReceiptTheme('minimal')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="minimal">🤍 <strong class="text-xs">Minimalista</strong></button>
+                <button type="button" onclick="applyReceiptTheme('neon')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="neon">🔮 <strong class="text-xs">Neón</strong></button>
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 items-end">
+            <div class="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
               <div>
-                <label class="font-bold text-slate-700 block mb-1">Impuesto / IVA Opc.</label>
-                <div class="flex gap-1">
-                  <input type="text" id="setting-tax-label" placeholder="IVA" class="w-14 shrink-0 px-2 py-1.5 bg-white border border-slate-200 rounded-xl text-[11px] font-bold">
-                  <input type="number" id="setting-tax-rate" value="0" min="0" max="100" step="any" placeholder="%" class="flex-1 min-w-0 px-2 py-1.5 bg-white border border-slate-200 rounded-xl font-bold text-right">
+                <span class="font-bold text-slate-800 block">🎨 Color de Toda Tu App y Tienda Online</span>
+                <span class="text-[10px] text-slate-500">Tanto tu panel como la App del Cliente adoptan este color</span>
+              </div>
+              <div class="grid grid-cols-3 gap-1.5 text-[11px]">
+                <button type="button" onclick="applyAppPalette('violet')" class="palette-btn p-2 rounded-xl border border-purple-300 bg-violet-600 text-white font-bold" data-palette="violet">Violeta</button>
+                <button type="button" onclick="applyAppPalette('rose')" class="palette-btn p-2 rounded-xl border border-pink-300 bg-rose-500 text-white font-bold" data-palette="rose">Rosa</button>
+                <button type="button" onclick="applyAppPalette('emerald')" class="palette-btn p-2 rounded-xl border border-emerald-300 bg-emerald-600 text-white font-bold" data-palette="emerald">Esmeralda</button>
+                <button type="button" onclick="applyAppPalette('blue')" class="palette-btn p-2 rounded-xl border border-blue-300 bg-blue-600 text-white font-bold" data-palette="blue">Azul Pro</button>
+                <button type="button" onclick="applyAppPalette('dark')" class="palette-btn p-2 rounded-xl border border-slate-500 bg-slate-900 text-white font-bold" data-palette="dark">Negro</button>
+                <label class="p-1.5 rounded-xl border border-purple-200 bg-white flex items-center justify-center gap-1 cursor-pointer font-bold text-slate-700">
+                  <input type="color" id="setting-custom-color" value="#7C3AED" oninput="applyAppPalette('custom', this.value)" class="w-5 h-5 rounded border-0 p-0 bg-transparent cursor-pointer">
+                  <span>Libre</span>
+                </label>
+              </div>
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Modo de Uso / Rubro</label>
+                <select id="setting-business-mode" class="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-bold text-slate-700">
+                  <option value="NUEVO PEDIDO PARA DESPACHO">📦 Pedidos &amp; Despachos</option>
+                  <option value="NUEVA VENTA DE MOSTRADOR">🏪 Tienda Física / Mostrador</option>
+                  <option value="VENTA SHOWROOM / EMPRENDIMIENTO">✨ Showroom / Emprendimiento</option>
+                  <option value="ORDEN DE SERVICIO">🛠️ Servicios / Turnos</option>
+                </select>
+              </div>
+              <div class="pt-1 border-t border-purple-100">
+                <label class="font-bold text-slate-800 block mb-0.5">👷 PIN Modo Empleado / Despachador (Opcional)</label>
+                <p class="text-[10px] text-slate-500 mb-1.5">Permite a quien empaca entrar solo a Pedidos y Despachos sin ver finanzas.</p>
+                <input type="text" inputmode="numeric" id="setting-staff-pin" placeholder="Vacío = desactivado (ej. 1234)" class="w-full min-w-0 px-3 py-2 bg-white border border-purple-200 rounded-xl font-mono font-bold text-slate-800">
+              </div>
+            </div>
+
+            <!-- Vista Previa en Vivo -->
+            <div class="p-4 rounded-2xl border border-purple-200 bg-gradient-to-b from-purple-50/60 to-white text-center space-y-1.5">
+              <span class="text-[9px] font-black uppercase tracking-widest text-purple-500 block">VISTA PREVIA EN VIVO DEL COMPROBANTE</span>
+              <div class="pt-1">
+                <img id="preview-logo-img" src="" class="max-h-14 max-w-[140px] mx-auto object-contain hidden rounded-xl mb-1">
+                <span id="preview-store-icon" class="text-2xl inline-block">🛍️</span>
+              </div>
+              <p id="preview-biz-name" class="font-serif font-black text-sm uppercase tracking-wider text-slate-900">MI TIENDA</p>
+              <p id="preview-biz-contact" class="text-[10px] text-slate-500"></p>
+              <p id="preview-footer-msg" class="text-[10px] italic text-purple-700 pt-1 border-t border-dashed border-purple-200"></p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" onclick="openVoiceStudioModal()" class="py-2.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold rounded-xl border border-purple-200 flex items-center justify-center gap-1.5 text-[11px]">
+                <i data-lucide="volume-2" class="w-4 h-4"></i>
+                <span>Voz de Pagos</span>
+              </button>
+              <button type="button" onclick="openGuideModal()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 text-[11px]">
+                <i data-lucide="help-circle" class="w-4 h-4"></i>
+                <span>Manual de Uso</span>
+              </button>
+            </div>
+          </div>
+        </details>
+
+        <!-- BOTÓN PRINCIPAL DE GUARDADO (Guarda Bloques 1, 2 y 3) -->
+        <button onclick="saveBusinessSettings()" class="w-full py-4 vf-brand-grad text-white font-extrabold rounded-2xl shadow-xl active:scale-[0.98] transition-all text-xs">
+          💾 GUARDAR CONFIGURACIÓN EN LA NUBE 💖
+        </button>
+
+        <!-- BLOQUE 4: SEGURIDAD MILITAR, CLAVE/PIN Y RESPALDO -->
+        <details class="vf-section bg-white rounded-3xl shadow-sm border border-purple-100 overflow-hidden">
+          <summary class="p-4 flex items-center justify-between gap-2 bg-slate-50">
+            <div class="min-w-0">
+              <span class="font-extrabold text-slate-900 text-xs block">🔐 4. Seguridad, Cambio de Clave/PIN y Copia de Respaldo</span>
+              <span class="text-[10px] text-slate-500 block">Autogestión de contraseña, cerrar otros equipos y backup .JSON</span>
+            </div>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-700 vf-chevron shrink-0"></i>
+          </summary>
+          <div class="p-4 space-y-3 border-t border-slate-100">
+            <div class="vf-help-tip">
+              <strong>🛡️ Protección Militar y Autogestión:</strong> Con tu <strong>PIN Secreto de Recuperación</strong> puedes restablecer tu clave desde la pantalla de inicio si la olvidas, sin hablar con soporte. Además puedes cerrar sesiones abiertas en otros teléfonos o descargar una copia completa de tu negocio (<code>.JSON</code>).
+            </div>
+
+            <form onsubmit="submitChangePasswordSettings(event)" class="space-y-2.5">
+              <div>
+                <label class="font-bold text-slate-700 block mb-1">Contraseña Actual *</label>
+                <input type="password" id="sec-current-pw" required placeholder="Ingresa tu contraseña actual" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="font-bold text-slate-700 block mb-1">Nueva Clave (opc.)</label>
+                  <input type="password" id="sec-new-pw" placeholder="Mín. 4 caract." class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
+                </div>
+                <div>
+                  <label class="font-bold text-slate-700 block mb-1">PIN Secreto (opc.)</label>
+                  <input type="password" inputmode="numeric" id="sec-new-pin" placeholder="4+ dígitos" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold">
                 </div>
               </div>
-              <label class="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-xl font-bold text-[11px] text-slate-700 cursor-pointer">
-                <input type="checkbox" id="setting-allow-pickup" checked>
-                <span>Retiro en Local</span>
-              </label>
+              <div id="sec-feedback" class="hidden p-2.5 rounded-xl text-[11px] font-bold"></div>
+              <button type="submit" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl">
+                Actualizar Contraseña / PIN Secreto
+              </button>
+            </form>
+
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-purple-50">
+              <button type="button" onclick="logoutOtherSessions()" class="py-2 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold rounded-xl border border-rose-200 text-[10px]">
+                🔒 Cerrar Otros Equipos
+              </button>
+              <button type="button" onclick="downloadStoreBackup()" class="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-200 text-[10px]">
+                📥 Backup Completo .JSON
+              </button>
             </div>
           </div>
-
-          <div>
-            <label class="font-bold text-slate-700 block mb-1">Mensaje al pie de la boleta</label>
-            <textarea id="setting-footer" oninput="updateReceiptLivePreview()" rows="2" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl"></textarea>
-          </div>
-
-          <div>
-            <label class="font-bold text-slate-700 block mb-1">Estilo Visual del Comprobante</label>
-            <div class="grid grid-cols-2 gap-2">
-              <button type="button" onclick="applyReceiptTheme('coquette')" class="theme-btn p-2.5 rounded-2xl border-2 border-purple-600 bg-purple-50 text-left" data-theme="coquette">🌸 <strong class="text-xs">Lila Coquette</strong></button>
-              <button type="button" onclick="applyReceiptTheme('glam')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="glam">💖 <strong class="text-xs">Rosa Glam</strong></button>
-              <button type="button" onclick="applyReceiptTheme('minimal')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="minimal">🤍 <strong class="text-xs">Minimalista</strong></button>
-              <button type="button" onclick="applyReceiptTheme('neon')" class="theme-btn p-2.5 rounded-2xl border border-purple-200 bg-white text-left" data-theme="neon">🔮 <strong class="text-xs">Neón</strong></button>
-            </div>
-          </div>
-
-          <!-- Personalización Total de la App (Marca Blanca) -->
-          <div class="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-3">
-            <div>
-              <span class="font-bold text-slate-800 block">🎨 Color de Toda Tu App (Marca Blanca)</span>
-              <span class="text-[10px] text-slate-500">Adapta toda la aplicación a los colores de tu marca</span>
-            </div>
-            <div class="grid grid-cols-3 gap-1.5 text-[11px]">
-              <button type="button" onclick="applyAppPalette('violet')" class="palette-btn p-2 rounded-xl border border-purple-300 bg-violet-600 text-white font-bold" data-palette="violet">Violeta</button>
-              <button type="button" onclick="applyAppPalette('rose')" class="palette-btn p-2 rounded-xl border border-pink-300 bg-rose-500 text-white font-bold" data-palette="rose">Rosa</button>
-              <button type="button" onclick="applyAppPalette('emerald')" class="palette-btn p-2 rounded-xl border border-emerald-300 bg-emerald-600 text-white font-bold" data-palette="emerald">Esmeralda</button>
-              <button type="button" onclick="applyAppPalette('blue')" class="palette-btn p-2 rounded-xl border border-blue-300 bg-blue-600 text-white font-bold" data-palette="blue">Azul Pro</button>
-              <button type="button" onclick="applyAppPalette('dark')" class="palette-btn p-2 rounded-xl border border-slate-500 bg-slate-900 text-white font-bold" data-palette="dark">Negro</button>
-              <label class="p-1.5 rounded-xl border border-purple-200 bg-white flex items-center justify-center gap-1 cursor-pointer font-bold text-slate-700">
-                <input type="color" id="setting-custom-color" value="#7C3AED" oninput="applyAppPalette('custom', this.value)" class="w-5 h-5 rounded border-0 p-0 bg-transparent cursor-pointer">
-                <span>Libre</span>
-              </label>
-            </div>
-            <div>
-              <label class="font-bold text-slate-700 block mb-1">Modo de Uso / Rubro</label>
-              <select id="setting-business-mode" class="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl font-bold text-slate-700">
-                <option value="NUEVO PEDIDO PARA DESPACHO">📦 Pedidos &amp; Despachos</option>
-                <option value="NUEVA VENTA DE MOSTRADOR">🏪 Tienda Física / Mostrador</option>
-                <option value="VENTA SHOWROOM / EMPRENDIMIENTO">✨ Showroom / Emprendimiento</option>
-                <option value="ORDEN DE SERVICIO">🛠️ Servicios / Turnos</option>
-              </select>
-            </div>
-            <div class="pt-1 border-t border-purple-100">
-              <label class="font-bold text-slate-800 block mb-0.5">👷 PIN Modo Empleado / Despacho (Opcional)</label>
-              <p class="text-[10px] text-slate-500 mb-1.5">Tus empleados entran con tu correo o link de tienda + este PIN: arman pedidos y despachos sin ver ganancias ni ajustes.</p>
-              <input type="text" inputmode="numeric" id="setting-staff-pin" placeholder="Dejar vacío para desactivar (ej. 1234)" class="w-full min-w-0 px-3 py-2 bg-white border border-purple-200 rounded-xl font-mono font-bold text-slate-800">
-            </div>
-          </div>
-
-          <!-- Vista Previa en Vivo del Encabezado del Comprobante -->
-          <div class="p-4 rounded-2xl border border-purple-200 bg-gradient-to-b from-purple-50/60 to-white text-center space-y-1.5">
-            <span class="text-[9px] font-black uppercase tracking-widest text-purple-500 block">VISTA PREVIA EN VIVO DEL COMPROBANTE</span>
-            <div class="pt-1">
-              <img id="preview-logo-img" src="" class="max-h-14 max-w-[140px] mx-auto object-contain hidden rounded-xl mb-1">
-              <span id="preview-store-icon" class="text-2xl inline-block">🛍️</span>
-            </div>
-            <p id="preview-biz-name" class="font-serif font-black text-sm uppercase tracking-wider text-slate-900">MI TIENDA</p>
-            <p id="preview-biz-contact" class="text-[10px] text-slate-500"></p>
-            <p id="preview-footer-msg" class="text-[10px] italic text-purple-700 pt-1 border-t border-dashed border-purple-200"></p>
-          </div>
-
-          <button onclick="saveBusinessSettings()" class="w-full py-3.5 vf-brand-grad text-white font-extrabold rounded-2xl shadow-xl">
-            GUARDAR CAMBIOS EN LA NUBE 💖
-          </button>
-
-          <div class="grid grid-cols-2 gap-2 pt-1">
-            <button type="button" onclick="openVoiceStudioModal()" class="py-2.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold rounded-xl border border-purple-200 flex items-center justify-center gap-1.5 text-[11px]">
-              <i data-lucide="volume-2" class="w-4 h-4"></i>
-              <span>Voz de Pagos</span>
-            </button>
-            <button type="button" onclick="openGuideModal()" class="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl border border-slate-200 flex items-center justify-center gap-1.5 text-[11px]">
-              <i data-lucide="help-circle" class="w-4 h-4"></i>
-              <span>Guía de la App</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Card Seguridad de Cuenta (Cambio de Contraseña & PIN Autogestionable) -->
-        <div class="bg-white rounded-3xl p-4 shadow-sm border border-purple-100 space-y-3">
-          <div>
-            <h4 class="font-bold text-xs text-slate-900 uppercase flex items-center gap-1.5">
-              <i data-lucide="shield-check" class="w-4 h-4 text-violet-600"></i>
-              Seguridad de tu Cuenta (Autogestión)
-            </h4>
-            <p class="text-[10px] text-slate-500 mt-0.5">Cambia tu contraseña o actualiza tu PIN Secreto de Recuperación cuando quieras, sin depender de nadie.</p>
-          </div>
-
-          <form onsubmit="submitChangePasswordSettings(event)" class="space-y-2.5">
-            <div>
-              <label class="font-bold text-slate-700 block mb-1">Contraseña Actual *</label>
-              <input type="password" id="sec-current-pw" required placeholder="Ingresa tu contraseña actual" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <label class="font-bold text-slate-700 block mb-1">Nueva Clave (opc.)</label>
-                <input type="password" id="sec-new-pw" placeholder="Mín. 4 caract." class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl">
-              </div>
-              <div>
-                <label class="font-bold text-slate-700 block mb-1">PIN Secreto (opc.)</label>
-                <input type="password" inputmode="numeric" id="sec-new-pin" placeholder="4+ dígitos" class="w-full min-w-0 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold">
-              </div>
-            </div>
-            <div id="sec-feedback" class="hidden p-2.5 rounded-xl text-[11px] font-bold"></div>
-            <button type="submit" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl">
-              Actualizar Contraseña / PIN Secreto
-            </button>
-          </form>
-
-          <div class="grid grid-cols-2 gap-2 pt-2 border-t border-purple-50">
-            <button type="button" onclick="logoutOtherSessions()" class="py-2 px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-800 font-bold rounded-xl border border-rose-200 text-[10px]">
-              🔒 Cerrar Otros Equipos
-            </button>
-            <button type="button" onclick="downloadStoreBackup()" class="py-2 px-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-xl border border-emerald-200 text-[10px]">
-              📥 Backup Completo .JSON
-            </button>
-          </div>
-        </div>
+        </details>
       </div>
 
     </main>
@@ -1433,8 +1599,14 @@
         <input type="text" id="sg-carrier-custom" placeholder="Nombre del transporte" class="hidden w-full min-w-0 px-3 py-2 bg-white border border-purple-200 rounded-xl font-semibold">
       </div>
       <div>
-        <label class="font-bold text-slate-700 block mb-1">Código de Seguimiento / Guía</label>
-        <input type="text" id="sg-tracking-input" placeholder="Ej: 360001928374" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold uppercase">
+        <div class="flex items-center justify-between mb-1">
+          <label class="font-bold text-slate-700">Código de Seguimiento / Guía</label>
+          <button type="button" onclick="scanBarcodeForShippingGuide()" class="px-2 py-1 bg-purple-100 hover:bg-purple-200 text-purple-900 font-extrabold rounded-lg text-[10px] flex items-center gap-1">
+            <span>📷 Escanear Ticket</span>
+          </button>
+        </div>
+        <input type="text" id="sg-tracking-input" placeholder="Ej: CP123456789AR o 360001928374" class="w-full min-w-0 px-3 py-2.5 bg-purple-50/40 border border-purple-200 rounded-xl font-mono font-bold uppercase">
+        <p class="text-[10px] text-slate-400 mt-1">Admite códigos Correo Argentino Track &amp; Trace (13 caract. terminados en AR) y Paq.ar / MiCorreo numéricos.</p>
       </div>
       <div class="grid grid-cols-2 gap-2 pt-1">
         <button type="button" onclick="saveShippingGuideModal(false)" class="py-2.5 bg-slate-900 text-white font-bold rounded-xl">Solo Guardar</button>
@@ -1592,14 +1764,308 @@
         </div>
       </div>
 
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button type="button" onclick="closeGuideModal(); openOnboardingTour(true);" class="py-2.5 px-3 bg-purple-100 hover:bg-purple-200 text-purple-950 font-extrabold rounded-2xl text-[11px]">
+          🎓 Ver Tutorial Paso a Paso
+        </button>
+        <button type="button" onclick="toggleHelpHints()" class="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-950 font-extrabold rounded-2xl border border-amber-200 text-[11px]">
+          💡 Mostrar / Ocultar Ayudas
+        </button>
+      </div>
+
       <button onclick="closeGuideModal()" class="w-full py-3 vf-brand-grad text-white font-bold rounded-2xl shadow">¡Entendido!</button>
+    </div>
+  </div>
+
+  <!-- MODAL: TUTORIAL INTERACTIVO DE BIENVENIDA (PRIMER INICIO + DESACTIVADOR DE AYUDAS) -->
+  <div id="modal-onboarding-tour" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-3 hidden overflow-y-auto no-print">
+    <div class="bg-white w-full max-w-md rounded-[32px] p-5 shadow-2xl space-y-4 my-auto text-xs border border-purple-200">
+      <div class="flex items-center justify-between gap-2">
+        <span id="tour-step-badge" class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-purple-100 text-purple-800">Paso 1 de 6</span>
+        <button type="button" onclick="finishOnboardingTour(true)" class="text-[11px] font-bold text-slate-400 hover:text-rose-600">Saltar tutorial ✕</button>
+      </div>
+
+      <div id="tour-step-body" class="space-y-2.5 min-h-[195px]"></div>
+
+      <div id="tour-dots" class="flex items-center justify-center gap-1.5 pt-1"></div>
+
+      <label class="flex items-center gap-2 p-2.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-[11px] text-amber-950 font-semibold cursor-pointer">
+        <input type="checkbox" id="tour-hide-helps-chk" onchange="setHelpHintsHidden(this.checked)">
+        <span>Ocultar los recuadros explicativos (💡 Ayudas) dentro de las pestañas</span>
+      </label>
+
+      <div class="flex items-center gap-2 pt-1">
+        <button type="button" id="btn-tour-prev" onclick="stepOnboardingTour(-1)" class="py-3 px-4 rounded-2xl border border-purple-200 font-bold text-slate-600">← Anterior</button>
+        <button type="button" id="btn-tour-next" onclick="stepOnboardingTour(1)" class="flex-1 py-3 vf-brand-grad text-white font-extrabold rounded-2xl shadow-lg">Siguiente →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VER COMPROBANTE DE TRANSFERENCIA ADJUNTO POR EL CLIENTE -->
+  <div id="modal-transfer-proof" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden overflow-y-auto no-print">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-3.5 text-xs my-auto">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">🧾 Comprobante de Transferencia</h3>
+          <p id="tp-order-meta" class="text-[10px] text-slate-500">Enviado desde el link de seguimiento</p>
+        </div>
+        <button onclick="closeTransferProofModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <input type="hidden" id="tp-order-id">
+      <div id="tp-proof-ref" class="p-2.5 rounded-xl bg-purple-50 text-purple-950 font-bold text-[11px] hidden"></div>
+      <div class="bg-slate-100 rounded-2xl p-2 flex items-center justify-center max-h-[52vh] overflow-y-auto border border-slate-200">
+        <img id="tp-proof-img" src="" alt="Comprobante" class="max-w-full rounded-xl object-contain">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="closeTransferProofModal()" class="py-2.5 border border-slate-200 rounded-xl font-bold text-slate-600">Cerrar</button>
+        <button type="button" id="btn-tp-approve" onclick="approveTransferProofFromModal()" class="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl shadow">✅ Aprobar Pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MODO RÁFAGA DE CÓDIGOS DE CORREO ARGENTINO -->
+  <div id="modal-rapid-tracking" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto no-print">
+    <div class="bg-white w-full max-w-md rounded-[32px] p-5 shadow-2xl space-y-3.5 text-xs max-h-[88vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">⚡ Ráfaga de Guías (Correo Argentino)</h3>
+          <p class="text-[10px] text-slate-500">Escanea con cámara o pega los códigos de todos tus paquetes seguidos</p>
+        </div>
+        <button onclick="closeRapidTrackingModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="rapid-tracking-list" class="flex-1 overflow-y-auto space-y-2 pr-1"></div>
+      <button onclick="closeRapidTrackingModal()" class="w-full py-2.5 bg-slate-900 text-white font-bold rounded-2xl">Listo</button>
+    </div>
+  </div>
+
+  <!-- MODAL: UNIFICAR PEDIDOS ("BOLSITA ABIERTA" -> 1 SOLO ENVÍO) -->
+  <div id="modal-merge-orders" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3 hidden overflow-y-auto no-print">
+    <div class="bg-white w-full max-w-md rounded-[32px] p-5 shadow-2xl space-y-3.5 text-xs max-h-[88vh] flex flex-col">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">🛍️ Unificar Pedidos en 1 Solo Envío</h3>
+          <p class="text-[10px] text-slate-500">Combina 2 o más compras del mismo cliente cobrando 1 único envío</p>
+        </div>
+        <button onclick="closeMergeOrdersModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div id="merge-orders-list" class="flex-1 overflow-y-auto space-y-1.5 pr-1"></div>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button type="button" onclick="closeMergeOrdersModal()" class="py-2.5 border border-purple-200 rounded-xl font-bold text-slate-600">Cancelar</button>
+        <button type="button" onclick="submitMergeSelectedOrders()" class="py-2.5 vf-brand-grad text-white font-extrabold rounded-xl shadow">Unificar Seleccionados</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AJUSTE MASIVO DE PRECIOS POR PORCENTAJE -->
+  <div id="modal-bulk-price" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden no-print">
+    <div class="bg-white w-full max-w-sm rounded-[32px] p-5 shadow-2xl space-y-3.5 text-xs border border-purple-100">
+      <div class="flex items-center justify-between border-b border-purple-100 pb-2.5">
+        <div>
+          <h3 class="font-bold text-sm text-slate-900 font-serif">📈 Ajuste Masivo de Precios (%)</h3>
+          <p class="text-[10px] text-slate-500">Actualiza todo tu catálogo o una categoría en 1 segundo</p>
+        </div>
+        <button onclick="closeBulkPriceModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div>
+        <label class="font-bold text-slate-700 block mb-1">¿A qué productos aplicar?</label>
+        <select id="bulk-price-category" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-slate-800">
+          <option value="ALL">📦 Todos los productos del catálogo</option>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Porcentaje (+ o -) *</label>
+          <input type="number" id="bulk-price-pct" step="any" placeholder="Ej: 10 o -15" class="w-full px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-900">
+        </div>
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Redondear a</label>
+          <select id="bulk-price-round" class="w-full px-2.5 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-slate-700">
+            <option value="0">Sin redondeo</option>
+            <option value="10">Múltiplos de $10</option>
+            <option value="50">Múltiplos de $50</option>
+            <option value="100" selected>Múltiplos de $100</option>
+          </select>
+        </div>
+      </div>
+      <label class="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-[11px] text-slate-700 cursor-pointer">
+        <input type="checkbox" id="bulk-price-cost" checked>
+        <span>Actualizar también el Precio de Costo en el mismo %</span>
+      </label>
+      <div class="grid grid-cols-2 gap-2 pt-1">
+        <button type="button" onclick="closeBulkPriceModal()" class="py-2.5 border border-purple-200 rounded-xl font-bold text-slate-600">Cancelar</button>
+        <button type="button" onclick="submitBulkPriceAdjustment()" class="py-2.5 vf-brand-grad text-white font-extrabold rounded-xl shadow">Aplicar Ahora</button>
+      </div>
     </div>
   </div>
 
   <!-- ================= APPLICATION JAVASCRIPT ================= -->
   <script>
     const SESSION_KEY = 'comprobantes_pos_session_v1';
-    const SALE_DRAFT_KEY = 'ventaflow_sale_draft_v4';
+    const SALE_DRAFT_KEY = 'ventaflow_sale_draft_v5';
+    const HELP_PREF_KEY = 'vf_hide_help_v5';
+    const TOUR_SEEN_PREFIX = 'vf_tour_seen_v5_';
+
+    let onboardingStepIdx = 0;
+    let paymentRadarTimer = null;
+
+    const ONBOARDING_STEPS = [
+      {
+        icon: '🚀',
+        title: '¡Bienvenido! Dos Apps Conectadas en Automático',
+        body: `
+          <p class="text-slate-700 leading-relaxed">Tu sistema ahora separa todo con total claridad para que nadie se confunda:</p>
+          <div class="p-3 rounded-2xl bg-purple-50 border border-purple-100 space-y-1.5 mt-2">
+            <p><strong>1. 🏪 Tu App de Dueño / Despachador (esta pantalla):</strong> Donde recibes los pedidos listos, escaneas códigos, imprimes pegatinas 58mm y ves tu ganancia limpia.</p>
+            <p><strong>2. 📲 La App Exclusiva de tu Cliente (<code>/tienda/tu-marca</code>):</strong> Un link premium aparte que le envías al comprador. Él elige productos, pone calle y Código Postal, paga en Mercado Pago y vuelve solo a su seguimiento en vivo.</p>
+          </div>
+        `
+      },
+      {
+        icon: '⚙️',
+        title: 'Paso 1: Configura tu Marca, Correo y Mercado Pago',
+        body: `
+          <p class="text-slate-700 leading-relaxed">En la pestaña inferior <strong>Tienda</strong> tienes todo ordenado en <strong>4 bloques desplegables</strong>:</p>
+          <ul class="space-y-1.5 mt-2 text-slate-700">
+            <li>• <strong>Bloque 1:</strong> Sube tu logo, elige tu link corto (ej. <code>/tienda/mi-marca</code>) y tu CP de origen.</li>
+            <li>• <strong>Bloque 2:</strong> Pon el precio de envío a <strong>Domicilio</strong>, a <strong>Sucursal Correo Argentino</strong>, monto de <strong>Envío Gratis</strong>, tu Alias y tu Token de Mercado Pago.</li>
+          </ul>
+        `
+      },
+      {
+        icon: '🛍️',
+        title: 'Paso 2: Carga tu Catálogo con Talles y Etiquetas 58mm',
+        body: `
+          <p class="text-slate-700 leading-relaxed">En la pestaña <strong>Catálogo</strong> cargas tus productos con foto, precio de costo, precio de venta y variantes (talles/colores):</p>
+          <ul class="space-y-1.5 mt-2 text-slate-700">
+            <li>• Todo se sincroniza en vivo con la App del Cliente y descuenta stock solo.</li>
+            <li>• Toca <strong>🏷️ Etiqueta</strong> para descargar códigos de barras listos para pegar en tu mercadería.</li>
+            <li>• Usa <strong>📈 Precios %</strong> cuando quieras actualizar precios por porcentaje en 1 segundo.</li>
+          </ul>
+        `
+      },
+      {
+        icon: '💳',
+        title: 'Paso 3: Compra y Pago 100% Automático del Cliente',
+        body: `
+          <p class="text-slate-700 leading-relaxed">Comparte tu link desde el botón verde <strong>"Enviar Link al Cliente"</strong>:</p>
+          <ul class="space-y-1.5 mt-2 text-slate-700">
+            <li>• El cliente arma su carrito, carga Calle, Altura, Localidad, Provincia y Código Postal.</li>
+            <li>• El sistema lo redirige solo a <strong>Mercado Pago</strong>. Al abonar, regresa automáticamente a su seguimiento y tu panel marca <strong>Abonado ✅</strong> con alerta sonora.</li>
+            <li>• Si abona por transferencia, puede subir la foto del comprobante desde su mismo link.</li>
+          </ul>
+        `
+      },
+      {
+        icon: '📮',
+        title: 'Paso 4: Escanear → Empacar → Despachar (Correo Argentino)',
+        body: `
+          <p class="text-slate-700 leading-relaxed">En la pestaña <strong>Despachos</strong> tienes todo servido sin escribir a mano:</p>
+          <ul class="space-y-1.5 mt-2 text-slate-700">
+            <li>• <strong>📮 MiCorreo .CSV / Copiar datos:</strong> Pasa las direcciones y CP a la web de Correo Argentino sin errores.</li>
+            <li>• <strong>📋 Lista de Armado + 🖨️ Pegatinas 58mm:</strong> Saca todo del estante y pega la etiqueta con QR en el paquete.</li>
+            <li>• <strong>⚡ Ráfaga / 📷 Escanear Ticket:</strong> Apunta la cámara al código de barras que te dio Correo Argentino y el cliente verá su envío en vivo al instante.</li>
+          </ul>
+        `
+      },
+      {
+        icon: '💡',
+        title: '¡Listo! Controla las Ayudas, Empleados y Ganancias',
+        body: `
+          <p class="text-slate-700 leading-relaxed">Últimos detalles clave para trabajar cómodo:</p>
+          <ul class="space-y-1.5 mt-2 text-slate-700">
+            <li>• Arriba tienes el botón <strong>💡 Ayudas ON/OFF</strong>: úsalo cuando ya domines la app para ocultar todas las explicaciones de las pestañas en 1 clic.</li>
+            <li>• En <strong>Resumen</strong> ves tu Ganancia Limpia real y descargas Excel (<code>.CSV</code>).</li>
+            <li>• Si tienes quien arme paquetes, créale un <strong>PIN de Empleado</strong> en Tienda → Bloque 3.</li>
+          </ul>
+        `
+      }
+    ];
+
+    function isHelpHintsHidden() {
+      return localStorage.getItem(HELP_PREF_KEY) === '1';
+    }
+
+    function syncHelpHintsUI() {
+      const hidden = isHelpHintsHidden();
+      document.body.classList.toggle('hide-help-tips', hidden);
+      const lbl = document.getElementById('help-toggle-label');
+      const btn = document.getElementById('btn-toggle-help');
+      if (lbl) lbl.innerText = hidden ? 'Ayudas OFF' : 'Ayudas ON';
+      if (btn) {
+        btn.className = hidden
+          ? 'flex items-center gap-1 px-2 py-1.5 rounded-xl text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200'
+          : 'flex items-center gap-1 px-2 py-1.5 rounded-xl text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200';
+      }
+      const chk = document.getElementById('tour-hide-helps-chk');
+      if (chk) chk.checked = hidden;
+    }
+
+    function setHelpHintsHidden(hide) {
+      localStorage.setItem(HELP_PREF_KEY, hide ? '1' : '0');
+      syncHelpHintsUI();
+    }
+
+    function toggleHelpHints() {
+      setHelpHintsHidden(!isHelpHintsHidden());
+    }
+
+    function openOnboardingTour(force = false) {
+      if (!force && currentUser) {
+        const seenKey = TOUR_SEEN_PREFIX + currentUser.id;
+        if (localStorage.getItem(seenKey) === '1') return;
+      }
+      onboardingStepIdx = 0;
+      syncHelpHintsUI();
+      renderOnboardingTourStep();
+      document.getElementById('modal-onboarding-tour').classList.remove('hidden');
+    }
+
+    function renderOnboardingTourStep() {
+      const step = ONBOARDING_STEPS[onboardingStepIdx] || ONBOARDING_STEPS[0];
+      document.getElementById('tour-step-badge').innerText = `Paso ${onboardingStepIdx + 1} de ${ONBOARDING_STEPS.length}`;
+      document.getElementById('tour-step-body').innerHTML = `
+        <div class="flex items-center gap-2.5">
+          <div class="w-11 h-11 rounded-2xl vf-brand-grad text-white flex items-center justify-center text-2xl shrink-0 shadow">${step.icon}</div>
+          <h3 class="font-serif font-black text-sm text-slate-900 leading-snug">${step.title}</h3>
+        </div>
+        <div class="text-xs pt-1">${step.body}</div>
+      `;
+      document.getElementById('tour-dots').innerHTML = ONBOARDING_STEPS.map((_, i) =>
+        `<span class="h-2 rounded-full transition-all ${i === onboardingStepIdx ? 'w-6 bg-purple-600' : 'w-2 bg-purple-200'}"></span>`
+      ).join('');
+      const prevBtn = document.getElementById('btn-tour-prev');
+      const nextBtn = document.getElementById('btn-tour-next');
+      if (prevBtn) prevBtn.classList.toggle('hidden', onboardingStepIdx === 0);
+      if (nextBtn) nextBtn.innerText = onboardingStepIdx === ONBOARDING_STEPS.length - 1 ? '¡Empezar a Usar mi App! ✨' : 'Siguiente →';
+    }
+
+    function stepOnboardingTour(delta) {
+      const next = onboardingStepIdx + delta;
+      if (next < 0) return;
+      if (next >= ONBOARDING_STEPS.length) {
+        finishOnboardingTour(true);
+        return;
+      }
+      onboardingStepIdx = next;
+      renderOnboardingTourStep();
+    }
+
+    function finishOnboardingTour(markSeen = true) {
+      if (markSeen && currentUser) {
+        try { localStorage.setItem(TOUR_SEEN_PREFIX + currentUser.id, '1'); } catch (e) {}
+      }
+      document.getElementById('modal-onboarding-tour').classList.add('hidden');
+    }
+
+    function sendBuyerAppWhatsApp() {
+      const url = getPublicStoreFullUrl();
+      const storeName = state.profile.name || 'nuestra tienda';
+      const cname = document.getElementById('client-name')?.value.trim() || '';
+      const phone = (document.getElementById('client-phone')?.value || '').replace(/\D/g, '');
+      const greet = cname ? `¡Hola *${cname}*! 👋` : '¡Hola! 👋';
+      const msg = `${greet} Te comparto el link oficial de *${storeName}* para que elijas tus productos, completes tus datos de envío y abones de forma rápida y segura:\n\n🛍️ ${url}\n\n¡Apenas confirmes tu pedido te llega el código de seguimiento en vivo! ✨`;
+      window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
 
     const COUNTRY_PRESETS = {
       AR: { code: 'ARS', sym: '$' },
@@ -1688,6 +2154,10 @@
           clientName: document.getElementById('client-name')?.value || '',
           clientPhone: document.getElementById('client-phone')?.value || '',
           clientAddress: document.getElementById('client-address')?.value || '',
+          clientCp: document.getElementById('client-cp')?.value || '',
+          clientCity: document.getElementById('client-city')?.value || '',
+          clientProvince: document.getElementById('client-province')?.value || '',
+          clientBranch: document.getElementById('client-branch')?.value || '',
           clientHandle: document.getElementById('client-handle')?.value || '',
           shippingCost: document.getElementById('sale-shipping-cost')?.value || '',
           paymentMethod: document.getElementById('sale-payment-method')?.value || 'mercadopago',
@@ -1703,9 +2173,7 @@
       try {
         const raw = localStorage.getItem(SALE_DRAFT_KEY);
         if (!raw) {
-          if (Number(state.profile.shipping_flat_rate) > 0 && state.deliveryMethod === 'delivery') {
-            document.getElementById('sale-shipping-cost').value = state.profile.shipping_flat_rate;
-          }
+          setSaleDeliveryMethod('delivery', true);
           return;
         }
         const d = JSON.parse(raw);
@@ -1713,6 +2181,10 @@
         document.getElementById('client-name').value = d.clientName || '';
         document.getElementById('client-phone').value = d.clientPhone || '';
         document.getElementById('client-address').value = d.clientAddress || '';
+        if (document.getElementById('client-cp')) document.getElementById('client-cp').value = d.clientCp || '';
+        if (document.getElementById('client-city')) document.getElementById('client-city').value = d.clientCity || '';
+        if (document.getElementById('client-province')) document.getElementById('client-province').value = d.clientProvince || '';
+        if (document.getElementById('client-branch')) document.getElementById('client-branch').value = d.clientBranch || '';
         document.getElementById('client-handle').value = d.clientHandle || '';
         document.getElementById('sale-shipping-cost').value = d.shippingCost ?? (state.profile.shipping_flat_rate || '');
         if (d.paymentMethod) document.getElementById('sale-payment-method').value = d.paymentMethod;
@@ -1725,7 +2197,7 @@
     function clearSaleDraftForm() {
       state.currentCart = [];
       state.activeDiscount = null;
-      ['client-name', 'client-phone', 'client-address', 'client-handle', 'sale-notes'].forEach(id => {
+      ['client-name', 'client-phone', 'client-address', 'client-cp', 'client-city', 'client-province', 'client-branch', 'client-handle', 'sale-notes'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
@@ -1737,20 +2209,35 @@
     }
 
     function setSaleDeliveryMethod(mode, autoFillShip = true) {
-      state.deliveryMethod = mode === 'pickup' ? 'pickup' : 'delivery';
+      state.deliveryMethod = ['delivery', 'branch', 'pickup'].includes(mode) ? mode : 'delivery';
+      const activeCls = 'py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate';
+      const idleCls = 'py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate';
       const bDel = document.getElementById('btn-sale-del-delivery');
+      const bBra = document.getElementById('btn-sale-del-branch');
       const bPic = document.getElementById('btn-sale-del-pickup');
-      const shipInp = document.getElementById('sale-shipping-cost');
-      if (bDel && bPic) {
-        bDel.className = state.deliveryMethod === 'delivery'
-          ? 'py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate'
-          : 'py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate';
-        bPic.className = state.deliveryMethod === 'pickup'
-          ? 'py-1.5 px-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold truncate'
-          : 'py-1.5 px-2 rounded-xl border border-purple-200 bg-white text-slate-600 font-bold truncate';
+      if (bDel) bDel.className = state.deliveryMethod === 'delivery' ? activeCls : idleCls;
+      if (bBra) bBra.className = state.deliveryMethod === 'branch' ? activeCls : idleCls;
+      if (bPic) bPic.className = state.deliveryMethod === 'pickup' ? activeCls : idleCls;
+
+      const addrInp = document.getElementById('client-address');
+      const branchInp = document.getElementById('client-branch');
+      const shipFields = document.getElementById('sale-shipping-fields');
+      if (shipFields) shipFields.classList.toggle('hidden', state.deliveryMethod === 'pickup');
+      if (addrInp && branchInp) {
+        addrInp.classList.toggle('hidden', state.deliveryMethod === 'branch');
+        branchInp.classList.toggle('hidden', state.deliveryMethod !== 'branch');
       }
+
+      const shipInp = document.getElementById('sale-shipping-cost');
       if (autoFillShip && shipInp) {
-        shipInp.value = state.deliveryMethod === 'pickup' ? '0' : (Number(state.profile.shipping_flat_rate) > 0 ? state.profile.shipping_flat_rate : '');
+        if (state.deliveryMethod === 'pickup') {
+          shipInp.value = '0';
+        } else if (state.deliveryMethod === 'branch') {
+          const brRate = Number(state.profile.shipping_branch_rate || state.profile.shipping_flat_rate || 0);
+          shipInp.value = brRate > 0 ? brRate : '';
+        } else {
+          shipInp.value = Number(state.profile.shipping_flat_rate) > 0 ? state.profile.shipping_flat_rate : '';
+        }
       }
       updateTotals();
       saveSaleDraft();
@@ -1890,7 +2377,63 @@
       }
     }
 
+    function stopLiveOrderRadar() {
+      if (paymentRadarTimer) {
+        clearInterval(paymentRadarTimer);
+        paymentRadarTimer = null;
+      }
+    }
+
+    function startLiveOrderRadar() {
+      stopLiveOrderRadar();
+      paymentRadarTimer = setInterval(pollIncomingPayments, 25000);
+    }
+
+    async function pollIncomingPayments() {
+      if (!sessionToken || !currentUser || currentUser.subscription_status !== 'active') return;
+      if (document.hidden) return;
+      try {
+        const res = await api('/api/orders/poll-payments');
+        if (!Array.isArray(res.orders)) return;
+
+        const prevById = new Map(state.orders.map(o => [o.id, o]));
+        const newlyPaidSet = new Set(res.newly_paid_ids || []);
+        let needsDispatchRefresh = false;
+
+        for (const incoming of res.orders) {
+          const prev = prevById.get(incoming.id);
+          if (!prev) {
+            needsDispatchRefresh = true;
+            playChimeSound();
+          } else {
+            if (prev.payment_status !== 'paid' && incoming.payment_status === 'paid') {
+              newlyPaidSet.add(incoming.id);
+              needsDispatchRefresh = true;
+            } else if (prev.dispatch_status !== incoming.dispatch_status || prev.transfer_proof_url !== incoming.transfer_proof_url || prev.customer_address !== incoming.customer_address) {
+              needsDispatchRefresh = true;
+            }
+          }
+        }
+
+        const incomingIds = new Set(res.orders.map(o => o.id));
+        const olderOrders = state.orders.filter(o => !incomingIds.has(o.id));
+        state.orders = [...res.orders, ...olderOrders];
+
+        if (newlyPaidSet.size > 0) {
+          const firstPaidId = [...newlyPaidSet][0];
+          const paidOrd = state.orders.find(o => o.id === firstPaidId);
+          if (paidOrd) triggerPaymentToast(paidOrd.customer_name, paidOrd.total);
+        }
+
+        if (needsDispatchRefresh) {
+          if (state.activeTab === 'dispatches') renderDispatchesList();
+          if (state.activeTab === 'audit') renderAuditModule();
+        }
+      } catch (e) {}
+    }
+
     async function logoutUser() {
+      stopLiveOrderRadar();
       try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
       sessionToken = '';
       currentUser = null;
@@ -2012,6 +2555,7 @@
       if (modeLbl && state.profile.business_mode) modeLbl.innerText = state.profile.business_mode;
 
       applyAppPalette(state.profile.app_palette || 'violet', state.profile.custom_color || '#7C3AED');
+      syncHelpHintsUI();
       updateHeaderLogo();
       updateMPUIStatus();
       refreshPublicStoreLinks();
@@ -2022,6 +2566,8 @@
       renderCart();
       updateTotals();
       showScreen('app');
+      startLiveOrderRadar();
+      setTimeout(() => openOnboardingTour(false), 350);
     }
 
     async function startSubscriptionCheckout() {
@@ -2183,6 +2729,19 @@
         closeBarcodeScannerModal();
         return;
       }
+      if (state.scannerTarget === 'shipping-guide') {
+        document.getElementById('sg-tracking-input').value = String(code).trim().toUpperCase();
+        closeBarcodeScannerModal();
+        return;
+      }
+      if (String(state.scannerTarget || '').startsWith('rapid:')) {
+        const oid = state.scannerTarget.slice(6);
+        const inp = document.getElementById(`rt-inp-${oid}`);
+        if (inp) inp.value = String(code).trim().toUpperCase();
+        closeBarcodeScannerModal();
+        saveRapidTrackingRow(oid, false);
+        return;
+      }
       handleScannedBarcode(code);
       if (!document.getElementById('scanner-continuous-mode').checked) closeBarcodeScannerModal();
     }
@@ -2196,11 +2755,26 @@
         closeBarcodeScannerModal();
         return;
       }
+      if (state.scannerTarget === 'shipping-guide') {
+        document.getElementById('sg-tracking-input').value = code.toUpperCase();
+        closeBarcodeScannerModal();
+        return;
+      }
+      if (String(state.scannerTarget || '').startsWith('rapid:')) {
+        const oid = state.scannerTarget.slice(6);
+        const inp = document.getElementById(`rt-inp-${oid}`);
+        if (inp) inp.value = code.toUpperCase();
+        closeBarcodeScannerModal();
+        saveRapidTrackingRow(oid, false);
+        return;
+      }
       handleScannedBarcode(code);
       document.getElementById('scanner-manual-code').value = '';
     }
 
     function scanBarcodeForProductField() { openBarcodeScannerModal('product-field'); }
+    function scanBarcodeForShippingGuide() { openBarcodeScannerModal('shipping-guide'); }
+    function scanBarcodeForRapidRow(orderId) { openBarcodeScannerModal('rapid:' + orderId); }
 
     function parseProductVariants(prod) {
       if (!prod) return [];
@@ -2426,12 +3000,29 @@
     async function emitAndOpenReceipt() {
       if (state.currentCart.length === 0) return;
       const { subtotal, disc, ship, tax, total } = getComputedSaleTotals();
-      const addrVal = document.getElementById('client-address').value.trim() || (state.deliveryMethod === 'pickup' ? 'Retiro en Local' : '');
+      const rawStreet = document.getElementById('client-address')?.value.trim() || '';
+      const rawCp = document.getElementById('client-cp')?.value.trim() || '';
+      const rawCity = document.getElementById('client-city')?.value.trim() || '';
+      const rawProv = document.getElementById('client-province')?.value.trim() || '';
+      const rawBranch = document.getElementById('client-branch')?.value.trim() || '';
+
+      let addrVal = rawStreet;
+      if (state.deliveryMethod === 'pickup') {
+        addrVal = 'Retiro en Local';
+      } else if (state.deliveryMethod === 'branch') {
+        addrVal = `Sucursal Correo: ${rawBranch || rawCity || 'A confirmar'}` + (rawCp || rawProv ? ` (CP ${rawCp} ${rawProv})`.trim() : '');
+      } else {
+        addrVal = [rawStreet, rawCity, rawProv, rawCp ? `CP ${rawCp}` : ''].filter(Boolean).join(', ');
+      }
 
       const payload = {
         customer_name: document.getElementById('client-name').value.trim() || 'Cliente',
         customer_phone: document.getElementById('client-phone').value.trim(),
         customer_address: addrVal,
+        customer_postal_code: rawCp,
+        customer_city: rawCity,
+        customer_province: rawProv,
+        branch_name: rawBranch,
         customer_handle: document.getElementById('client-handle').value.trim(),
         items: state.currentCart.map(i => ({
           productName: i.productName,
@@ -2563,7 +3154,8 @@
       document.getElementById('sticker-tracking').innerText = order.tracking_code;
       document.getElementById('sticker-client-name').innerText = order.customer_name;
       document.getElementById('sticker-phone').innerText = order.customer_phone ? 'WhatsApp: ' + order.customer_phone : '';
-      document.getElementById('sticker-address').innerText = order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar';
+      const cpTag = order.customer_postal_code ? ` [CP ${order.customer_postal_code}]` : '';
+      document.getElementById('sticker-address').innerText = (order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar') + (order.customer_address && order.customer_address.includes('CP ') ? '' : cpTag);
       document.getElementById('sticker-checklist').innerHTML = items.map(i => `
         <div class="flex items-center gap-1.5 font-bold text-slate-900">
           <span class="w-3.5 h-3.5 border-2 border-slate-900 rounded inline-block shrink-0"></span>
@@ -2709,7 +3301,8 @@
         if (logoImg) h += 100;
         h += 140;
         mCtx.font = 'bold 26px sans-serif';
-        const addrLines = wrapCanvasLines(mCtx, order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar', contentW);
+        const extraCp = (order.customer_postal_code && !(order.customer_address || '').includes('CP ')) ? ` [CP ${order.customer_postal_code}]` : '';
+        const addrLines = wrapCanvasLines(mCtx, (order.customer_address ? 'Envío: ' + order.customer_address : 'Envío: Por coordinar') + extraCp, contentW);
         h += 90 + addrLines.length * 34;
         mCtx.font = 'bold 26px sans-serif';
         items.forEach(i => {
@@ -3261,7 +3854,7 @@
 
     function setDispatchFilter(f) {
       state.dispatchFilter = f;
-      ['all', 'pending_pay', 'to_prepare', 'packed', 'dispatched'].forEach(k => {
+      ['all', 'pending_pay', 'to_prepare', 'packed', 'dispatched', 'cancelled'].forEach(k => {
         const el = document.getElementById(`df-${k}`);
         if (el) el.className = k === f ? 'px-2.5 py-1.5 rounded-xl font-bold bg-purple-600 text-white shrink-0' : 'px-2.5 py-1.5 rounded-xl font-bold bg-purple-100 text-purple-800 shrink-0';
       });
@@ -3272,7 +3865,13 @@
       const container = document.getElementById('dispatches-list');
       const q = (document.getElementById('dispatch-search')?.value || '').toLowerCase().trim();
       const filtered = state.orders.filter(o => {
-        if (q && !(o.folio_number.toLowerCase().includes(q) || o.tracking_code.toLowerCase().includes(q) || o.customer_name.toLowerCase().includes(q))) return false;
+        if (q) {
+          const hay = [o.folio_number, o.tracking_code, o.customer_name, o.shipping_tracking, o.customer_postal_code, o.customer_city]
+            .map(x => String(x || '').toLowerCase()).join(' ');
+          if (!hay.includes(q)) return false;
+        }
+        if (state.dispatchFilter === 'cancelled') return o.dispatch_status === 'cancelled';
+        if (o.dispatch_status === 'cancelled') return false;
         if (state.dispatchFilter === 'pending_pay') return o.payment_status !== 'paid';
         if (state.dispatchFilter === 'to_prepare') return o.dispatch_status === 'to_prepare';
         if (state.dispatchFilter === 'packed') return o.dispatch_status === 'packed';
@@ -3295,47 +3894,281 @@
       container.innerHTML = filtered.map(o => {
         const items = typeof o.items_json === 'string' ? JSON.parse(o.items_json) : [];
         const isPaid = o.payment_status === 'paid';
+        const isCancelled = o.dispatch_status === 'cancelled';
+        const hasProof = !!o.transfer_proof_url;
         const safeId = esc(o.id);
+        const delBadge = o.delivery_method === 'pickup'
+          ? '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">🏪 Retiro</span>'
+          : (o.delivery_method === 'branch'
+            ? '<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">📮 Sucursal Correo</span>'
+            : `<span class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-900">🚚 Domicilio${o.customer_postal_code ? ' • CP ' + esc(o.customer_postal_code) : ''}</span>`);
+
         return `
-          <div class="bg-white rounded-3xl p-4 border border-purple-100 shadow-sm space-y-2.5">
+          <div class="bg-white rounded-3xl p-4 border ${isCancelled ? 'border-slate-200 opacity-70' : 'border-purple-100'} shadow-sm space-y-2.5">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span class="font-mono font-black text-purple-700">${esc(o.folio_number)}</span>
                   <span class="text-[10px] font-mono bg-purple-50 px-1.5 py-0.5 rounded text-purple-600">${esc(o.tracking_code)}</span>
-                  ${o.source === 'web_store' ? '<span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800">🌐 Tienda Web</span>' : ''}
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                    ${isPaid ? 'Abonado ✅' : 'Pend. Abono ⏳'}
+                  ${o.source === 'web_store' ? '<span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800">🌐 App Cliente</span>' : ''}
+                  ${delBadge}
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isCancelled ? 'bg-rose-100 text-rose-800' : (isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800')}">
+                    ${isCancelled ? 'Anulado ✕' : (isPaid ? 'Abonado ✅' : 'Pend. Abono ⏳')}
                   </span>
                 </div>
                 <p class="font-bold text-slate-900 mt-1 truncate">${esc(o.customer_name)} ${o.customer_phone ? '• ' + esc(o.customer_phone) : ''}</p>
-                ${o.customer_address ? `<p class="text-[10px] text-slate-500 truncate">📍 ${esc(o.customer_address)}</p>` : ''}
+                ${o.customer_address ? `<p class="text-[10px] text-slate-500 leading-snug">📍 ${esc(o.customer_address)}</p>` : ''}
               </div>
               <span class="font-black text-sm text-purple-800 shrink-0">${esc(formatCurrency(o.total))}</span>
             </div>
 
+            ${hasProof ? `
+              <button type="button" onclick="openTransferProofModal('${safeId}')" class="w-full py-2 px-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-900 font-extrabold text-[11px] flex items-center justify-between gap-2">
+                <span class="truncate">🧾 Comprobante de Transferencia Adjunto ${o.transfer_reference ? '(' + esc(o.transfer_reference) + ')' : ''}</span>
+                <span class="shrink-0 underline">Ver Foto →</span>
+              </button>
+            ` : ''}
+
             <p class="text-[11px] text-slate-600 bg-purple-50/40 p-2 rounded-xl">${items.map(i => `${Number(i.quantity)}x ${esc(i.productName)}`).join(', ')}</p>
 
-            <div class="grid grid-cols-2 gap-2">
-              <select onchange="updateOrderStatus('${safeId}', { dispatch_status: this.value })" class="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-xl font-bold text-[11px] text-purple-900">
-                ${Object.entries(dispatchLabels).map(([val, lbl]) => `<option value="${val}" ${o.dispatch_status === val ? 'selected' : ''}>${lbl}</option>`).join('')}
-              </select>
-              <button onclick="openReceiptById('${safeId}')" class="px-2.5 py-1.5 bg-purple-600 text-white font-bold rounded-xl text-[11px] truncate">🧾 Boleta / Sticker</button>
-            </div>
+            ${!isCancelled ? `
+              <div class="grid grid-cols-2 gap-2">
+                <select onchange="updateOrderStatus('${safeId}', { dispatch_status: this.value })" class="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-xl font-bold text-[11px] text-purple-900">
+                  ${Object.entries(dispatchLabels).map(([val, lbl]) => `<option value="${val}" ${o.dispatch_status === val ? 'selected' : ''}>${lbl}</option>`).join('')}
+                </select>
+                <button onclick="openReceiptById('${safeId}')" class="px-2.5 py-1.5 bg-purple-600 text-white font-bold rounded-xl text-[11px] truncate">🧾 Boleta / Sticker</button>
+              </div>
 
-            <div class="flex flex-wrap gap-1.5 pt-1 border-t border-purple-50">
-              ${!isPaid ? `
-                <button onclick="generatePaymentLinkForOrder('${safeId}')" class="px-2.5 py-1 bg-sky-100 text-sky-800 font-bold rounded-xl text-[10px]">🔗 ${o.mp_payment_link ? 'Copiar Link MP' : 'Link MP'}</button>
-                <button onclick="sendDispatchWhatsApp('${safeId}', 'pay')" class="px-2.5 py-1 bg-amber-100 text-amber-900 font-bold rounded-xl text-[10px]">💬 Cobrar WA</button>
-                <button onclick="verifyOrderPaymentMP('${safeId}')" class="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-xl text-[10px]">🔄 Verificar MP</button>
-                <button onclick="markOrderPaid('${safeId}')" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-xl text-[10px]">✅ Abonado</button>
-              ` : ''}
-              <button onclick="editOrderTracking('${safeId}')" class="px-2.5 py-1 bg-slate-100 text-slate-700 font-bold rounded-xl text-[10px]">🚚 ${o.shipping_tracking ? 'Guía: ' + esc(o.shipping_tracking) : '+ Cargar Guía'}</button>
-              ${o.shipping_tracking ? `<button onclick="sendDispatchWhatsApp('${safeId}', 'shipped')" class="px-2.5 py-1 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">📲 Avisar Envío</button>` : ''}
+              <div class="flex flex-wrap gap-1.5 pt-1 border-t border-purple-50">
+                ${!isPaid ? `
+                  <button onclick="generatePaymentLinkForOrder('${safeId}')" class="px-2.5 py-1 bg-sky-100 text-sky-800 font-bold rounded-xl text-[10px]">🔗 ${o.mp_payment_link ? 'Copiar Link MP' : 'Link MP'}</button>
+                  <button onclick="sendDispatchWhatsApp('${safeId}', 'pay')" class="px-2.5 py-1 bg-amber-100 text-amber-900 font-bold rounded-xl text-[10px]">💬 Cobrar WA</button>
+                  <button onclick="verifyOrderPaymentMP('${safeId}')" class="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-xl text-[10px]">🔄 Verificar MP</button>
+                  <button onclick="markOrderPaid('${safeId}')" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-xl text-[10px]">✅ Abonado</button>
+                ` : ''}
+                <button onclick="copyOrderForCorreo('${safeId}')" class="px-2.5 py-1 bg-sky-50 text-sky-900 border border-sky-200 font-bold rounded-xl text-[10px]" title="Copiar destinatario y CP para pegar en Correo Argentino">📋 Copiar p/ Correo</button>
+                <button onclick="editOrderTracking('${safeId}')" class="px-2.5 py-1 bg-slate-100 text-slate-800 font-bold rounded-xl text-[10px]">📷 ${o.shipping_tracking ? 'Guía: ' + esc(o.shipping_tracking) : 'Cargar/Escanear Guía'}</button>
+                ${o.shipping_tracking ? `<button onclick="sendDispatchWhatsApp('${safeId}', 'shipped')" class="px-2.5 py-1 bg-green-100 text-green-800 font-bold rounded-xl text-[10px]">📲 Avisar Envío</button>` : ''}
+                <button onclick="cancelAndRestockOrder('${safeId}')" class="px-2 py-1 text-rose-600 hover:bg-rose-50 font-bold rounded-xl text-[10px]" title="Anular pedido y devolver todo el stock automáticamente">↩️ Anular</button>
+              </div>
+            ` : `<p class="text-[10px] text-rose-700 font-bold">Pedido anulado • El stock fue devuelto automáticamente a tu catálogo.</p>`}
+          </div>
+        `;
+      }).join('');
+    }
+
+    function copyOrderForCorreo(orderId) {
+      const o = state.orders.find(x => x.id === orderId);
+      if (!o) return;
+      const lines = [
+        `Destinatario: ${o.customer_name || ''}`,
+        `Teléfono: ${o.customer_phone || ''}`,
+        `Modalidad: ${o.delivery_method === 'branch' ? 'Sucursal Correo Argentino' : 'Envío a Domicilio'}`,
+        o.branch_name ? `Sucursal Destino: ${o.branch_name}` : '',
+        `Dirección: ${o.customer_address || ''}`,
+        o.customer_postal_code ? `Código Postal: ${o.customer_postal_code}` : '',
+        o.customer_city ? `Localidad: ${o.customer_city}` : '',
+        o.customer_province ? `Provincia: ${o.customer_province}` : '',
+        `Referencia Pedido: ${o.folio_number} (${o.tracking_code})`
+      ].filter(Boolean).join('\n');
+      if (navigator.clipboard) navigator.clipboard.writeText(lines).catch(() => {});
+      alert(`📋 ¡Datos listos y copiados para Correo Argentino!\n\n${lines}`);
+    }
+
+    function exportMiCorreoCSV() {
+      const targets = state.orders.filter(o =>
+        o.dispatch_status !== 'cancelled' &&
+        (o.dispatch_status === 'to_prepare' || o.dispatch_status === 'packed') &&
+        o.delivery_method !== 'pickup'
+      );
+      if (!targets.length) {
+        alert('No hay pedidos pendientes de envío (Por Preparar o Empacado) para exportar a Correo Argentino.');
+        return;
+      }
+      const csvEsc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const rows = [[
+        'Folio', 'Codigo_Seguimiento_Tienda', 'Modalidad_Entrega', 'Nombre_Destinatario',
+        'Telefono', 'Direccion_o_Sucursal', 'Localidad', 'Provincia', 'Codigo_Postal_Destino',
+        'Sucursal_Correo', 'CP_Origen_Tienda', 'Estado_Pago', 'Valor_Declarado', 'Observaciones'
+      ]];
+      targets.forEach(o => {
+        rows.push([
+          o.folio_number,
+          o.tracking_code,
+          o.delivery_method === 'branch' ? 'SUCURSAL' : 'DOMICILIO',
+          o.customer_name,
+          o.customer_phone || '',
+          o.customer_address || '',
+          o.customer_city || '',
+          o.customer_province || '',
+          o.customer_postal_code || '',
+          o.branch_name || '',
+          state.profile.origin_postal_code || '',
+          o.payment_status === 'paid' ? 'ABONADO' : 'PENDIENTE',
+          Number(o.total || 0),
+          o.notes || ''
+        ]);
+      });
+      const content = '\uFEFF' + rows.map(r => r.map(csvEsc).join(';')).join('\r\n');
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MiCorreo_Envios_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
+    }
+
+    function openTransferProofModal(orderId) {
+      const o = state.orders.find(x => x.id === orderId);
+      if (!o || !o.transfer_proof_url) return;
+      document.getElementById('tp-order-id').value = o.id;
+      document.getElementById('tp-order-meta').innerText = `${o.folio_number} • ${o.customer_name} • ${formatCurrency(o.total)}`;
+      document.getElementById('tp-proof-img').src = o.transfer_proof_url;
+      const refEl = document.getElementById('tp-proof-ref');
+      if (o.transfer_reference) {
+        refEl.innerText = `Referencia / Titular informado: ${o.transfer_reference}`;
+        refEl.classList.remove('hidden');
+      } else {
+        refEl.classList.add('hidden');
+      }
+      document.getElementById('btn-tp-approve').classList.toggle('hidden', o.payment_status === 'paid');
+      document.getElementById('modal-transfer-proof').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeTransferProofModal() {
+      document.getElementById('modal-transfer-proof').classList.add('hidden');
+    }
+
+    async function approveTransferProofFromModal() {
+      const id = document.getElementById('tp-order-id').value;
+      if (!id) return;
+      closeTransferProofModal();
+      await markOrderPaid(id);
+    }
+
+    function openRapidTrackingModal() {
+      renderRapidTrackingRows();
+      document.getElementById('modal-rapid-tracking').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeRapidTrackingModal() {
+      document.getElementById('modal-rapid-tracking').classList.add('hidden');
+    }
+
+    function renderRapidTrackingRows() {
+      const box = document.getElementById('rapid-tracking-list');
+      const candidates = state.orders.filter(o =>
+        o.dispatch_status !== 'cancelled' &&
+        (o.dispatch_status === 'to_prepare' || o.dispatch_status === 'packed' || !o.shipping_tracking)
+      ).slice(0, 40);
+      if (!candidates.length) {
+        box.innerHTML = '<p class="text-center text-slate-400 py-8">🎉 Todos los pedidos activos ya tienen su guía cargada.</p>';
+        return;
+      }
+      box.innerHTML = candidates.map(o => {
+        const sid = esc(o.id);
+        return `
+          <div class="p-3 rounded-2xl bg-purple-50/50 border border-purple-100 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <span class="font-mono font-black text-purple-800">${esc(o.folio_number)}</span>
+                <span class="font-bold text-slate-800 ml-1 truncate">${esc(o.customer_name)}</span>
+              </div>
+              <span class="text-[10px] font-bold ${o.payment_status === 'paid' ? 'text-emerald-700' : 'text-amber-700'} shrink-0">${o.payment_status === 'paid' ? 'Abonado ✅' : 'Pend. ⏳'}</span>
+            </div>
+            <p class="text-[10px] text-slate-500 truncate">📍 ${esc(o.customer_address || 'Sin dirección')}</p>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="scanBarcodeForRapidRow('${sid}')" class="px-2.5 py-2 bg-purple-600 text-white font-bold rounded-xl text-[11px] shrink-0" title="Escanear ticket con cámara">📷</button>
+              <input type="text" id="rt-inp-${sid}" value="${esc(o.shipping_tracking || '')}" placeholder="Código Correo Argentino..." class="flex-1 min-w-0 px-2.5 py-2 bg-white border border-purple-200 rounded-xl font-mono font-bold uppercase text-[11px]">
+              <button type="button" onclick="saveRapidTrackingRow('${sid}', false)" class="px-2.5 py-2 bg-slate-900 text-white font-bold rounded-xl text-[10px] shrink-0">Guardar</button>
+              <button type="button" onclick="saveRapidTrackingRow('${sid}', true)" class="px-2.5 py-2 bg-emerald-600 text-white font-extrabold rounded-xl text-[10px] shrink-0">📲 WA</button>
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    async function saveRapidTrackingRow(orderId, alsoWA = false) {
+      const inp = document.getElementById(`rt-inp-${orderId}`);
+      const code = (inp?.value || '').trim().toUpperCase();
+      if (!code) { alert('Ingresa o escanea primero el código de seguimiento.'); return; }
+      await updateOrderStatus(orderId, {
+        shipping_carrier: 'Correo Argentino',
+        shipping_tracking: code,
+        dispatch_status: 'dispatched'
+      });
+      renderRapidTrackingRows();
+      if (alsoWA) sendDispatchWhatsApp(orderId, 'shipped');
+    }
+
+    function openMergeOrdersModal() {
+      const box = document.getElementById('merge-orders-list');
+      const candidates = state.orders.filter(o =>
+        o.dispatch_status !== 'cancelled' &&
+        (o.dispatch_status === 'to_prepare' || o.dispatch_status === 'packed')
+      );
+      if (candidates.length < 2) {
+        alert('Necesitas al menos 2 pedidos activos en "Por Preparar" o "Empacado" para unificarlos en un solo envío.');
+        return;
+      }
+      box.innerHTML = candidates.map(o => `
+        <label class="p-3 rounded-2xl bg-purple-50/40 hover:bg-purple-50 border border-purple-100 flex items-center justify-between gap-2 cursor-pointer">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <input type="checkbox" class="merge-order-chk w-4 h-4 shrink-0" value="${esc(o.id)}">
+            <div class="min-w-0">
+              <p class="font-bold text-slate-900 truncate">${esc(o.folio_number)} • ${esc(o.customer_name)}</p>
+              <p class="text-[10px] text-slate-500 truncate">${esc(formatCurrency(o.total))} • ${o.payment_status === 'paid' ? 'Abonado ✅' : 'Pendiente ⏳'}</p>
+            </div>
+          </div>
+          <span class="text-[10px] font-mono text-purple-700 shrink-0">${esc(o.tracking_code)}</span>
+        </label>
+      `).join('');
+      document.getElementById('modal-merge-orders').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeMergeOrdersModal() {
+      document.getElementById('modal-merge-orders').classList.add('hidden');
+    }
+
+    async function submitMergeSelectedOrders() {
+      const checked = [...document.querySelectorAll('.merge-order-chk:checked')].map(el => el.value);
+      if (checked.length < 2) {
+        alert('Marca al menos 2 pedidos de la lista para combinarlos en un único envío.');
+        return;
+      }
+      try {
+        const res = await api('/api/orders/merge', {
+          method: 'POST',
+          body: JSON.stringify({ order_ids: checked })
+        });
+        if (Array.isArray(res.orders)) state.orders = res.orders;
+        closeMergeOrdersModal();
+        renderDispatchesList();
+        alert('🛍️ ¡Pedidos unificados con éxito en 1 solo paquete y 1 solo costo de envío!');
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function cancelAndRestockOrder(orderId) {
+      const o = state.orders.find(x => x.id === orderId);
+      if (!o) return;
+      if (!confirm(`¿Anular el pedido ${o.folio_number} de ${o.customer_name} y devolver automáticamente todos sus productos al stock?`)) return;
+      try {
+        const res = await api(`/api/orders/${orderId}/cancel-restock`, { method: 'POST' });
+        const idx = state.orders.findIndex(x => x.id === orderId);
+        if (idx >= 0 && res.order) state.orders[idx] = res.order;
+        if (Array.isArray(res.products)) state.products = res.products;
+        renderDispatchesList();
+        if (state.activeTab === 'catalog') renderCatalogList();
+        if (state.activeTab === 'audit') renderAuditModule();
+      } catch (err) {
+        alert(err.message);
+      }
     }
 
     function openPickingListModal() {
@@ -3521,8 +4354,11 @@
       box.innerHTML = filtered.map(c => `
         <div onclick="selectCustomer('${esc(c.id)}')" class="p-3 bg-purple-50/50 hover:bg-purple-100 rounded-2xl border border-purple-100 cursor-pointer flex justify-between items-center text-xs">
           <div class="min-w-0 pr-2">
-            <p class="font-bold text-slate-800 truncate">${esc(c.name)}</p>
-            <p class="text-[10px] text-slate-500 truncate">${esc(c.phone || '')} ${c.address ? '• ' + esc(c.address) : ''}</p>
+            <div class="flex items-center gap-1.5">
+              <p class="font-bold text-slate-800 truncate">${esc(c.name)}</p>
+              ${Number(c.orders_count) > 0 ? `<span class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 shrink-0">⭐ ${Number(c.orders_count)}</span>` : ''}
+            </div>
+            <p class="text-[10px] text-slate-500 truncate">${esc(c.phone || '')} ${c.postal_code ? '• CP ' + esc(c.postal_code) : ''} ${c.address ? '• ' + esc(c.address) : ''}</p>
           </div>
           <span class="text-purple-600 font-bold shrink-0">Elegir →</span>
         </div>
@@ -3535,7 +4371,11 @@
         document.getElementById('client-name').value = c.name || '';
         document.getElementById('client-phone').value = c.phone || '';
         document.getElementById('client-address').value = c.address || '';
+        if (document.getElementById('client-cp')) document.getElementById('client-cp').value = c.postal_code || '';
+        if (document.getElementById('client-city')) document.getElementById('client-city').value = c.city || '';
+        if (document.getElementById('client-province')) document.getElementById('client-province').value = c.province || '';
         document.getElementById('client-handle').value = c.handle || '';
+        saveSaleDraft();
         closeCustomerPickerModal();
       }
     }
@@ -3899,6 +4739,43 @@
       } catch (err) { alert(err.message); }
     }
 
+    function openBulkPriceModal() {
+      const sel = document.getElementById('bulk-price-category');
+      const cats = [...new Set(state.products.map(p => (p.category || 'General').trim()).filter(Boolean))].sort();
+      sel.innerHTML = `<option value="ALL">📦 Todos los productos (${state.products.length})</option>` +
+        cats.map(c => `<option value="${esc(c)}">🏷️ Solo categoría: ${esc(c)}</option>`).join('');
+      document.getElementById('bulk-price-pct').value = '';
+      document.getElementById('modal-bulk-price').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeBulkPriceModal() {
+      document.getElementById('modal-bulk-price').classList.add('hidden');
+    }
+
+    async function submitBulkPriceAdjustment() {
+      const pct = parseFloat(document.getElementById('bulk-price-pct').value);
+      if (isNaN(pct) || pct === 0) {
+        alert('Ingresa un porcentaje válido distinto de 0 (ej. 10 para subir 10%, o -15 para bajar 15%).');
+        return;
+      }
+      const category = document.getElementById('bulk-price-category').value;
+      const round_to = parseInt(document.getElementById('bulk-price-round').value) || 0;
+      const apply_to_cost = !!document.getElementById('bulk-price-cost').checked;
+      try {
+        const res = await api('/api/products/bulk-price', {
+          method: 'POST',
+          body: JSON.stringify({ percent: pct, category, round_to, apply_to_cost })
+        });
+        if (Array.isArray(res.products)) state.products = res.products;
+        closeBulkPriceModal();
+        renderCatalogList();
+        alert(`📈 ¡Listo! Se actualizaron los precios de ${res.updated_count} productos.`);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
     async function loadSampleProducts() {
       try {
         const res = await api('/api/products/batch-samples', { method: 'POST' });
@@ -3957,9 +4834,10 @@
     // ================= AUDITORÍA, GASTOS, EXCEL & REPOSICIÓN =================
 
     function renderAuditModule() {
+      const activeOrders = state.orders.filter(o => o.dispatch_status !== 'cancelled');
       const todayIso = new Date().toISOString().slice(0, 10);
       const todayStr = new Date().toDateString();
-      const todayOrders = state.orders.filter(o => new Date(o.created_at).toDateString() === todayStr);
+      const todayOrders = activeOrders.filter(o => new Date(o.created_at).toDateString() === todayStr);
       const todayExpenses = (state.expenses || []).filter(e => (e.expense_date || '').slice(0, 10) === todayIso);
 
       const todayTotal = todayOrders.reduce((s, o) => s + Number(o.total || 0), 0);
@@ -3980,9 +4858,9 @@
       document.getElementById('audit-today-pending').innerText = `Pendiente cobro: ${formatCurrency(pending)}`;
       document.getElementById('audit-items-sold').innerText = `${items} unid.`;
 
-      // Historical Totals
-      const allTotal = state.orders.reduce((s, o) => s + Number(o.total || 0), 0);
-      const allCost = state.orders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
+      // Historical Totals (excluding cancelled orders)
+      const allTotal = activeOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+      const allCost = activeOrders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
       const allExpenses = (state.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0);
       const allProfit = allTotal - allCost - allExpenses;
       const allMargin = allTotal > 0 ? Math.round((allProfit / allTotal) * 100) : 0;
@@ -3993,7 +4871,7 @@
       if (expEl) expEl.innerText = formatCurrency(allExpenses);
       document.getElementById('audit-all-profit').innerText = formatCurrency(allProfit);
       document.getElementById('audit-all-margin').innerText = `Margen Limpio: ${allMargin}%`;
-      document.getElementById('audit-ticket-avg').innerText = `Pedidos registrados: ${state.orders.length} • Gastos anotados: ${(state.expenses || []).length}`;
+      document.getElementById('audit-ticket-avg').innerText = `Pedidos activos: ${activeOrders.length} • Gastos anotados: ${(state.expenses || []).length}`;
 
       renderExpensesList();
 
@@ -4087,8 +4965,9 @@
         rows.push([e.expense_date, e.category, e.description, Number(e.amount || 0)]);
       });
 
-      const allTotal = state.orders.reduce((s, o) => s + Number(o.total || 0), 0);
-      const allCost = state.orders.reduce((s, o) => s + Number(o.total_cost || 0), 0);
+      const activeForCsv = state.orders.filter(o => o.dispatch_status !== 'cancelled');
+      const allTotal = activeForCsv.reduce((s, o) => s + Number(o.total || 0), 0);
+      const allCost = activeForCsv.reduce((s, o) => s + Number(o.total_cost || 0), 0);
       const allExp = (state.expenses || []).reduce((s, e) => s + Number(e.amount || 0), 0);
       rows.push([]);
       rows.push(['=== RESUMEN FINAL ===']);
@@ -4158,7 +5037,10 @@
       if (document.getElementById('setting-bank-holder')) document.getElementById('setting-bank-holder').value = state.profile.bank_holder || '';
       if (document.getElementById('setting-ext-pay-link')) document.getElementById('setting-ext-pay-link').value = state.profile.external_pay_link || '';
       if (document.getElementById('setting-ship-flat')) document.getElementById('setting-ship-flat').value = state.profile.shipping_flat_rate || 0;
+      if (document.getElementById('setting-ship-branch')) document.getElementById('setting-ship-branch').value = state.profile.shipping_branch_rate || 0;
       if (document.getElementById('setting-ship-free')) document.getElementById('setting-ship-free').value = state.profile.free_shipping_min || 0;
+      if (document.getElementById('setting-origin-cp')) document.getElementById('setting-origin-cp').value = state.profile.origin_postal_code || '';
+      if (document.getElementById('setting-origin-prov')) document.getElementById('setting-origin-prov').value = state.profile.origin_province || '';
       if (document.getElementById('setting-tax-label')) document.getElementById('setting-tax-label').value = state.profile.tax_label || '';
       if (document.getElementById('setting-tax-rate')) document.getElementById('setting-tax-rate').value = state.profile.tax_rate || 0;
       if (document.getElementById('setting-allow-pickup')) document.getElementById('setting-allow-pickup').checked = state.profile.allow_pickup !== 0 && state.profile.allow_pickup !== false;
@@ -4337,6 +5219,8 @@
             phone: document.getElementById('setting-phone').value.trim(),
             instagram: document.getElementById('setting-instagram').value.trim(),
             address: document.getElementById('setting-address').value.trim(),
+            origin_postal_code: document.getElementById('setting-origin-cp')?.value.trim() || '',
+            origin_province: document.getElementById('setting-origin-prov')?.value.trim() || '',
             country_code: document.getElementById('setting-country')?.value || 'AR',
             currency_symbol: document.getElementById('setting-currency')?.value.trim() || '$',
             currency_code: (document.getElementById('setting-currency-code')?.value.trim() || 'ARS').toUpperCase(),
@@ -4344,6 +5228,7 @@
             bank_holder: document.getElementById('setting-bank-holder')?.value.trim() || '',
             external_pay_link: document.getElementById('setting-ext-pay-link')?.value.trim() || '',
             shipping_flat_rate: parseFloat(document.getElementById('setting-ship-flat')?.value) || 0,
+            shipping_branch_rate: parseFloat(document.getElementById('setting-ship-branch')?.value) || 0,
             free_shipping_min: parseFloat(document.getElementById('setting-ship-free')?.value) || 0,
             tax_label: document.getElementById('setting-tax-label')?.value.trim() || '',
             tax_rate: parseFloat(document.getElementById('setting-tax-rate')?.value) || 0,

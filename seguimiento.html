@@ -5,21 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Seguimiento de Pedido en Vivo</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     html, body { overflow-x: hidden; max-width: 100%; }
     body { background: linear-gradient(135deg, #F5F3FF 0%, #FDF4FF 50%, #F3E8FF 100%); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; }
   </style>
 </head>
-<body class="flex flex-col items-center justify-center p-4">
-  <div class="w-full max-w-md bg-white rounded-[32px] p-6 shadow-2xl border border-purple-100 space-y-4">
-    <div id="loading-box" class="text-center py-8 text-sm text-purple-600 font-bold">Buscando tu paquete... ⏳</div>
+<body class="flex flex-col items-center justify-center p-4 py-6">
+  <div class="w-full max-w-md bg-white rounded-[32px] p-5 sm:p-6 shadow-2xl border border-purple-100 space-y-4">
+    <div id="loading-box" class="text-center py-8 text-sm text-purple-600 font-bold">Conectando con tu pedido en tiempo real... ⏳</div>
 
     <div id="error-box" class="hidden text-center py-6 space-y-2">
       <span class="text-3xl block">🔍</span>
       <h2 class="font-bold text-slate-800">Pedido no encontrado</h2>
-      <p class="text-xs text-slate-500">Verifica el código de seguimiento (ej. PED-XXXXXX).</p>
+      <p class="text-xs text-slate-500">Ingresa el código de seguimiento que recibiste (ej. PED-XXXXXX).</p>
       <div class="flex gap-2 pt-2">
         <input type="text" id="manual-code" placeholder="Ej: PED-A1B2C3" class="flex-1 min-w-0 px-3 py-2 border border-purple-200 rounded-xl text-xs uppercase font-mono">
         <button onclick="searchManual()" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl text-xs shrink-0">Buscar</button>
@@ -27,29 +28,42 @@
     </div>
 
     <div id="order-box" class="hidden space-y-4 text-xs">
-      <div class="text-center space-y-1 border-b border-purple-100 pb-3.5">
+      <!-- Banner de Regreso Exitoso de Mercado Pago -->
+      <div id="mp-approved-banner" class="hidden p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl text-emerald-900 space-y-1 text-center">
+        <p class="font-extrabold text-sm">🎉 ¡Tu pago fue acreditado con éxito!</p>
+        <p class="text-[11px] text-emerald-800">La tienda ya recibió tu pedido abonado y tus datos de envío para empaquetarlo y despacharlo.</p>
+      </div>
+
+      <!-- Encabezado Tienda + Live Pulse -->
+      <div class="text-center space-y-1 border-b border-purple-100 pb-3">
+        <div class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full mb-1">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+          <span>Estado en Vivo • Actualización Automática</span>
+        </div>
         <img id="store-logo" src="" class="h-12 mx-auto object-contain hidden mb-1 rounded-xl">
         <span id="store-icon" class="text-3xl block">🛍️</span>
         <h1 id="store-name" class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">Mi Comercio</h1>
         <p id="store-contact" class="text-[11px] text-slate-400"></p>
       </div>
 
+      <!-- Folio y Estado de Pago -->
       <div class="flex items-center justify-between bg-purple-50/70 p-3.5 rounded-2xl border border-purple-100">
         <div>
-          <span class="text-[10px] font-bold uppercase text-purple-600 block">Comprobante</span>
+          <span class="text-[10px] font-bold uppercase text-purple-600 block">Tu Comprobante</span>
           <span id="ord-folio" class="font-mono font-black text-base text-purple-900">#001001</span>
           <span id="ord-code" class="text-[10px] font-mono text-slate-500 block"></span>
         </div>
-        <div class="text-right">
-          <span id="ord-pay-badge" class="text-xs font-extrabold px-3 py-1 rounded-full"></span>
+        <div class="text-right space-y-1">
+          <span id="ord-pay-badge" class="text-xs font-extrabold px-3 py-1 rounded-full inline-block"></span>
+          <span id="ord-proof-badge" class="hidden text-[10px] font-bold text-violet-700 block">🧾 Comprobante en revisión</span>
         </div>
       </div>
 
-      <!-- Línea de progreso del despacho -->
-      <div class="space-y-2">
+      <!-- Barra de Etapas del Envío + Explicación Clara -->
+      <div class="space-y-2.5">
         <div class="flex items-center justify-between">
-          <span class="font-bold text-slate-700">Estado del Despacho</span>
-          <span id="ord-delivery-badge" class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full"></span>
+          <span class="font-bold text-slate-800">Progreso de tu Paquete</span>
+          <span id="ord-delivery-badge" class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full"></span>
         </div>
         <div class="grid grid-cols-4 gap-1 text-center text-[10px] font-bold">
           <div id="step-to_prepare" class="p-2 rounded-xl border">📦<br>Preparando</div>
@@ -57,25 +71,59 @@
           <div id="step-dispatched" class="p-2 rounded-xl border">🚚<br>En Camino</div>
           <div id="step-delivered" class="p-2 rounded-xl border">✅<br>Entregado</div>
         </div>
+        <div id="stage-explanation-box" class="p-2.5 bg-purple-50/50 border border-purple-100 rounded-xl text-[11px] text-purple-950 font-semibold text-center"></div>
 
-        <!-- Información de Correo y Rastreo Directo Oficial -->
+        <!-- Tarjeta Especial Inteligente para Correo Argentino y Transportes -->
         <div id="shipping-info" class="hidden p-3.5 bg-sky-50 border border-sky-200 rounded-2xl text-sky-950 space-y-2">
-          <div class="flex items-center justify-between gap-2">
+          <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
-              <span class="text-[10px] font-black uppercase text-sky-700 block">🚚 Transporte y Nº de Guía</span>
-              <p id="shipping-detail" class="font-bold text-xs truncate"></p>
+              <span id="carrier-badge-label" class="text-[10px] font-black uppercase text-sky-700 block">🚚 Transporte Oficial</span>
+              <p id="shipping-detail" class="font-extrabold text-sm font-mono text-slate-900 break-all mt-0.5"></p>
+              <p id="ca-helper-note" class="hidden text-[10px] text-sky-800 mt-0.5 leading-snug"></p>
             </div>
-            <button type="button" id="btn-copy-guide" onclick="copyTrackingGuide()" class="hidden px-2.5 py-1 bg-white border border-sky-200 text-sky-800 rounded-lg font-bold text-[10px] shrink-0">📋 Copiar Guía</button>
+            <button type="button" id="btn-copy-guide" onclick="copyTrackingGuide()" class="hidden px-2.5 py-1.5 bg-white border border-sky-300 text-sky-900 rounded-xl font-bold text-[10px] shrink-0 shadow-sm">📋 Copiar</button>
           </div>
-          <a id="btn-carrier-official" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-center block shadow-sm">
-            🔎 Rastrear en Sitio Oficial del Correo ↗
-          </a>
+          <button type="button" id="btn-carrier-official" onclick="openOfficialCarrierAndCopy()" class="hidden w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-center block shadow">
+            🔎 Copiar Código y Abrir Seguimiento Oficial ↗
+          </button>
+          <button type="button" id="btn-confirm-received" onclick="confirmPackageReceived()" class="hidden w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] shadow-sm">
+            📦 ¡Ya recibí mi paquete conforme!
+          </button>
         </div>
+
+        <!-- Línea de Tiempo con Fecha y Hora Exacta -->
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+          <span class="text-[10px] font-black uppercase tracking-wider text-slate-500 block">🕒 Movimientos Registrados</span>
+          <div id="timeline-list" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <!-- Autogestión de Dirección y Código Postal (Si aún no fue despachado) -->
+      <div id="self-address-card" class="hidden p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <span class="text-[10px] font-black uppercase text-amber-800 block">📍 Destino de Entrega</span>
+            <p id="current-addr-text" class="text-[11px] text-slate-700 font-semibold truncate"></p>
+          </div>
+          <button type="button" onclick="toggleAddressForm()" class="px-2.5 py-1 bg-white border border-amber-300 text-amber-900 font-bold rounded-xl text-[10px] shrink-0">✏️ Corregir</button>
+        </div>
+
+        <form id="self-address-form" onsubmit="submitSelfAddress(event)" class="hidden space-y-2 pt-2 border-t border-amber-200/70">
+          <p class="text-[10px] text-slate-600">Verifica o completa tus datos exactos para el rótulo de Correo Argentino:</p>
+          <input type="text" id="sa-street" placeholder="Calle, Altura, Piso y Depto *" class="w-full min-w-0 px-3 py-2 bg-white border border-amber-200 rounded-xl font-semibold">
+          <div class="grid grid-cols-3 gap-1.5">
+            <input type="text" id="sa-cp" placeholder="Cód. Postal *" class="w-full min-w-0 px-2.5 py-2 bg-white border border-amber-200 rounded-xl font-mono font-bold">
+            <input type="text" id="sa-city" placeholder="Localidad *" class="w-full min-w-0 px-2.5 py-2 bg-white border border-amber-200 rounded-xl">
+            <input type="text" id="sa-prov" placeholder="Provincia *" class="w-full min-w-0 px-2.5 py-2 bg-white border border-amber-200 rounded-xl">
+          </div>
+          <input type="text" id="sa-branch" placeholder="Sucursal Correo (solo si retiras en sucursal)" class="w-full min-w-0 px-3 py-2 bg-white border border-amber-200 rounded-xl">
+          <button type="submit" class="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl">Guardar Datos de Envío ✅</button>
+        </form>
       </div>
 
       <!-- Detalle de Productos y Totales -->
       <div class="space-y-1.5 border-t border-purple-100 pt-3">
-        <span class="font-bold text-slate-700 block">Detalle del Pedido:</span>
+        <span class="font-bold text-slate-700 block">Resumen de tu Compra:</span>
         <div id="ord-items" class="space-y-1 text-slate-600"></div>
         <div id="ord-extra-rows" class="space-y-1 pt-1 border-t border-slate-100 text-slate-500"></div>
         <div class="flex justify-between items-baseline pt-2 border-t border-purple-50 font-black text-base text-purple-800">
@@ -84,26 +132,38 @@
         </div>
       </div>
 
-      <!-- Medios de Abono si está pendiente -->
-      <div id="unpaid-actions" class="hidden space-y-2 pt-1 border-t border-purple-100">
-        <a id="btn-pay-mp" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-center text-xs shadow-lg block">
-          💳 ABONAR CON MERCADO PAGO
+      <!-- Medios de Abono y Subida de Comprobante de Transferencia -->
+      <div id="unpaid-actions" class="hidden space-y-2.5 pt-2 border-t border-purple-100">
+        <a id="btn-pay-mp" href="#" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-center text-xs shadow-lg block">
+          💳 ABONAR AHORA CON MERCADO PAGO
         </a>
         <a id="btn-pay-ext" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3 bg-indigo-600 text-white font-extrabold rounded-2xl text-center text-xs shadow block">
           🔗 IR AL LINK DE PAGO ONLINE
         </a>
-        <div id="bank-box" class="hidden p-3 bg-purple-50 border border-purple-200 rounded-2xl space-y-1">
-          <span class="text-[10px] font-black uppercase text-purple-700 block">🏦 Datos para Transferencia</span>
+        <div id="bank-box" class="hidden p-3.5 bg-purple-50 border border-purple-200 rounded-2xl space-y-2">
+          <span class="text-[10px] font-black uppercase text-purple-700 block">🏦 Pago por Transferencia Bancaria</span>
           <p id="bank-holder" class="text-[11px] text-slate-600"></p>
           <div class="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-purple-200">
             <span id="bank-alias" class="font-mono font-bold text-slate-900 truncate"></span>
             <button type="button" onclick="copyBank()" class="px-2 py-1 bg-purple-600 text-white font-bold rounded-lg text-[10px] shrink-0">📋 Copiar</button>
           </div>
+
+          <div class="pt-1.5 border-t border-purple-200/60 space-y-1.5">
+            <p class="text-[10px] text-slate-600 font-semibold">¿Ya transferiste? Adjunta aquí la foto/captura del comprobante:</p>
+            <div class="flex gap-1.5">
+              <input type="text" id="proof-ref" placeholder="Nº operación / Titular (opc.)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px]">
+              <button type="button" onclick="document.getElementById('proof-file-input').click()" id="btn-upload-proof" class="px-3 py-1.5 bg-purple-700 text-white font-bold rounded-xl text-[11px] shrink-0">
+                📎 Subir Captura
+              </button>
+              <input type="file" id="proof-file-input" accept="image/*" class="hidden" onchange="handleProofUpload(event)">
+            </div>
+            <p id="proof-upload-msg" class="hidden text-[11px] font-bold text-emerald-700"></p>
+          </div>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-2 pt-1">
-        <a id="btn-store-link" href="#" class="hidden py-2.5 bg-purple-50 text-purple-800 font-bold rounded-xl text-center border border-purple-200">🛍️ Ver Tienda</a>
+        <a id="btn-store-link" href="#" class="hidden py-2.5 bg-purple-50 text-purple-800 font-bold rounded-xl text-center border border-purple-200">← Volver a la Tienda</a>
         <a id="btn-wa-store" href="#" target="_blank" rel="noopener noreferrer" class="hidden py-2.5 bg-emerald-50 text-emerald-800 font-bold rounded-xl text-center border border-emerald-200">💬 Consultar WA</a>
       </div>
     </div>
@@ -111,8 +171,19 @@
 
   <script>
     const STEPS = ['to_prepare', 'packed', 'dispatched', 'delivered'];
+    const STAGE_EXPLANATIONS = {
+      to_prepare: '📦 Tu pedido está registrado en la tienda y en fila de preparación.',
+      packed: '🎁 ¡Tus productos ya fueron controlados, empacados y rotulados para salir!',
+      dispatched: '🚚 ¡Tu paquete ya salió! Abajo tienes tu código de seguimiento oficial.',
+      delivered: '✅ Paquete entregado. ¡Muchas gracias por tu compra!',
+      cancelled: '⚠️ Este pedido figura como anulado. Ante cualquier duda contacta a la tienda.'
+    };
+
+    let activeTrackingCode = '';
     let currentGuide = '';
+    let currentOfficialUrl = '';
     let currentAlias = '';
+    let celebratedOnce = false;
 
     function esc(str) {
       return String(str ?? '')
@@ -123,25 +194,51 @@
         .replace(/'/g, '&#39;');
     }
 
-    function resolveCarrierUrl(carrier, tracking) {
+    function formatDateTime(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) + ' ' +
+               d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function analyzeCarrierAndGuide(carrier, tracking) {
       const c = String(carrier || '').toLowerCase();
-      const t = encodeURIComponent(String(tracking || '').trim());
-      if (!c) return '';
-      if (c.includes('andreani')) return t ? `https://www.andreani.com/#!/informacionEnvio/${t}` : 'https://www.andreani.com/';
-      if (c.includes('correo argentino')) return 'https://www.correoargentino.com.ar/formularios/e-commerce';
-      if (c.includes('oca')) return 'https://www.oca.com.ar/Busquedas/Envios';
-      if (c.includes('via cargo') || c.includes('vía cargo')) return 'https://viacargo.com.ar/seguimiento';
-      if (c.includes('dhl')) return `https://www.dhl.com/global-en/home/tracking.html?tracking-id=${t}`;
-      if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${t}`;
-      if (c.includes('ups')) return `https://www.ups.com/track?tracknum=${t}`;
-      if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`;
-      if (c.includes('estafeta')) return 'https://www.estafeta.com/Herramientas/Rastreo';
-      if (c.includes('chilexpress')) return 'https://www.chilexpress.cl/';
-      if (c.includes('blue express') || c.includes('bluexpress')) return 'https://www.blue.cl/seguimiento/';
-      if (c.includes('servientrega')) return 'https://www.servientrega.com/';
-      if (c.includes('correios')) return 'https://rastreamento.correios.com.br/';
-      if (c.includes('correos')) return 'https://www.correos.es/es/es/herramientas/localizador/envios';
-      return '';
+      const raw = String(tracking || '').trim().toUpperCase();
+      const t = encodeURIComponent(raw);
+
+      if (c.includes('correo argentino') || /^[A-Z]{2}\d{9}AR$/.test(raw)) {
+        const s10 = raw.match(/^([A-Z]{2})(\d{9})(AR)$/);
+        if (s10) {
+          return {
+            url: 'https://www.correoargentino.com.ar/formularios/ondnc',
+            copyValue: s10[2],
+            helper: `Código Nacional: elige letras "${s10[1]}" y pega los números "${s10[2]}" (se copian solos al tocar el botón azul).`
+          };
+        }
+        return {
+          url: 'https://www.correoargentino.com.ar/formularios/e-commerce',
+          copyValue: raw,
+          helper: raw ? 'Al tocar el botón azul copiamos tu código automáticamente para que solo lo pegues en la web de Correo Argentino.' : ''
+        };
+      }
+      if (c.includes('andreani')) return { url: raw ? `https://www.andreani.com/#!/informacionEnvio/${t}` : 'https://www.andreani.com/', copyValue: raw, helper: '' };
+      if (c.includes('oca')) return { url: 'https://www.oca.com.ar/Busquedas/Envios', copyValue: raw, helper: '' };
+      if (c.includes('via cargo') || c.includes('vía cargo')) return { url: 'https://viacargo.com.ar/seguimiento', copyValue: raw, helper: '' };
+      if (c.includes('dhl')) return { url: `https://www.dhl.com/global-en/home/tracking.html?tracking-id=${t}`, copyValue: raw, helper: '' };
+      if (c.includes('fedex')) return { url: `https://www.fedex.com/fedextrack/?trknbr=${t}`, copyValue: raw, helper: '' };
+      if (c.includes('ups')) return { url: `https://www.ups.com/track?tracknum=${t}`, copyValue: raw, helper: '' };
+      if (c.includes('usps')) return { url: `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`, copyValue: raw, helper: '' };
+      if (c.includes('estafeta')) return { url: 'https://www.estafeta.com/Herramientas/Rastreo', copyValue: raw, helper: '' };
+      if (c.includes('chilexpress')) return { url: 'https://www.chilexpress.cl/', copyValue: raw, helper: '' };
+      if (c.includes('blue express') || c.includes('bluexpress')) return { url: 'https://www.blue.cl/seguimiento/', copyValue: raw, helper: '' };
+      if (c.includes('servientrega')) return { url: 'https://www.servientrega.com/', copyValue: raw, helper: '' };
+      if (c.includes('correios')) return { url: 'https://rastreamento.correios.com.br/', copyValue: raw, helper: '' };
+      if (c.includes('correos')) return { url: 'https://www.correos.es/es/es/herramientas/localizador/envios', copyValue: raw, helper: '' };
+      return { url: '', copyValue: raw, helper: '' };
     }
 
     function searchManual() {
@@ -152,7 +249,16 @@
     function copyTrackingGuide() {
       if (currentGuide && navigator.clipboard) {
         navigator.clipboard.writeText(currentGuide).catch(() => {});
-        alert('¡Número de guía copiado! 📋');
+        alert(`¡Código ${currentGuide} copiado! 📋`);
+      }
+    }
+
+    function openOfficialCarrierAndCopy() {
+      if (currentGuide && navigator.clipboard) {
+        navigator.clipboard.writeText(currentGuide).catch(() => {});
+      }
+      if (currentOfficialUrl) {
+        window.open(currentOfficialUrl, '_blank', 'noopener');
       }
     }
 
@@ -163,21 +269,128 @@
       }
     }
 
+    function toggleAddressForm() {
+      document.getElementById('self-address-form').classList.toggle('hidden');
+    }
+
+    async function submitSelfAddress(e) {
+      e.preventDefault();
+      if (!activeTrackingCode) return;
+      const street = document.getElementById('sa-street').value.trim();
+      const cp = document.getElementById('sa-cp').value.trim();
+      const city = document.getElementById('sa-city').value.trim();
+      const prov = document.getElementById('sa-prov').value.trim();
+      const branch = document.getElementById('sa-branch').value.trim();
+      try {
+        const resp = await fetch(`/api/public/track/${encodeURIComponent(activeTrackingCode)}/update-address`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_address: street,
+            customer_postal_code: cp,
+            customer_city: city,
+            customer_province: prov,
+            branch_name: branch,
+            delivery_method: branch ? 'branch' : 'delivery'
+          })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'No se pudo actualizar');
+        document.getElementById('self-address-form').classList.add('hidden');
+        await loadOrder();
+        alert('¡Datos de envío y Código Postal confirmados! ✅');
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function handleProofUpload(e) {
+      const file = e.target.files?.[0];
+      if (!file || !activeTrackingCode) return;
+      const btn = document.getElementById('btn-upload-proof');
+      btn.innerText = 'Subiendo... ⏳';
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = async () => {
+          const maxDim = 900;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.78);
+          try {
+            const resp = await fetch(`/api/public/track/${encodeURIComponent(activeTrackingCode)}/upload-proof`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                proof_data_url: compressed,
+                transfer_reference: document.getElementById('proof-ref').value.trim()
+              })
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data.error || 'Error al subir');
+            const msg = document.getElementById('proof-upload-msg');
+            msg.innerText = '✅ ¡Comprobante recibido! La tienda verificará tu pago en breve.';
+            msg.classList.remove('hidden');
+            await loadOrder();
+          } catch (err) {
+            alert(err.message);
+          } finally {
+            btn.innerText = '📎 Subir Captura';
+          }
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function confirmPackageReceived() {
+      if (!activeTrackingCode) return;
+      if (!confirm('¿Confirmas que ya recibiste tu paquete correctamente?')) return;
+      try {
+        const resp = await fetch(`/api/public/track/${encodeURIComponent(activeTrackingCode)}/confirm-received`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        if (resp.ok) await loadOrder();
+      } catch (e) {}
+    }
+
     async function loadOrder() {
-      const code = new URLSearchParams(window.location.search).get('code');
+      const qs = new URLSearchParams(window.location.search);
+      const code = qs.get('code');
+      const retPaymentId = qs.get('payment_id') || qs.get('collection_id') || '';
+      const retStatus = qs.get('status') || qs.get('collection_status') || '';
+
       if (!code) {
         document.getElementById('loading-box').classList.add('hidden');
         document.getElementById('error-box').classList.remove('hidden');
         return;
       }
+      activeTrackingCode = code.trim().toUpperCase();
       try {
-        const resp = await fetch(`/api/public/track/${encodeURIComponent(code)}`);
+        const apiUrl = `/api/public/track/${encodeURIComponent(activeTrackingCode)}` +
+          (retPaymentId ? `?payment_id=${encodeURIComponent(retPaymentId)}` : '');
+        const resp = await fetch(apiUrl);
         if (!resp.ok) throw new Error('Not found');
         const data = await resp.json();
         const o = data.order;
         const s = data.store || {};
         const sym = s.currency_symbol || '$';
         const fmt = n => `${sym} ${Number(n || 0).toLocaleString('es-AR')}`;
+
+        if ((retStatus === 'approved' || o.payment_status === 'paid') && retPaymentId && !celebratedOnce) {
+          celebratedOnce = true;
+          document.getElementById('mp-approved-banner').classList.remove('hidden');
+          if (typeof confetti === 'function') confetti({ particleCount: 80, spread: 70 });
+          window.history.replaceState({}, '', `/seguimiento.html?code=${encodeURIComponent(activeTrackingCode)}`);
+        }
 
         if (s.logo_data_url) {
           document.getElementById('store-logo').src = s.logo_data_url;
@@ -190,38 +403,96 @@
         document.getElementById('store-contact').innerText = [s.phone, s.instagram].filter(Boolean).join(' • ');
         document.getElementById('ord-folio').innerText = o.folio_number;
         document.getElementById('ord-code').innerText = o.tracking_code;
-        document.getElementById('ord-delivery-badge').innerText = o.delivery_method === 'pickup' ? '🏪 Retiro en Local' : '🚚 Envío a Domicilio';
+
+        const delLbl = o.delivery_method === 'pickup'
+          ? '🏪 Retiro en Local'
+          : (o.delivery_method === 'branch' ? '📮 Sucursal Correo' : '🚚 Envío a Domicilio');
+        document.getElementById('ord-delivery-badge').innerText = delLbl;
 
         const badge = document.getElementById('ord-pay-badge');
         if (o.payment_status === 'paid') {
           badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800';
           badge.innerText = 'Abonado ✅';
+        } else if (o.payment_status === 'cancelled') {
+          badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-rose-100 text-rose-800';
+          badge.innerText = 'Anulado';
         } else {
           badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-amber-100 text-amber-800';
-          badge.innerText = 'Pendiente ⏳';
+          badge.innerText = 'Pendiente de Abono ⏳';
         }
+        document.getElementById('ord-proof-badge').classList.toggle('hidden', !o.has_transfer_proof || o.payment_status === 'paid');
 
         const currIdx = Math.max(0, STEPS.indexOf(o.dispatch_status));
         STEPS.forEach((st, idx) => {
           const el = document.getElementById(`step-${st}`);
-          if (idx <= currIdx) el.className = 'p-2 rounded-xl border-2 border-purple-600 bg-purple-100 text-purple-900';
+          if (idx <= currIdx && o.dispatch_status !== 'cancelled') el.className = 'p-2 rounded-xl border-2 border-purple-600 bg-purple-100 text-purple-900';
           else el.className = 'p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400';
         });
+        document.getElementById('stage-explanation-box').innerText = STAGE_EXPLANATIONS[o.dispatch_status] || STAGE_EXPLANATIONS.to_prepare;
 
+        // Transporte y Guía
+        const shipBox = document.getElementById('shipping-info');
         if (o.shipping_carrier || o.shipping_tracking) {
-          document.getElementById('shipping-info').classList.remove('hidden');
-          document.getElementById('shipping-detail').innerText = [o.shipping_carrier, o.shipping_tracking ? `Guía: ${o.shipping_tracking}` : ''].filter(Boolean).join(' • ');
-          if (o.shipping_tracking) {
-            currentGuide = o.shipping_tracking;
-            document.getElementById('btn-copy-guide').classList.remove('hidden');
+          shipBox.classList.remove('hidden');
+          document.getElementById('carrier-badge-label').innerText = `🚚 ${o.shipping_carrier || 'Transporte Asignado'}`;
+          document.getElementById('shipping-detail').innerText = o.shipping_tracking ? `Código: ${o.shipping_tracking}` : 'Guía en preparación';
+          const info = analyzeCarrierAndGuide(o.shipping_carrier, o.shipping_tracking);
+          currentGuide = info.copyValue || o.shipping_tracking || '';
+          currentOfficialUrl = info.url || '';
+
+          document.getElementById('btn-copy-guide').classList.toggle('hidden', !currentGuide);
+          const helperEl = document.getElementById('ca-helper-note');
+          if (info.helper) {
+            helperEl.innerText = info.helper;
+            helperEl.classList.remove('hidden');
+          } else {
+            helperEl.classList.add('hidden');
           }
-          const officialUrl = resolveCarrierUrl(o.shipping_carrier, o.shipping_tracking);
-          if (officialUrl) {
-            const cBtn = document.getElementById('btn-carrier-official');
-            cBtn.href = officialUrl;
-            cBtn.innerText = `🔎 Rastrear en ${o.shipping_carrier || 'Sitio Oficial'} ↗`;
+
+          const cBtn = document.getElementById('btn-carrier-official');
+          if (currentOfficialUrl) {
+            cBtn.innerText = `🔎 Copiar Guía e Ir a ${o.shipping_carrier || 'Correo Oficial'} ↗`;
             cBtn.classList.remove('hidden');
+          } else {
+            cBtn.classList.add('hidden');
           }
+          document.getElementById('btn-confirm-received').classList.toggle('hidden', o.dispatch_status !== 'dispatched');
+        } else {
+          shipBox.classList.add('hidden');
+        }
+
+        // Timeline con fecha y hora
+        const tlArr = Array.isArray(o.timeline) ? [...o.timeline].reverse() : [];
+        document.getElementById('timeline-list').innerHTML = tlArr.map((ev, i) => `
+          <div class="flex items-start gap-2.5">
+            <div class="w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${i === 0 ? 'bg-purple-600 ring-4 ring-purple-100' : 'bg-slate-300'}"></div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between gap-2">
+                <p class="font-bold ${i === 0 ? 'text-slate-900' : 'text-slate-600'}">${esc(ev.title)}</p>
+                <span class="text-[10px] text-slate-400 shrink-0">${esc(formatDateTime(ev.at))}</span>
+              </div>
+              ${ev.detail ? `<p class="text-[10px] text-slate-500">${esc(ev.detail)}</p>` : ''}
+            </div>
+          </div>
+        `).join('');
+
+        // Autogestión de dirección si aún no fue despachado
+        const saCard = document.getElementById('self-address-card');
+        if (o.dispatch_status === 'to_prepare' || o.dispatch_status === 'packed') {
+          saCard.classList.remove('hidden');
+          const missingAddr = !o.customer_address || (!o.customer_postal_code && o.delivery_method !== 'pickup');
+          document.getElementById('current-addr-text').innerText = o.customer_address
+            ? `${o.customer_address}${o.customer_postal_code && !o.customer_address.includes(o.customer_postal_code) ? ' (CP ' + o.customer_postal_code + ')' : ''}`
+            : '⚠️ Falta completar tu dirección y Código Postal';
+          document.getElementById('sa-cp').value = o.customer_postal_code || '';
+          document.getElementById('sa-city').value = o.customer_city || '';
+          document.getElementById('sa-prov').value = o.customer_province || '';
+          document.getElementById('sa-branch').value = o.branch_name || '';
+          if (missingAddr && o.delivery_method !== 'pickup') {
+            document.getElementById('self-address-form').classList.remove('hidden');
+          }
+        } else {
+          saCard.classList.add('hidden');
         }
 
         document.getElementById('ord-items').innerHTML = (o.items || []).map(i => `
@@ -235,7 +506,7 @@
         document.getElementById('ord-extra-rows').innerHTML = extras.join('');
         document.getElementById('ord-total').innerText = fmt(o.total);
 
-        if (o.payment_status !== 'paid') {
+        if (o.payment_status !== 'paid' && o.payment_status !== 'cancelled') {
           let anyPay = false;
           if (o.mp_payment_link) {
             const btn = document.getElementById('btn-pay-mp');
@@ -256,7 +527,9 @@
             document.getElementById('bank-box').classList.remove('hidden');
             anyPay = true;
           }
-          if (anyPay) document.getElementById('unpaid-actions').classList.remove('hidden');
+          document.getElementById('unpaid-actions').classList.toggle('hidden', !anyPay);
+        } else {
+          document.getElementById('unpaid-actions').classList.add('hidden');
         }
 
         if (s.slug) {
@@ -278,7 +551,9 @@
         document.getElementById('error-box').classList.remove('hidden');
       }
     }
+
     loadOrder();
+    setInterval(() => { if (activeTrackingCode && !document.hidden) loadOrder(); }, 25000);
   </script>
 </body>
 </html>

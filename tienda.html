@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Catálogo Online</title>
+  <title>Tienda Oficial Online</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -23,141 +23,206 @@
 <body class="flex flex-col items-center pb-28">
 
   <div id="loading-view" class="w-full max-w-md min-h-screen flex items-center justify-center p-6 text-center">
-    <p class="text-sm font-bold text-purple-700 animate-pulse">Cargando tienda oficial... 🛍️</p>
+    <div class="space-y-2">
+      <div class="w-12 h-12 mx-auto rounded-2xl bg-purple-100 flex items-center justify-center text-2xl animate-bounce">🛍️</div>
+      <p class="text-sm font-bold text-purple-800">Abriendo tienda oficial...</p>
+    </div>
   </div>
 
   <div id="error-view" class="hidden w-full max-w-md min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-3">
     <span class="text-4xl">🏪</span>
     <h1 class="font-bold text-lg text-slate-900">Tienda no disponible</h1>
-    <p id="error-msg" class="text-xs text-slate-500">Verifica que el enlace del comercio sea correcto.</p>
+    <p id="error-msg" class="text-xs text-slate-500">Verifica que el enlace enviado por el comercio sea correcto.</p>
   </div>
 
-  <!-- STOREFRONT -->
+  <!-- BUYER STANDALONE APP -->
   <div id="store-view" class="hidden w-full max-w-md">
-    <header class="st-grad text-white p-6 rounded-b-[32px] shadow-xl text-center space-y-2">
+    <!-- Premium Header -->
+    <header class="st-grad text-white p-6 pb-5 rounded-b-[32px] shadow-xl text-center space-y-2.5">
       <div class="flex justify-center">
         <img id="st-logo" src="" class="max-h-16 max-w-[160px] object-contain rounded-2xl bg-white/95 p-1.5 hidden shadow">
-        <div id="st-icon-box" class="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-3xl">🛍️</div>
+        <div id="st-icon-box" class="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center text-3xl shadow">🛍️</div>
       </div>
-      <h1 id="st-name" class="text-xl font-extrabold tracking-tight" style="font-family:'Playfair Display',serif">Mi Tienda</h1>
-      <p id="st-info" class="text-xs text-white/85"></p>
-      <div id="st-shipping-banner" class="hidden inline-block bg-white/20 backdrop-blur px-3 py-1 rounded-full text-[11px] font-bold"></div>
+      <div>
+        <h1 id="st-name" class="text-xl font-extrabold tracking-tight" style="font-family:'Playfair Display',serif">Mi Tienda</h1>
+        <p id="st-info" class="text-xs text-white/85 mt-0.5"></p>
+      </div>
+      <div id="st-shipping-banner" class="hidden inline-block bg-white/20 backdrop-blur px-3.5 py-1 rounded-full text-[11px] font-bold border border-white/25"></div>
+
+      <!-- Buyer App Navigation Tabs: Shop vs Track My Order -->
+      <div class="grid grid-cols-2 gap-1.5 bg-black/20 p-1 rounded-2xl text-xs mt-2">
+        <button type="button" onclick="switchBuyerTab('shop')" id="btab-shop" class="py-2 rounded-xl font-extrabold bg-white text-slate-900 shadow">🛍️ Catálogo</button>
+        <button type="button" onclick="switchBuyerTab('orders')" id="btab-orders" class="py-2 rounded-xl font-bold text-white/90">🚚 Seguir mi Pedido</button>
+      </div>
     </header>
 
-    <main class="px-4 pt-4 space-y-3.5">
+    <!-- TAB 1: COMPRAR PRODUCTOS -->
+    <main id="buyer-section-shop" class="px-4 pt-4 space-y-3.5">
+      <!-- Guía clara de compra sin estrés (Ocultable) -->
+      <div id="buyer-how-box" class="bg-white/95 rounded-2xl p-3 border border-purple-100 shadow-sm text-[11px] space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="font-extrabold text-slate-800">✨ ¿Cómo comprar fácil y seguro?</span>
+          <button type="button" onclick="hideBuyerHowBox()" class="text-[10px] font-bold text-slate-400 hover:text-slate-600">Ocultar ✕</button>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 text-[10px] text-slate-600">
+          <div class="bg-purple-50/60 p-1.5 rounded-xl"><strong>1. Elegí:</strong> Sumá tus productos y talles al carrito.</div>
+          <div class="bg-purple-50/60 p-1.5 rounded-xl"><strong>2. Envío:</strong> Indicá tu domicilio, sucursal o retiro.</div>
+          <div class="bg-purple-50/60 p-1.5 rounded-xl"><strong>3. Aboná:</strong> Pago automático con Mercado Pago o Alias.</div>
+          <div class="bg-purple-50/60 p-1.5 rounded-xl"><strong>4. Seguí:</strong> Recibís código para ver tu envío en vivo.</div>
+        </div>
+      </div>
+
       <div class="relative">
         <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
-        <input type="text" id="st-search" oninput="renderStoreProducts()" placeholder="Buscar productos..." class="w-full pl-9 pr-3 py-2.5 text-xs bg-white border border-purple-100 rounded-2xl shadow-sm focus:outline-none">
+        <input type="text" id="st-search" oninput="renderStoreProducts()" placeholder="Buscar por nombre o categoría..." class="w-full pl-9 pr-3 py-2.5 text-xs bg-white border border-purple-100 rounded-2xl shadow-sm focus:outline-none">
       </div>
 
       <div id="st-categories" class="flex gap-1.5 overflow-x-auto pb-1 text-xs"></div>
 
       <div id="st-products" class="grid grid-cols-2 gap-2.5"></div>
     </main>
+
+    <!-- TAB 2: SEGUIR MIS PEDIDOS DESDE LA APP DEL CLIENTE -->
+    <section id="buyer-section-orders" class="hidden px-4 pt-4 space-y-3.5 text-xs">
+      <div class="bg-white rounded-3xl p-5 border border-purple-100 shadow-sm space-y-3">
+        <h2 class="font-bold text-sm text-slate-900" style="font-family:'Playfair Display',serif">🔎 Consultar Estado de mi Pedido</h2>
+        <p class="text-[11px] text-slate-500 leading-relaxed">Ingresa tu código (ej. <span class="font-mono font-bold text-purple-700">PED-A1B2C3</span>) para ver en tiempo real si está en preparación, empacado o en camino con tu guía de Correo.</p>
+        <div class="flex gap-2">
+          <input type="text" id="buyer-track-input" placeholder="Ej: PED-A1B2C3" class="flex-1 min-w-0 px-3 py-2.5 bg-slate-50 border border-purple-200 rounded-xl font-mono uppercase font-bold">
+          <button type="button" onclick="openBuyerTrackingFromInput()" class="px-4 py-2.5 st-grad text-white font-extrabold rounded-xl shrink-0 shadow">Ver Estado</button>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-3xl p-4 border border-purple-100 shadow-sm space-y-2">
+        <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">Tus Pedidos Recientes en este Dispositivo</span>
+        <div id="buyer-recent-orders" class="space-y-2"></div>
+      </div>
+    </section>
   </div>
 
   <!-- FLOATING CART BAR -->
   <div id="cart-bar" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-40">
-    <button onclick="openCheckoutDrawer()" class="w-full py-3.5 px-5 st-grad text-white font-extrabold rounded-2xl shadow-2xl flex items-center justify-between text-sm">
+    <button type="button" onclick="openCheckoutDrawer()" class="w-full py-3.5 px-5 st-grad text-white font-extrabold rounded-2xl shadow-2xl flex items-center justify-between text-sm active:scale-[0.99] transition-transform">
       <span id="cart-count-badge" class="bg-white/20 px-2.5 py-0.5 rounded-xl text-xs">0 unid.</span>
-      <span>Ver Pedido y Finalizar →</span>
+      <span>Continuar al Envío y Pago →</span>
       <span id="cart-total-badge">$ 0</span>
     </button>
   </div>
 
-  <!-- CHECKOUT MODAL -->
+  <!-- CHECKOUT MODAL (PREMIUM & CLEAR) -->
   <div id="checkout-modal" class="hidden fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-[32px] p-5 max-h-[92vh] overflow-y-auto space-y-3.5 text-xs">
       <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
-        <h2 class="font-bold text-sm text-slate-900" style="font-family:'Playfair Display',serif">🛒 Finalizar Tu Pedido</h2>
-        <button onclick="closeCheckoutDrawer()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+        <div>
+          <h2 class="font-bold text-sm text-slate-900" style="font-family:'Playfair Display',serif">🛒 Tu Carrito y Datos de Envío</h2>
+          <p class="text-[10px] text-slate-400">Revisa tus productos y completa dónde recibir tu compra</p>
+        </div>
+        <button type="button" onclick="closeCheckoutDrawer()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
 
-      <div id="cart-items-list" class="space-y-2 max-h-40 overflow-y-auto"></div>
+      <div id="cart-items-list" class="space-y-2 max-h-36 overflow-y-auto"></div>
 
-      <div id="free-ship-progress" class="hidden p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800 text-center"></div>
+      <div id="free-ship-progress" class="hidden p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800 text-center"></div>
 
-      <form onsubmit="submitPublicOrder(event)" class="space-y-3 pt-2 border-t border-slate-100">
-        <!-- Honeypot anti-bots invisible -->
+      <form onsubmit="submitPublicOrder(event)" class="space-y-3.5 pt-2 border-t border-slate-100">
         <input type="text" id="co-hp" class="hidden" tabindex="-1" autocomplete="off">
 
-        <!-- Método de Entrega -->
+        <!-- 1. Método de Entrega -->
         <div id="delivery-selector-wrap" class="space-y-1.5">
-          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">1. Forma de Entrega</span>
-          <div class="grid grid-cols-2 gap-2">
+          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">1. ¿Cómo prefieres recibir tu pedido?</span>
+          <div id="delivery-buttons-grid" class="grid grid-cols-2 gap-1.5">
             <button type="button" onclick="setDeliveryMethod('delivery')" id="btn-del-delivery" class="p-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold text-[11px] text-center">
               🚚 Envío a Domicilio
+            </button>
+            <button type="button" onclick="setDeliveryMethod('branch')" id="btn-del-branch" class="hidden p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center">
+              📮 Sucursal Correo
             </button>
             <button type="button" onclick="setDeliveryMethod('pickup')" id="btn-del-pickup" class="p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center">
               🏪 Retiro en Local
             </button>
           </div>
+          <p id="delivery-explain-text" class="text-[10px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-xl"></p>
         </div>
 
-        <!-- Datos del Comprador -->
+        <!-- 2. Datos del Comprador y Dirección Estructurada -->
         <div class="space-y-2">
-          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">2. Tus Datos de Contacto</span>
-          <input type="text" id="co-name" required maxlength="90" placeholder="Tu Nombre y Apellido *" class="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
-          <input type="tel" id="co-phone" required maxlength="35" placeholder="Tu WhatsApp con código de área *" class="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
-          <div id="co-address-wrap">
-            <input type="text" id="co-address" maxlength="200" placeholder="Dirección, Calle, Altura y Ciudad *" class="w-full min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">2. Tus Datos para el Comprobante y Despacho</span>
+          <div class="grid grid-cols-2 gap-2">
+            <input type="text" id="co-name" required maxlength="90" placeholder="Nombre y Apellido *" class="w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
+            <input type="tel" id="co-phone" required maxlength="35" placeholder="Tu WhatsApp *" class="w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold">
           </div>
-          <input type="text" id="co-notes" maxlength="250" placeholder="Notas opcionales (timbre, horario, detalle)" class="w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+
+          <div id="co-address-wrap" class="space-y-2">
+            <input type="text" id="co-address" maxlength="180" placeholder="Calle, Altura, Piso y Depto *" class="w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+            <input type="text" id="co-branch-name" maxlength="120" placeholder="Nombre o localidad de la Sucursal Correo *" class="hidden w-full min-w-0 px-3 py-2 bg-purple-50/50 border border-purple-200 rounded-xl font-semibold">
+            <div class="grid grid-cols-3 gap-1.5">
+              <input type="text" id="co-cp" maxlength="12" placeholder="Cód. Postal *" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold">
+              <input type="text" id="co-city" maxlength="70" placeholder="Localidad *" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+              <input type="text" id="co-province" maxlength="70" placeholder="Provincia *" class="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl">
+            </div>
+          </div>
+
+          <input type="text" id="co-notes" maxlength="250" placeholder="Indicaciones extra (entrecalles, horario, regalo...)" class="w-full min-w-0 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl">
         </div>
 
-        <!-- Medio de Pago -->
+        <!-- 3. Medio de Pago -->
         <div class="space-y-1.5">
-          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">3. Medio de Pago Preferido</span>
+          <span class="font-bold text-slate-800 block uppercase tracking-wider text-[10px]">3. ¿Cómo deseas abonar?</span>
           <div id="payment-methods-grid" class="grid grid-cols-2 gap-1.5"></div>
+          <p id="payment-explain-text" class="text-[10px] text-slate-500 bg-slate-50 px-2.5 py-1.5 rounded-xl"></p>
         </div>
 
-        <!-- Desglose de Totales -->
-        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1">
-          <div class="flex justify-between text-slate-500"><span>Subtotal productos:</span><span id="drawer-subtotal" class="font-semibold text-slate-700">$ 0</span></div>
-          <div class="flex justify-between text-slate-500" id="drawer-ship-row"><span>Costo de envío:</span><span id="drawer-ship" class="font-semibold text-slate-700">$ 0</span></div>
-          <div class="flex justify-between text-slate-500 hidden" id="drawer-tax-row"><span id="drawer-tax-lbl">Impuesto:</span><span id="drawer-tax" class="font-semibold text-slate-700">$ 0</span></div>
-          <div class="flex justify-between items-baseline pt-1.5 border-t border-slate-200">
-            <span class="font-extrabold text-slate-900">TOTAL FINAL</span>
-            <span id="drawer-total" class="text-lg font-black st-text">$ 0</span>
+        <!-- Desglose Transparente de Totales -->
+        <div class="p-3.5 bg-purple-50/50 rounded-2xl border border-purple-100 space-y-1">
+          <div class="flex justify-between text-slate-600"><span>Subtotal productos:</span><span id="drawer-subtotal" class="font-semibold text-slate-800">$ 0</span></div>
+          <div class="flex justify-between text-slate-600" id="drawer-ship-row"><span>Costo de envío:</span><span id="drawer-ship" class="font-semibold text-slate-800">$ 0</span></div>
+          <div class="flex justify-between text-slate-600 hidden" id="drawer-tax-row"><span id="drawer-tax-lbl">Impuesto:</span><span id="drawer-tax" class="font-semibold text-slate-800">$ 0</span></div>
+          <div class="flex justify-between items-baseline pt-1.5 border-t border-purple-200/60">
+            <span class="font-extrabold text-slate-900">TOTAL A ABONAR</span>
+            <span id="drawer-total" class="text-xl font-black st-text">$ 0</span>
           </div>
         </div>
 
-        <button type="submit" id="btn-submit-order" class="w-full py-3.5 st-grad text-white font-extrabold rounded-2xl shadow-lg text-sm">
-          CONFIRMAR PEDIDO ✨
+        <button type="submit" id="btn-submit-order" class="w-full py-4 st-grad text-white font-extrabold rounded-2xl shadow-xl text-sm active:scale-[0.98] transition-all">
+          CONFIRMAR Y CONTINUAR AL PAGO ✨
         </button>
       </form>
     </div>
   </div>
 
-  <!-- SUCCESS MODAL -->
+  <!-- SUCCESS / AUTO-REDIRECT MODAL -->
   <div id="success-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="bg-white w-full max-w-sm rounded-[32px] p-6 text-center space-y-4 shadow-2xl text-xs">
       <div class="w-14 h-14 mx-auto rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl">✅</div>
-      <h2 class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">¡Pedido Confirmado!</h2>
-      <p class="text-slate-500">Tu código de seguimiento es <strong id="suc-code" class="font-mono text-purple-700 text-sm"></strong></p>
+      <h2 class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">¡Pedido Registrado!</h2>
+      <p class="text-slate-600">Tu código de seguimiento en vivo es <strong id="suc-code" class="font-mono text-purple-700 text-sm"></strong></p>
 
-      <!-- Bloque de Transferencia / Alias si aplica -->
+      <div id="suc-redirect-notice" class="hidden p-3 bg-sky-50 border border-sky-200 rounded-2xl text-sky-900 font-bold text-[11px] animate-pulse">
+        💳 Redirigiendo automáticamente a Mercado Pago Seguro... Al abonar volverás directo a tu pantalla de seguimiento.
+      </div>
+
       <div id="suc-bank-box" class="hidden p-3 bg-purple-50 border border-purple-200 rounded-2xl text-left space-y-1.5">
-        <span class="text-[10px] font-black uppercase text-purple-700 block">🏦 Datos para Transferencia</span>
+        <span class="text-[10px] font-black uppercase text-purple-700 block">🏦 Datos para Transferir</span>
         <p id="suc-bank-holder" class="text-[11px] text-slate-600"></p>
         <div class="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-purple-200">
           <span id="suc-bank-alias" class="font-mono font-bold text-slate-900 truncate"></span>
           <button type="button" onclick="copyBankAlias()" class="px-2 py-1 bg-purple-600 text-white font-bold rounded-lg text-[10px] shrink-0">📋 Copiar</button>
         </div>
+        <p class="text-[10px] text-purple-700 font-semibold">💡 Una vez hecha la transferencia, entra a tu Seguimiento abajo para adjuntar el comprobante.</p>
       </div>
 
       <div class="space-y-2 pt-1">
         <a id="suc-mp-btn" href="#" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-xs shadow-lg block">
-          💳 ABONAR CON MERCADO PAGO
+          💳 IR A MERCADO PAGO AHORA
         </a>
         <a id="suc-ext-btn" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3.5 bg-indigo-600 text-white font-extrabold rounded-2xl text-xs shadow-lg block">
           🔗 IR AL LINK DE PAGO ONLINE
         </a>
-        <a id="suc-wa-btn" href="#" target="_blank" rel="noopener noreferrer" class="w-full py-3 bg-emerald-500 text-white font-bold rounded-2xl text-xs shadow block">
-          📲 Enviar Pedido por WhatsApp a la Tienda
+        <a id="suc-track-btn" href="#" class="w-full py-3 bg-purple-600 text-white font-extrabold rounded-2xl text-xs shadow block">
+          🚚 Abrir Seguimiento en Vivo de mi Pedido
         </a>
-        <a id="suc-track-btn" href="#" class="w-full py-2.5 bg-slate-100 text-slate-700 font-bold rounded-2xl text-xs block">
-          🚚 Ver Seguimiento en Vivo de mi Paquete
+        <a id="suc-wa-btn" href="#" target="_blank" rel="noopener noreferrer" class="w-full py-2.5 bg-emerald-500 text-white font-bold rounded-2xl text-xs shadow block">
+          📲 Consultar por WhatsApp con la Tienda
         </a>
       </div>
     </div>
@@ -217,6 +282,74 @@
       }
     }
 
+    function hideBuyerHowBox() {
+      document.getElementById('buyer-how-box').classList.add('hidden');
+      try { localStorage.setItem('vf_buyer_hide_how', '1'); } catch (e) {}
+    }
+
+    function switchBuyerTab(tab) {
+      const isShop = tab === 'shop';
+      document.getElementById('buyer-section-shop').classList.toggle('hidden', !isShop);
+      document.getElementById('buyer-section-orders').classList.toggle('hidden', isShop);
+      document.getElementById('btab-shop').className = isShop
+        ? 'py-2 rounded-xl font-extrabold bg-white text-slate-900 shadow'
+        : 'py-2 rounded-xl font-bold text-white/90';
+      document.getElementById('btab-orders').className = !isShop
+        ? 'py-2 rounded-xl font-extrabold bg-white text-slate-900 shadow'
+        : 'py-2 rounded-xl font-bold text-white/90';
+      if (!isShop) renderBuyerRecentOrders();
+    }
+
+    function openBuyerTrackingFromInput() {
+      const code = document.getElementById('buyer-track-input').value.trim().toUpperCase();
+      if (!code) return;
+      window.location.href = `/seguimiento.html?code=${encodeURIComponent(code)}`;
+    }
+
+    function getBuyerOrdersKey() {
+      return `vf_buyer_orders_${store?.slug || 'global'}`;
+    }
+
+    function saveBuyerRecentOrder(ord) {
+      try {
+        const key = getBuyerOrdersKey();
+        const prev = JSON.parse(localStorage.getItem(key) || '[]');
+        prev.unshift({ code: ord.tracking_code, folio: ord.folio_number, total: ord.total, at: new Date().toLocaleDateString('es-AR') });
+        localStorage.setItem(key, JSON.stringify(prev.slice(0, 10)));
+      } catch (e) {}
+    }
+
+    function renderBuyerRecentOrders() {
+      const box = document.getElementById('buyer-recent-orders');
+      let arr = [];
+      try { arr = JSON.parse(localStorage.getItem(getBuyerOrdersKey()) || '[]'); } catch (e) {}
+      if (!arr.length) {
+        box.innerHTML = '<p class="text-[11px] text-slate-400 text-center py-4">Aún no realizaste pedidos desde este dispositivo.</p>';
+        return;
+      }
+      box.innerHTML = arr.map(o => `
+        <a href="/seguimiento.html?code=${encodeURIComponent(o.code)}" class="p-3 bg-purple-50/50 hover:bg-purple-100 rounded-2xl border border-purple-100 flex items-center justify-between">
+          <div>
+            <p class="font-mono font-extrabold text-purple-800">${esc(o.folio)} • ${esc(o.code)}</p>
+            <p class="text-[10px] text-slate-500">Fecha: ${esc(o.at)} • Total: ${esc(fmt(o.total))}</p>
+          </div>
+          <span class="font-bold text-purple-700">Ver en vivo →</span>
+        </a>
+      `).join('');
+    }
+
+    function restoreSavedBuyerInfo() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('vf_buyer_profile_v5') || '{}');
+        if (saved.name) document.getElementById('co-name').value = saved.name;
+        if (saved.phone) document.getElementById('co-phone').value = saved.phone;
+        if (saved.address) document.getElementById('co-address').value = saved.address;
+        if (saved.cp) document.getElementById('co-cp').value = saved.cp;
+        if (saved.city) document.getElementById('co-city').value = saved.city;
+        if (saved.province) document.getElementById('co-province').value = saved.province;
+      } catch (e) {}
+    }
+
     async function initStore() {
       const slug = getSlug();
       if (!slug) {
@@ -224,6 +357,12 @@
         document.getElementById('error-view').classList.remove('hidden');
         return;
       }
+      try {
+        if (localStorage.getItem('vf_buyer_hide_how') === '1') {
+          document.getElementById('buyer-how-box')?.classList.add('hidden');
+        }
+      } catch (e) {}
+
       try {
         const resp = await fetch(`/api/public/store/${encodeURIComponent(slug)}`);
         const data = await resp.json();
@@ -247,12 +386,19 @@
         if (Number(store.free_shipping_min) > 0) {
           shipBanner.innerText = `🚚 ¡Envío Gratis en compras desde ${fmt(store.free_shipping_min)}!`;
           shipBanner.classList.remove('hidden');
+        } else if (Number(store.shipping_branch_rate) > 0) {
+          shipBanner.innerText = `📮 Envíos a Sucursal Correo (${fmt(store.shipping_branch_rate)}) y a Domicilio`;
+          shipBanner.classList.remove('hidden');
         } else if (store.allow_pickup) {
-          shipBanner.innerText = `🚚 Envíos a domicilio y Retiro sin cargo`;
+          shipBanner.innerText = `🚚 Envíos a todo el país y Retiro sin cargo`;
           shipBanner.classList.remove('hidden');
         }
 
+        const hasBranch = Number(store.shipping_branch_rate) > 0;
+        document.getElementById('btn-del-branch').classList.toggle('hidden', !hasBranch);
         document.getElementById('btn-del-pickup').classList.toggle('hidden', !store.allow_pickup);
+
+        restoreSavedBuyerInfo();
         setupPaymentMethods();
         setDeliveryMethod('delivery');
         renderCategories();
@@ -269,13 +415,13 @@
 
     function setupPaymentMethods() {
       const methods = [];
-      if (store.mp_enabled) methods.push({ id: 'mercadopago', label: '💳 Mercado Pago' });
-      if (store.bank_alias) methods.push({ id: 'transfer', label: '🏦 Transferencia' });
-      if (store.external_pay_link) methods.push({ id: 'external_link', label: '🔗 Pago Online' });
-      if (store.cash_on_delivery || methods.length === 0) methods.push({ id: 'cash', label: '💵 Efectivo / Acordar' });
+      if (store.mp_enabled) methods.push({ id: 'mercadopago', label: '💳 Mercado Pago', desc: 'Te redirigimos automáticamente a Mercado Pago Seguro. Al abonar, tu pedido pasa directo a despacho.' });
+      if (store.bank_alias) methods.push({ id: 'transfer', label: '🏦 Transferencia', desc: 'Al confirmar verás el Alias/CBU para copiar en 1 toque y podrás adjuntar tu comprobante.' });
+      if (store.external_pay_link) methods.push({ id: 'external_link', label: '🔗 Pago Online', desc: 'Abona de forma segura mediante el enlace de pago oficial de la tienda.' });
+      if (store.cash_on_delivery || methods.length === 0) methods.push({ id: 'cash', label: '💵 Efectivo / Acordar', desc: 'Abonas al retirar o coordinas el pago directamente con la tienda.' });
       selectedPayMethod = methods[0].id;
-      renderPaymentMethodButtons(methods);
       window._storeMethods = methods;
+      renderPaymentMethodButtons(methods);
     }
 
     function renderPaymentMethodButtons(methods) {
@@ -285,6 +431,9 @@
           ${esc(m.label)}
         </button>
       `).join('');
+      const activeObj = list.find(x => x.id === selectedPayMethod);
+      const expEl = document.getElementById('payment-explain-text');
+      if (expEl && activeObj) expEl.innerText = activeObj.desc;
     }
 
     function selectPayMethod(id) {
@@ -293,24 +442,55 @@
     }
 
     function setDeliveryMethod(mode) {
-      selectedDelivery = (mode === 'pickup' && store?.allow_pickup) ? 'pickup' : 'delivery';
-      document.getElementById('btn-del-delivery').className = selectedDelivery === 'delivery'
-        ? 'p-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold text-[11px] text-center'
-        : 'p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center';
-      const pBtn = document.getElementById('btn-del-pickup');
-      if (pBtn && !pBtn.classList.contains('hidden')) {
-        pBtn.className = selectedDelivery === 'pickup'
-          ? 'p-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold text-[11px] text-center'
-          : 'p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center';
-      }
+      if (mode === 'pickup' && store?.allow_pickup) selectedDelivery = 'pickup';
+      else if (mode === 'branch' && Number(store?.shipping_branch_rate) > 0) selectedDelivery = 'branch';
+      else selectedDelivery = 'delivery';
+
+      ['delivery', 'branch', 'pickup'].forEach(k => {
+        const b = document.getElementById(`btn-del-${k}`);
+        if (b && !b.classList.contains('hidden')) {
+          b.className = selectedDelivery === k
+            ? 'p-2 rounded-xl border-2 border-purple-600 bg-purple-50 text-purple-950 font-bold text-[11px] text-center'
+            : 'p-2 rounded-xl border border-slate-200 bg-white text-slate-600 font-bold text-[11px] text-center';
+        }
+      });
+
       const addrWrap = document.getElementById('co-address-wrap');
-      const addrInp = document.getElementById('co-address');
+      const streetInp = document.getElementById('co-address');
+      const branchInp = document.getElementById('co-branch-name');
+      const cpInp = document.getElementById('co-cp');
+      const cityInp = document.getElementById('co-city');
+      const provInp = document.getElementById('co-province');
+      const delExp = document.getElementById('delivery-explain-text');
+
       if (selectedDelivery === 'pickup') {
         addrWrap.classList.add('hidden');
-        addrInp.required = false;
+        streetInp.required = false;
+        branchInp.required = false;
+        cpInp.required = false;
+        cityInp.required = false;
+        provInp.required = false;
+        if (delExp) delExp.innerText = `🏪 Retiras sin costo de envío en ${store?.address || 'el punto de entrega de la tienda'}.`;
+      } else if (selectedDelivery === 'branch') {
+        addrWrap.classList.remove('hidden');
+        streetInp.classList.add('hidden');
+        streetInp.required = false;
+        branchInp.classList.remove('hidden');
+        branchInp.required = true;
+        cpInp.required = true;
+        cityInp.required = true;
+        provInp.required = true;
+        if (delExp) delExp.innerText = `📮 Recibes en la Sucursal de Correo Argentino que indiques (Costo: ${fmt(store?.shipping_branch_rate || 0)}).`;
       } else {
         addrWrap.classList.remove('hidden');
-        addrInp.required = true;
+        streetInp.classList.remove('hidden');
+        streetInp.required = true;
+        branchInp.classList.add('hidden');
+        branchInp.required = false;
+        cpInp.required = true;
+        cityInp.required = true;
+        provInp.required = true;
+        if (delExp) delExp.innerText = `🚚 Recibes directamente en la puerta de tu domicilio (${Number(store?.shipping_flat_rate) > 0 ? 'Costo: ' + fmt(store.shipping_flat_rate) : 'Sin cargo adicional'}).`;
       }
       updateCartBar();
     }
@@ -318,7 +498,7 @@
     function renderCategories() {
       const cats = ['Todos', ...new Set(products.map(p => p.category || 'General'))];
       document.getElementById('st-categories').innerHTML = cats.map((c, idx) => `
-        <button type="button" data-cat-idx="${idx}" onclick="selectCatByIdx(${idx})" class="px-3 py-1.5 rounded-xl font-bold shrink-0 ${activeCategory === c ? 'st-grad text-white shadow' : 'bg-white text-slate-600 border border-slate-200'}">
+        <button type="button" onclick="selectCatByIdx(${idx})" class="px-3 py-1.5 rounded-xl font-bold shrink-0 ${activeCategory === c ? 'st-grad text-white shadow' : 'bg-white text-slate-600 border border-slate-200'}">
           ${esc(c)}
         </button>
       `).join('');
@@ -335,13 +515,13 @@
       const q = (document.getElementById('st-search').value || '').toLowerCase().trim();
       const filtered = products.filter(p => {
         if (activeCategory !== 'Todos' && (p.category || 'General') !== activeCategory) return false;
-        if (q && !String(p.name || '').toLowerCase().includes(q)) return false;
+        if (q && !(String(p.name || '').toLowerCase().includes(q) || String(p.category || '').toLowerCase().includes(q))) return false;
         return true;
       });
 
       const box = document.getElementById('st-products');
       if (!filtered.length) {
-        box.innerHTML = '<div class="col-span-2 text-center py-10 text-xs text-slate-400 bg-white rounded-3xl">No hay productos en esta búsqueda.</div>';
+        box.innerHTML = '<div class="col-span-2 text-center py-10 text-xs text-slate-400 bg-white rounded-3xl">No encontramos productos con esa búsqueda.</div>';
         return;
       }
 
@@ -361,15 +541,15 @@
             <div class="space-y-1.5 pt-1">
               <div class="flex items-center justify-between">
                 <span class="font-black text-sm st-text">${esc(fmt(p.price))}</span>
-                <span class="text-[9px] font-bold ${out ? 'text-rose-600' : 'text-emerald-600'}">${out ? 'Agotado' : `Stock: ${Number(p.stock)}`}</span>
+                <span class="text-[9px] font-bold ${out ? 'text-rose-600' : 'text-emerald-600'}">${out ? 'Agotado' : `Disp: ${Number(p.stock)}`}</span>
               </div>
               ${availVars.length && !out ? `
                 <select id="var-${safeId}" class="w-full px-2 py-1 text-[10px] bg-slate-50 border border-slate-200 rounded-lg font-semibold">
-                  ${availVars.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${Number(v.stock)})</option>`).join('')}
+                  ${availVars.map(v => `<option value="${esc(v.name)}">${esc(v.name)} (${Number(v.stock)} disp.)</option>`).join('')}
                 </select>
               ` : ''}
-              <button type="button" ${out ? 'disabled' : `onclick="addToPublicCart('${safeId}')"`} class="w-full py-2 rounded-xl font-bold text-xs ${out ? 'bg-slate-100 text-slate-400' : 'st-grad text-white shadow active:scale-95 transition-transform'}">
-                ${out ? 'Sin Stock' : '+ Agregar'}
+              <button type="button" id="addbtn-${safeId}" ${out ? 'disabled' : `onclick="addToPublicCart('${safeId}')"`} class="w-full py-2 rounded-xl font-bold text-xs ${out ? 'bg-slate-100 text-slate-400' : 'st-grad text-white shadow active:scale-95 transition-all'}">
+                ${out ? 'Sin Stock' : '+ Sumar al Pedido'}
               </button>
             </div>
           </div>
@@ -389,10 +569,16 @@
         : p.stock;
 
       if (existing) {
-        if (existing.quantity >= maxStock) { alert('Alcanzaste el stock máximo disponible.'); return; }
+        if (existing.quantity >= maxStock) { alert('Alcanzaste el stock máximo disponible de este artículo.'); return; }
         existing.quantity += 1;
       } else {
         cart.push({ key, product_id: pid, name: p.name, variant_name: vname, price: Number(p.price), quantity: 1, maxStock });
+      }
+      const btn = document.getElementById(`addbtn-${pid}`);
+      if (btn) {
+        const prev = btn.innerText;
+        btn.innerText = '✓ Agregado';
+        setTimeout(() => { btn.innerText = prev; }, 900);
       }
       updateCartBar();
     }
@@ -409,10 +595,13 @@
     function computeTotals() {
       const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
       const flat = Number(store?.shipping_flat_rate || 0);
+      const branch = Number(store?.shipping_branch_rate || 0);
       const freeMin = Number(store?.free_shipping_min || 0);
       let ship = 0;
       if (selectedDelivery === 'delivery') {
         ship = (freeMin > 0 && subtotal >= freeMin) ? 0 : flat;
+      } else if (selectedDelivery === 'branch') {
+        ship = (freeMin > 0 && subtotal >= freeMin) ? 0 : branch;
       }
       const taxRate = Number(store?.tax_rate || 0);
       const tax = taxRate > 0 ? Math.round(subtotal * (taxRate / 100) * 100) / 100 : 0;
@@ -441,12 +630,12 @@
 
       const prog = document.getElementById('free-ship-progress');
       const freeMin = Number(store?.free_shipping_min || 0);
-      if (freeMin > 0 && selectedDelivery === 'delivery') {
+      if (freeMin > 0 && selectedDelivery !== 'pickup') {
         prog.classList.remove('hidden');
         if (t.subtotal >= freeMin) {
-          prog.innerText = '🎉 ¡Felicitaciones! Tienes Envío Gratis en este pedido';
+          prog.innerText = '🎉 ¡Felicitaciones! Ya tienes Envío Gratis en este pedido';
         } else {
-          prog.innerText = `🚚 Te faltan ${fmt(freeMin - t.subtotal)} para obtener Envío Gratis`;
+          prog.innerText = `🚚 Suma ${fmt(freeMin - t.subtotal)} más para tener Envío Gratis`;
         }
       } else {
         prog.classList.add('hidden');
@@ -492,7 +681,17 @@
       if (!cart.length) return;
       const btn = document.getElementById('btn-submit-order');
       btn.disabled = true;
-      btn.innerText = 'Procesando pedido seguro... 🔒';
+      btn.innerText = 'Generando tu pedido y pago... 🔒';
+
+      const buyerData = {
+        name: document.getElementById('co-name').value.trim(),
+        phone: document.getElementById('co-phone').value.trim(),
+        address: document.getElementById('co-address').value.trim(),
+        cp: document.getElementById('co-cp').value.trim(),
+        city: document.getElementById('co-city').value.trim(),
+        province: document.getElementById('co-province').value.trim()
+      };
+      try { localStorage.setItem('vf_buyer_profile_v5', JSON.stringify(buyerData)); } catch (err) {}
 
       try {
         const resp = await fetch(`/api/public/store/${encodeURIComponent(store.slug)}/checkout`, {
@@ -500,9 +699,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             website_hp: document.getElementById('co-hp').value,
-            customer_name: document.getElementById('co-name').value.trim(),
-            customer_phone: document.getElementById('co-phone').value.trim(),
-            customer_address: document.getElementById('co-address').value.trim(),
+            customer_name: buyerData.name,
+            customer_phone: buyerData.phone,
+            customer_address: buyerData.address,
+            customer_postal_code: buyerData.cp,
+            customer_city: buyerData.city,
+            customer_province: buyerData.province,
+            branch_name: document.getElementById('co-branch-name').value.trim(),
             delivery_method: selectedDelivery,
             payment_method: selectedPayMethod,
             notes: document.getElementById('co-notes').value.trim(),
@@ -512,11 +715,13 @@
         const data = await resp.json();
         if (!resp.ok) throw new Error(data.error || 'No se pudo procesar el pedido');
 
+        saveBuyerRecentOrder(data.order);
         closeCheckoutDrawer();
         document.getElementById('suc-code').innerText = data.order.tracking_code;
         document.getElementById('suc-track-btn').href = data.tracking_url;
 
         const mpBtn = document.getElementById('suc-mp-btn');
+        const redirNotice = document.getElementById('suc-redirect-notice');
         if (data.payment_link) {
           mpBtn.href = data.payment_link;
           mpBtn.classList.remove('hidden');
@@ -533,7 +738,7 @@
         }
 
         const bankBox = document.getElementById('suc-bank-box');
-        if (data.bank_alias) {
+        if (data.bank_alias && selectedPayMethod !== 'mercadopago') {
           document.getElementById('suc-bank-alias').innerText = data.bank_alias;
           document.getElementById('suc-bank-holder').innerText = data.bank_holder ? `Titular / Banco: ${data.bank_holder}` : '';
           bankBox.classList.remove('hidden');
@@ -542,7 +747,7 @@
         }
 
         const fullTrackUrl = `${window.location.origin}${data.tracking_url}`;
-        const waMsg = `¡Hola ${store.name}! Realicé el Pedido ${data.order.folio_number} (${data.order.tracking_code}) por ${fmt(data.order.total)}. Seguimiento: ${fullTrackUrl}`;
+        const waMsg = `¡Hola ${store.name}! Realicé el Pedido ${data.order.folio_number} (${data.order.tracking_code}) por ${fmt(data.order.total)}. Mi seguimiento: ${fullTrackUrl}`;
         const cleanPhone = (data.store_phone || '').replace(/\D/g, '');
         document.getElementById('suc-wa-btn').href = cleanPhone
           ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(waMsg)}`
@@ -551,11 +756,21 @@
         cart = [];
         updateCartBar();
         document.getElementById('success-modal').classList.remove('hidden');
+
+        // Redirección automática e inmediata a Mercado Pago si el cliente eligió Mercado Pago
+        if (selectedPayMethod === 'mercadopago' && data.payment_link) {
+          redirNotice.classList.remove('hidden');
+          setTimeout(() => {
+            window.location.assign(data.payment_link);
+          }, 1200);
+        } else {
+          redirNotice.classList.add('hidden');
+        }
       } catch (err) {
         alert(err.message);
       } finally {
         btn.disabled = false;
-        btn.innerText = 'CONFIRMAR PEDIDO ✨';
+        btn.innerText = 'CONFIRMAR Y CONTINUAR AL PAGO ✨';
       }
     }
 
