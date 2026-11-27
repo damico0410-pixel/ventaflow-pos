@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ventaflow-pos-v6';
+const CACHE_NAME = 'ventaflow-pos-v7';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

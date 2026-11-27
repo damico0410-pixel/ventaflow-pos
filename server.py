@@ -44,6 +44,7 @@ PUBLIC_STATIC_FILES = {
     '/index.html': 'text/html; charset=utf-8',
     '/tienda.html': 'text/html; charset=utf-8',
     '/seguimiento.html': 'text/html; charset=utf-8',
+    '/admin.html': 'text/html; charset=utf-8',
     '/manifest.json': 'application/manifest+json; charset=utf-8',
     '/sw.js': 'application/javascript; charset=utf-8',
     '/icon.svg': 'image/svg+xml',
@@ -632,6 +633,10 @@ def init_db():
             bank_holder TEXT DEFAULT '',
             external_pay_link TEXT DEFAULT '',
             cash_on_delivery INTEGER DEFAULT 1,
+            transfer_discount_pct REAL DEFAULT 0,
+            coupons_json TEXT DEFAULT '[]',
+            shipping_local_rate REAL DEFAULT 0,
+            shipping_regional_rate REAL DEFAULT 0,
             shipping_flat_rate REAL DEFAULT 0,
             shipping_branch_rate REAL DEFAULT 0,
             free_shipping_min REAL DEFAULT 0,
@@ -660,6 +665,9 @@ def init_db():
             barcode TEXT DEFAULT '',
             sku TEXT DEFAULT '',
             image_url TEXT DEFAULT '',
+            gallery_json TEXT DEFAULT '[]',
+            wholesale_min_qty INTEGER DEFAULT 0,
+            wholesale_price REAL DEFAULT 0,
             variants_json TEXT DEFAULT '[]',
             created_at TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users(id)
@@ -751,6 +759,9 @@ def init_db():
         "ALTER TABLE products ADD COLUMN cost_price REAL DEFAULT 0",
         "ALTER TABLE products ADD COLUMN description TEXT DEFAULT ''",
         "ALTER TABLE products ADD COLUMN compare_price REAL DEFAULT 0",
+        "ALTER TABLE products ADD COLUMN gallery_json TEXT DEFAULT '[]'",
+        "ALTER TABLE products ADD COLUMN wholesale_min_qty INTEGER DEFAULT 0",
+        "ALTER TABLE products ADD COLUMN wholesale_price REAL DEFAULT 0",
         "ALTER TABLE products ADD COLUMN image_url TEXT DEFAULT ''",
         "ALTER TABLE products ADD COLUMN variants_json TEXT DEFAULT '[]'",
         "ALTER TABLE customers ADD COLUMN postal_code TEXT DEFAULT ''",
@@ -790,6 +801,10 @@ def init_db():
         "ALTER TABLE store_profiles ADD COLUMN allow_pickup INTEGER DEFAULT 1",
         "ALTER TABLE store_profiles ADD COLUMN origin_postal_code TEXT DEFAULT ''",
         "ALTER TABLE store_profiles ADD COLUMN origin_province TEXT DEFAULT ''",
+        "ALTER TABLE store_profiles ADD COLUMN transfer_discount_pct REAL DEFAULT 0",
+        "ALTER TABLE store_profiles ADD COLUMN coupons_json TEXT DEFAULT '[]'",
+        "ALTER TABLE store_profiles ADD COLUMN shipping_local_rate REAL DEFAULT 0",
+        "ALTER TABLE store_profiles ADD COLUMN shipping_regional_rate REAL DEFAULT 0",
     ]
     for alter_sql in migrations:
         try:
@@ -879,6 +894,49 @@ def sanitize_profile_for_client(profile_row, conn=None, is_staff=False):
 def resolve_mp_currency(profile_row):
     code = ((profile_row['currency_code'] if profile_row and 'currency_code' in profile_row.keys() else '') or 'ARS').upper().strip()
     return code if code in MP_SUPPORTED_CURRENCIES else 'ARS'
+
+
+def compute_zone_shipping_rate(profile_row, delivery_method: str, dest_province: str = '') -> float:
+    if delivery_method == 'pickup':
+        return 0.0
+    if delivery_method == 'branch':
+        return max(0.0, float(profile_row['shipping_branch_rate'] or 0))
+    flat = max(0.0, float(profile_row['shipping_flat_rate'] or 0))
+    local_r = max(0.0, float(profile_row['shipping_local_rate'] or 0)) if 'shipping_local_rate' in profile_row.keys() else 0.0
+    reg_r = max(0.0, float(profile_row['shipping_regional_rate'] or 0)) if 'shipping_regional_rate' in profile_row.keys() else 0.0
+    if local_r <= 0 and reg_r <= 0:
+        return flat
+    prov_norm = slugify(dest_province).replace('-', ' ')
+    orig_norm = slugify(profile_row['origin_province'] or '').replace('-', ' ')
+    if not prov_norm:
+        return flat
+    caba_gba = {'caba', 'capital federal', 'ciudad autonoma de buenos aires', 'amba', 'gba'}
+    if local_r > 0:
+        if orig_norm and (prov_norm == orig_norm or (prov_norm in caba_gba and orig_norm in (caba_gba | {'buenos aires'}))):
+            return local_r
+        if not orig_norm and prov_norm in caba_gba:
+            return local_r
+    if reg_r > 0:
+        regional_set = caba_gba | {'buenos aires', 'cordoba', 'santa fe', 'entre rios', 'la pampa', 'mendoza', 'san luis'}
+        if prov_norm in regional_set:
+            return reg_r
+    return flat
+
+
+def find_active_coupon(profile_row, raw_code: str):
+    code = re.sub(r'[^A-Z0-9\-_]', '', str(raw_code or '').strip().upper())[:24]
+    if not code or not profile_row or 'coupons_json' not in profile_row.keys():
+        return None
+    try:
+        coupons = json.loads(profile_row['coupons_json'] or '[]')
+    except Exception:
+        coupons = []
+    for c in coupons:
+        if str(c.get('code') or '').strip().upper() == code and c.get('active', True) is not False:
+            pct = float(c.get('pct') or 0)
+            if 0 < pct <= 90:
+                return {'code': code, 'pct': pct}
+    return None
 
 
 def mp_api_request(method, path, token, payload=None):
@@ -1178,6 +1236,8 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
             return
         if path in ('/', ''):
             path = '/index.html'
+        elif path in ('/control', '/admin'):
+            path = '/admin.html'
         elif path == '/seguimiento':
             path = '/seguimiento.html'
         elif path == '/tienda' or path.startswith('/tienda/'):
@@ -1198,7 +1258,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 trial_days = int(cfg.get('TRIAL_DAYS') or DEFAULT_TRIAL_DAYS)
                 self.send_json(200, {
                     'ok': True,
-                    'version': '6.0-pro',
+                    'version': '7.0-ultra',
                     'database': 'postgresql' if IS_POSTGRES else 'sqlite',
                     'mp_platform_configured': bool(cfg.get('PLATFORM_MP_ACCESS_TOKEN') or cfg.get('PLATFORM_MP_PAY_LINK')),
                     'smtp_configured': bool(cfg.get('SMTP_HOST') and cfg.get('SMTP_USER')),
@@ -1545,7 +1605,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     return
 
                 products = conn.execute(
-                    'SELECT id, name, description, price, compare_price, category, stock, image_url, variants_json FROM products WHERE user_id = ? ORDER BY category ASC, name ASC',
+                    'SELECT id, name, description, price, compare_price, wholesale_min_qty, wholesale_price, category, stock, image_url, gallery_json, variants_json FROM products WHERE user_id = ? ORDER BY category ASC, name ASC',
                     (owner['id'],)
                 ).fetchall()
                 pub_prods = []
@@ -1555,10 +1615,21 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         pd['variants'] = json.loads(pd.get('variants_json') or '[]')
                     except Exception:
                         pd['variants'] = []
+                    try:
+                        pd['gallery'] = json.loads(pd.get('gallery_json') or '[]')
+                    except Exception:
+                        pd['gallery'] = []
                     del pd['variants_json']
+                    del pd['gallery_json']
                     pub_prods.append(pd)
 
                 mp_tok = decrypt_secret(profile['mp_access_token'], conn)
+                try:
+                    raw_coupons = json.loads(profile['coupons_json'] or '[]')
+                    has_coupons = any(float(c.get('pct') or 0) > 0 and c.get('active', True) is not False for c in raw_coupons)
+                except Exception:
+                    has_coupons = False
+
                 self.send_json(200, {
                     'store': {
                         'name': profile['name'],
@@ -1569,6 +1640,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         'custom_color': profile['custom_color'],
                         'phone': profile['phone'],
                         'address': profile['address'],
+                        'origin_province': profile['origin_province'] or '',
                         'instagram': profile['instagram'],
                         'country_code': profile['country_code'] or 'AR',
                         'currency_code': profile['currency_code'] or 'ARS',
@@ -1579,6 +1651,10 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         'bank_holder': profile['bank_holder'] or '',
                         'external_pay_link': profile['external_pay_link'] or '',
                         'cash_on_delivery': bool(profile['cash_on_delivery']),
+                        'transfer_discount_pct': float(profile['transfer_discount_pct'] or 0),
+                        'has_coupons': has_coupons,
+                        'shipping_local_rate': float(profile['shipping_local_rate'] or 0),
+                        'shipping_regional_rate': float(profile['shipping_regional_rate'] or 0),
                         'shipping_flat_rate': float(profile['shipping_flat_rate'] or 0),
                         'shipping_branch_rate': float(profile['shipping_branch_rate'] or 0),
                         'free_shipping_min': float(profile['free_shipping_min'] or 0),
@@ -1601,27 +1677,86 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 users = conn.execute(
                     '''SELECT u.id, u.email, u.role, u.store_name, u.subscription_status,
                               u.subscription_expires_at, u.is_trial, u.mp_last_payment_id, u.created_at,
-                              sp.phone AS store_phone, sp.slug AS store_slug
+                              sp.phone AS store_phone, sp.slug AS store_slug, sp.address AS store_address,
+                              sp.instagram AS store_instagram, sp.mp_access_token AS store_mp_tok
                        FROM users u
                        LEFT JOIN store_profiles sp ON sp.user_id = u.id
                        ORDER BY u.id DESC'''
                 ).fetchall()
+
+                prod_counts = {
+                    r['user_id']: int(r['cnt'])
+                    for r in conn.execute('SELECT user_id, COUNT(*) AS cnt FROM products GROUP BY user_id').fetchall()
+                }
+                ord_stats = {
+                    r['user_id']: {'cnt': int(r['cnt']), 'vol': float(r['vol'] or 0)}
+                    for r in conn.execute("SELECT user_id, COUNT(*) AS cnt, COALESCE(SUM(total), 0) AS vol FROM orders WHERE dispatch_status != 'cancelled' GROUP BY user_id").fetchall()
+                }
+                sub_stats = {
+                    r['user_id']: {'cnt': int(r['cnt']), 'paid_sum': float(r['paid_sum'] or 0), 'last_at': r['last_at'] or ''}
+                    for r in conn.execute('SELECT user_id, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS paid_sum, MAX(created_at) AS last_at FROM subscription_payments GROUP BY user_id').fetchall()
+                }
+
                 enriched_users = []
+                paid_active_count = 0
+                courtesy_active_count = 0
+                trial_unpaid_count = 0
+                expired_unpaid_count = 0
+
                 for u in users:
                     ud = dict(u)
+                    ud['has_mp_linked'] = bool(ud.pop('store_mp_tok', ''))
                     st, dleft, _, is_tr = compute_subscription_info(u)
-                    ud['computed_status'] = 'trial' if (st == 'active' and is_tr) else st
+                    comp_st = 'trial' if (st == 'active' and is_tr) else st
+                    ud['computed_status'] = comp_st
                     ud['days_left'] = dleft
+                    uid = u['id']
+                    ud['products_count'] = prod_counts.get(uid, 0)
+                    ud['orders_count'] = ord_stats.get(uid, {}).get('cnt', 0)
+                    ud['sales_volume'] = ord_stats.get(uid, {}).get('vol', 0.0)
+                    s_info = sub_stats.get(uid, {'cnt': 0, 'paid_sum': 0.0, 'last_at': ''})
+                    ud['sub_payments_count'] = s_info['cnt']
+                    ud['sub_paid_total'] = s_info['paid_sum']
+                    ud['last_payment_at'] = s_info['last_at']
+
+                    last_pid = str(u['mp_last_payment_id'] or '')
+                    if u['role'] == 'admin':
+                        ud['billing_category'] = 'admin'
+                    elif comp_st == 'active' and s_info['paid_sum'] > 0 and not last_pid.startswith('courtesy_'):
+                        ud['billing_category'] = 'paid_active'
+                        paid_active_count += 1
+                    elif comp_st == 'active':
+                        ud['billing_category'] = 'courtesy_active'
+                        courtesy_active_count += 1
+                    elif comp_st == 'trial':
+                        ud['billing_category'] = 'trial_unpaid'
+                        trial_unpaid_count += 1
+                    else:
+                        ud['billing_category'] = 'expired_unpaid'
+                        expired_unpaid_count += 1
+
                     enriched_users.append(ud)
 
                 payments = conn.execute(
                     '''SELECT sp.*, u.email, u.store_name
                        FROM subscription_payments sp
                        JOIN users u ON u.id = sp.user_id
-                       ORDER BY sp.id DESC LIMIT 50'''
+                       ORDER BY sp.id DESC LIMIT 120'''
                 ).fetchall()
+                total_sub_rev = sum(float(p['amount'] or 0) for p in payments)
+                total_platform_orders = sum(v['cnt'] for v in ord_stats.values())
+
                 cfg = load_config(conn)
                 self.send_json(200, {
+                    'summary': {
+                        'total_merchants': sum(1 for x in enriched_users if x['role'] != 'admin'),
+                        'paid_active_count': paid_active_count,
+                        'courtesy_active_count': courtesy_active_count,
+                        'trial_unpaid_count': trial_unpaid_count,
+                        'expired_unpaid_count': expired_unpaid_count,
+                        'total_subscription_revenue': total_sub_rev,
+                        'total_platform_orders': total_platform_orders
+                    },
                     'users': enriched_users,
                     'payments': [dict(p) for p in payments],
                     'config': {
@@ -1644,6 +1779,8 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
 
         if path in ('/', ''):
             route = '/index.html'
+        elif path in ('/control', '/admin'):
+            route = '/admin.html'
         elif path == '/seguimiento':
             route = '/seguimiento.html'
         elif path == '/tienda' or path.startswith('/tienda/'):
@@ -2161,18 +2298,21 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 pid = 'prod_' + secrets.token_hex(6)
                 now_iso = utc_now().isoformat()
                 variants = body.get('variants') if isinstance(body.get('variants'), list) else []
+                gallery = [str(g).strip() for g in (body.get('gallery') or []) if str(g).strip().startswith('data:image/') or str(g).strip().startswith('http')][:4]
                 stock_val = max(0, int(body.get('stock') or 0))
                 if variants:
                     stock_val = sum(max(0, int(v.get('stock') or 0)) for v in variants)
                 conn.execute(
-                    '''INSERT INTO products (id, user_id, name, description, price, compare_price, cost_price, category, stock, min_stock, barcode, sku, image_url, variants_json, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    '''INSERT INTO products (id, user_id, name, description, price, compare_price, wholesale_min_qty, wholesale_price, cost_price, category, stock, min_stock, barcode, sku, image_url, gallery_json, variants_json, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (
                         pid, user['id'],
                         (body.get('name') or '').strip()[:140],
                         (body.get('description') or '').strip()[:600],
                         max(0.0, float(body.get('price') or 0)),
                         max(0.0, float(body.get('compare_price') or 0)),
+                        max(0, int(body.get('wholesale_min_qty') or 0)),
+                        max(0.0, float(body.get('wholesale_price') or 0)),
                         max(0.0, float(body.get('cost_price') or 0)),
                         (body.get('category') or 'General').strip()[:60],
                         stock_val,
@@ -2180,6 +2320,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         (body.get('barcode') or '').strip()[:64],
                         (body.get('sku') or body.get('barcode') or '').strip()[:64],
                         (body.get('image_url') or '').strip(),
+                        json.dumps(gallery, ensure_ascii=False),
                         json.dumps(variants, ensure_ascii=False),
                         now_iso
                     )
@@ -2712,6 +2853,26 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 conn.close()
             return
 
+        if path.startswith('/api/public/store/') and path.endswith('/validate-coupon'):
+            if not SHIELD.check_rate('pub_coupon', ip, limit=15, window_sec=60):
+                self.send_json(429, {'error': 'Demasiados intentos. Aguarda unos segundos.'})
+                return
+            slug = re.sub(r'[^a-z0-9\-]', '', path.split('/')[4].strip().lower())[:64]
+            conn = get_db()
+            try:
+                profile = conn.execute('SELECT * FROM store_profiles WHERE lower(slug) = ?', (slug,)).fetchone()
+                if not profile:
+                    self.send_json(404, {'error': 'Tienda no encontrada'})
+                    return
+                found = find_active_coupon(profile, body.get('code') or '')
+                if not found:
+                    self.send_json(400, {'error': 'Cupón inválido o vencido.'})
+                    return
+                self.send_json(200, {'coupon': found})
+            finally:
+                conn.close()
+            return
+
         if path.startswith('/api/public/store/') and path.endswith('/checkout'):
             if not SHIELD.check_rate('public_checkout', ip, limit=8, window_sec=60):
                 self.send_json(429, {'error': 'Demasiados pedidos seguidos desde esta conexión. Aguarda un minuto.'})
@@ -2780,8 +2941,15 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         return
 
                     uprice = float(prod['price'])
+                    w_min = int(prod['wholesale_min_qty'] or 0) if 'wholesale_min_qty' in prod.keys() else 0
+                    w_price = float(prod['wholesale_price'] or 0) if 'wholesale_price' in prod.keys() else 0.0
+                    is_wholesale = (w_min > 0 and w_price > 0 and qty >= w_min)
+                    if is_wholesale:
+                        uprice = w_price
                     ucost = float(prod['cost_price'] or 0)
                     display_name = f"{prod['name']} ({vname})" if vname else prod['name']
+                    if is_wholesale:
+                        display_name += f" [Mayorista {w_min}+]"
                     sub = uprice * qty
                     csub = ucost * qty
                     subtotal += sub
@@ -2816,28 +2984,43 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json(400, {'error': 'Productos inválidos.'})
                     return
 
-                flat_ship = float(profile['shipping_flat_rate'] or 0)
-                branch_ship = float(profile['shipping_branch_rate'] or 0)
+                # Descuentos automáticos (Cupón + % Transferencia)
+                discount_amount = 0.0
+                disc_parts = []
+                coupon_obj = find_active_coupon(profile, body.get('coupon_code') or '')
+                if coupon_obj:
+                    c_disc = round(subtotal * (coupon_obj['pct'] / 100.0), 2)
+                    discount_amount += c_disc
+                    disc_parts.append(f"Cupón {coupon_obj['code']} (-{int(coupon_obj['pct'])}%)")
+
+                after_coupon = max(0.0, subtotal - discount_amount)
+                tr_pct = float(profile['transfer_discount_pct'] or 0) if 'transfer_discount_pct' in profile.keys() else 0.0
+                if payment_method in ('transfer', 'cash') and tr_pct > 0:
+                    t_disc = round(after_coupon * (tr_pct / 100.0), 2)
+                    discount_amount = round(discount_amount + t_disc, 2)
+                    disc_parts.append(f"Desc. Transferencia (-{int(tr_pct) if tr_pct.is_integer() else tr_pct}%)")
+
+                discount_label = ' + '.join(disc_parts)[:80]
+                net_merchandise = max(0.0, subtotal - discount_amount)
+
                 free_min = float(profile['free_shipping_min'] or 0)
                 if delivery_method == 'pickup':
                     shipping_cost = 0.0
-                elif free_min > 0 and subtotal >= free_min:
+                elif free_min > 0 and net_merchandise >= free_min:
                     shipping_cost = 0.0
-                elif delivery_method == 'branch':
-                    shipping_cost = max(0.0, branch_ship)
                 else:
-                    shipping_cost = max(0.0, flat_ship)
+                    shipping_cost = compute_zone_shipping_rate(profile, delivery_method, cprov)
 
                 tax_rate = max(0.0, float(profile['tax_rate'] or 0))
-                tax_amount = round(subtotal * (tax_rate / 100.0), 2) if tax_rate > 0 else 0.0
-                grand_total = round(subtotal + shipping_cost + tax_amount, 2)
+                tax_amount = round(net_merchandise * (tax_rate / 100.0), 2) if tax_rate > 0 else 0.0
+                grand_total = round(net_merchandise + shipping_cost + tax_amount, 2)
 
                 folio_num = int(profile['next_folio_number'] or 1001)
                 folio_str = '#' + str(folio_num).zfill(6)
                 oid = 'ord_' + secrets.token_hex(6)
                 tracking_code = 'PED-' + secrets.token_hex(3).upper()
                 now_iso = utc_now().isoformat()
-                net_profit = subtotal - total_cost
+                net_profit = net_merchandise - total_cost
 
                 mp_link = ''
                 mp_warning = ''
@@ -2880,12 +3063,12 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                            discount_label, shipping_cost, tax_amount, total, total_cost, net_profit,
                            payment_status, payment_method, mp_payment_link, delivery_method,
                            dispatch_status, timeline_json, notes, source, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, 0, '', ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'to_prepare', ?, ?, 'web_store', ?)''',
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, 'to_prepare', ?, ?, 'web_store', ?)''',
                     (
                         oid, owner['id'], tracking_code, folio_str, cname, cphone,
                         caddr, ccp, ccity, cprov, branch_name,
                         json.dumps(enriched_items, ensure_ascii=False),
-                        subtotal, shipping_cost, tax_amount, grand_total, total_cost, net_profit,
+                        subtotal, discount_amount, discount_label, shipping_cost, tax_amount, grand_total, total_cost, net_profit,
                         payment_method, mp_link, delivery_method, tl_json, notes, now_iso
                     )
                 )
@@ -2897,6 +3080,8 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         'folio_number': folio_str,
                         'tracking_code': tracking_code,
                         'subtotal': subtotal,
+                        'discount_amount': discount_amount,
+                        'discount_label': discount_label,
                         'shipping_cost': shipping_cost,
                         'tax_amount': tax_amount,
                         'total': grand_total
@@ -2977,12 +3162,89 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     return
                 target_id = int(body.get('user_id') or 0)
                 action = body.get('action') or 'activate'
+                days_val = max(1, min(3650, int(body.get('days') or SUBSCRIPTION_DAYS)))
+                is_courtesy = bool(body.get('courtesy'))
                 if action == 'suspend':
                     conn.execute("UPDATE users SET subscription_status = 'expired' WHERE id = ? AND role != 'admin'", (target_id,))
                     conn.commit()
                 else:
-                    activate_user_subscription(conn, target_id, f"admin_{secrets.token_hex(4)}", SUBSCRIPTION_PRICE, {'manual_admin': True})
+                    pid_tag = f"courtesy_{secrets.token_hex(4)}" if is_courtesy else f"admin_{secrets.token_hex(4)}"
+                    amt_val = 0.0 if is_courtesy else float(body.get('amount') if body.get('amount') is not None else SUBSCRIPTION_PRICE)
+                    activate_user_subscription(conn, target_id, pid_tag, amt_val, {'manual_admin': True, 'courtesy': is_courtesy, 'days': days_val}, days=days_val)
                 self.send_json(200, {'ok': True})
+            finally:
+                conn.close()
+            return
+
+        if path == '/api/admin/create-account':
+            conn = get_db()
+            try:
+                user = self.get_current_user(conn)
+                if not user or user['role'] != 'admin':
+                    self.send_json(403, {'error': 'Solo administrador'})
+                    return
+                email = (body.get('email') or '').strip().lower()[:120]
+                password = str(body.get('password') or '').strip()
+                store_name = (body.get('store_name') or '').strip()[:80]
+                recovery_pin = str(body.get('recovery_pin') or '1234').strip()[:32]
+                days_val = max(1, min(3650, int(body.get('days') or 365)))
+                is_courtesy = bool(body.get('courtesy', True))
+
+                if not email or '@' not in email or len(password) < 4 or not store_name:
+                    self.send_json(400, {'error': 'Completa correo, contraseña (mín. 4 caracteres) y nombre de tienda.'})
+                    return
+
+                existing = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
+                now = utc_now()
+                now_iso = now.isoformat()
+                exp_iso = (now + timedelta(days=days_val)).isoformat()
+                pid_tag = f"courtesy_{secrets.token_hex(4)}" if is_courtesy else f"admin_{secrets.token_hex(4)}"
+
+                if existing:
+                    uid = existing['id']
+                    conn.execute(
+                        '''UPDATE users
+                           SET password_hash = ?, recovery_pin_hash = ?, store_name = ?,
+                               subscription_status = 'active', is_trial = 0,
+                               subscription_expires_at = ?, mp_last_payment_id = ?
+                           WHERE id = ? AND role != 'admin' ''',
+                        (hash_password(password), hash_password(recovery_pin), store_name, exp_iso, pid_tag, uid)
+                    )
+                    prof = conn.execute('SELECT slug FROM store_profiles WHERE user_id = ?', (uid,)).fetchone()
+                    slug = prof['slug'] if prof and prof['slug'] else ensure_unique_slug(conn, store_name, uid)
+                    if not prof:
+                        conn.execute('INSERT INTO store_profiles (user_id, name, slug) VALUES (?, ?, ?)', (uid, store_name, slug))
+                    else:
+                        conn.execute('UPDATE store_profiles SET name = ?, slug = ? WHERE user_id = ?', (store_name, slug, uid))
+                else:
+                    cur = conn.execute(
+                        '''INSERT INTO users (email, password_hash, recovery_pin_hash, role, store_name, subscription_status, subscription_expires_at, is_trial, mp_last_payment_id, created_at)
+                           VALUES (?, ?, ?, 'merchant', ?, 'active', ?, 0, ?, ?)''',
+                        (email, hash_password(password), hash_password(recovery_pin), store_name, exp_iso, pid_tag, now_iso)
+                    )
+                    uid = cur.lastrowid
+                    slug = ensure_unique_slug(conn, store_name, uid)
+                    conn.execute('INSERT INTO store_profiles (user_id, name, slug) VALUES (?, ?, ?)', (uid, store_name, slug))
+
+                amt_val = 0.0 if is_courtesy else float(SUBSCRIPTION_PRICE)
+                conn.execute(
+                    '''INSERT OR IGNORE INTO subscription_payments (user_id, mp_payment_id, amount, status, raw_json, created_at)
+                       VALUES (?, ?, ?, 'approved', ?, ?)''',
+                    (uid, pid_tag, amt_val, json.dumps({'created_by_admin': True, 'courtesy': is_courtesy, 'days': days_val}), now_iso)
+                )
+                conn.commit()
+                self.send_json(201, {
+                    'ok': True,
+                    'account': {
+                        'user_id': uid,
+                        'email': email,
+                        'store_name': store_name,
+                        'slug': slug,
+                        'days': days_val,
+                        'expires_at': exp_iso,
+                        'courtesy': is_courtesy
+                    }
+                })
             finally:
                 conn.close()
             return
@@ -3078,12 +3340,23 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     else:
                         del body['mp_access_token']
 
+                if 'coupons' in body and isinstance(body['coupons'], list):
+                    clean_coupons = []
+                    for c in body['coupons'][:30]:
+                        code_c = re.sub(r'[^A-Z0-9\-_]', '', str(c.get('code') or '').strip().upper())[:24]
+                        pct_c = max(0.0, min(90.0, float(c.get('pct') or 0)))
+                        if code_c and pct_c > 0:
+                            clean_coupons.append({'code': code_c, 'pct': pct_c, 'active': bool(c.get('active', True))})
+                    body['coupons_json'] = json.dumps(clean_coupons, ensure_ascii=False)
+
                 fields = [
                     'name', 'slug', 'store_icon', 'logo_data_url', 'receipt_theme', 'app_palette',
                     'custom_color', 'business_mode', 'phone', 'address', 'origin_postal_code', 'origin_province',
                     'instagram', 'website', 'country_code', 'currency_code', 'currency_symbol',
                     'tax_label', 'tax_rate', 'bank_alias', 'bank_holder', 'external_pay_link',
-                    'cash_on_delivery', 'shipping_flat_rate', 'shipping_branch_rate', 'free_shipping_min',
+                    'cash_on_delivery', 'transfer_discount_pct', 'coupons_json',
+                    'shipping_local_rate', 'shipping_regional_rate', 'shipping_flat_rate',
+                    'shipping_branch_rate', 'free_shipping_min',
                     'allow_pickup', 'next_folio_number', 'receipt_footer_message', 'mp_access_token',
                     'staff_pin', 'voice_accent', 'voice_template'
                 ]
@@ -3117,25 +3390,34 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 if variants is not None and len(variants) > 0:
                     stock_val = sum(max(0, int(v.get('stock') or 0)) for v in variants)
 
-                existing = conn.execute('SELECT description, compare_price, image_url, variants_json FROM products WHERE id = ? AND user_id = ?', (pid, user['id'])).fetchone()
+                existing = conn.execute('SELECT description, compare_price, wholesale_min_qty, wholesale_price, image_url, gallery_json, variants_json FROM products WHERE id = ? AND user_id = ?', (pid, user['id'])).fetchone()
                 if not existing:
                     self.send_json(404, {'error': 'Producto no encontrado'})
                     return
 
                 img_url = body.get('image_url') if 'image_url' in body else existing['image_url']
                 var_json = json.dumps(variants, ensure_ascii=False) if variants is not None else existing['variants_json']
+                if 'gallery' in body and isinstance(body['gallery'], list):
+                    clean_gal = [str(g).strip() for g in body['gallery'] if str(g).strip().startswith('data:image/') or str(g).strip().startswith('http')][:4]
+                    gal_json = json.dumps(clean_gal, ensure_ascii=False)
+                else:
+                    gal_json = existing['gallery_json'] or '[]'
                 desc_val = (body.get('description') or '').strip()[:600] if 'description' in body else (existing['description'] or '')
                 comp_val = max(0.0, float(body.get('compare_price') or 0)) if 'compare_price' in body else float(existing['compare_price'] or 0)
+                w_min_val = max(0, int(body.get('wholesale_min_qty') or 0)) if 'wholesale_min_qty' in body else int(existing['wholesale_min_qty'] or 0)
+                w_price_val = max(0.0, float(body.get('wholesale_price') or 0)) if 'wholesale_price' in body else float(existing['wholesale_price'] or 0)
 
                 conn.execute(
                     '''UPDATE products
-                       SET name = ?, description = ?, price = ?, compare_price = ?, cost_price = ?, category = ?, stock = ?, min_stock = ?, barcode = ?, sku = ?, image_url = ?, variants_json = ?
+                       SET name = ?, description = ?, price = ?, compare_price = ?, wholesale_min_qty = ?, wholesale_price = ?, cost_price = ?, category = ?, stock = ?, min_stock = ?, barcode = ?, sku = ?, image_url = ?, gallery_json = ?, variants_json = ?
                        WHERE id = ? AND user_id = ?''',
                     (
                         (body.get('name') or '').strip()[:140],
                         desc_val,
                         max(0.0, float(body.get('price') or 0)),
                         comp_val,
+                        w_min_val,
+                        w_price_val,
                         max(0.0, float(body.get('cost_price') or 0)),
                         (body.get('category') or 'General').strip()[:60],
                         stock_val,
@@ -3143,6 +3425,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         (body.get('barcode') or '').strip()[:64],
                         (body.get('barcode') or '').strip()[:64],
                         img_url or '',
+                        gal_json,
                         var_json or '[]',
                         pid, user['id']
                     )

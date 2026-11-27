@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>VentaFlow Control SaaS — Panel de Suscripciones y Registrados</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      overflow-x: hidden;
+      max-width: 100%;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background: #F1F5F9;
+      color: #0F172A;
+      min-height: 100vh;
+    }
+    input, select, textarea { font-size: 16px; }
+    @media (min-width: 640px) {
+      input, select, textarea { font-size: 14px; }
+    }
+  </style>
+</head>
+<body class="flex flex-col min-h-screen">
+
+  <!-- TOAST -->
+  <div id="ctrl-toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[80] px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs sm:text-sm font-bold shadow-2xl flex items-center gap-2 pointer-events-none transition-all duration-300 opacity-0 -translate-y-8">
+    <span id="ctrl-toast-msg">Listo</span>
+  </div>
+
+  <!-- ================= ADMIN LOGIN VIEW ================= -->
+  <div id="ctrl-login-view" class="hidden flex-1 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 space-y-5">
+      <div class="flex items-center gap-3">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-900 to-violet-800 text-white flex items-center justify-center text-2xl shadow-md">👑</div>
+        <div>
+          <span class="text-[10px] font-extrabold uppercase tracking-widest text-violet-700 bg-violet-50 px-2.5 py-0.5 rounded-full">App Externa Exclusiva</span>
+          <h1 class="font-extrabold text-xl text-slate-900 mt-0.5">Control Central SaaS</h1>
+        </div>
+      </div>
+      <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+        Monitorea en tiempo real quiénes se registran en tu plataforma, quiénes abonaron su plan, quiénes están en prueba sin abonar y gestiona cuentas Full.
+      </p>
+
+      <form onsubmit="submitAdminLogin(event)" class="space-y-3.5">
+        <div>
+          <label class="text-xs font-bold text-slate-700 block mb-1">Correo de Administrador *</label>
+          <input type="email" id="adm-login-email" required placeholder="admin@comprobantespos.com" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl font-semibold focus:outline-none focus:border-violet-600">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-700 block mb-1">Contraseña *</label>
+          <input type="password" id="adm-login-pw" required placeholder="••••••••" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-violet-600">
+        </div>
+        <div id="adm-login-err" class="hidden p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold"></div>
+        <button type="submit" class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl shadow-lg text-sm transition-all">
+          Ingresar al Centro de Control →
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= MAIN SAAS CONTROL DASHBOARD ================= -->
+  <div id="ctrl-app-view" class="hidden flex-1 flex flex-col">
+
+    <!-- Top Executive Navbar -->
+    <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-lg">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-lg shadow shrink-0">👑</div>
+          <div class="min-w-0">
+            <h1 class="font-extrabold text-sm sm:text-base truncate">VentaFlow Control SaaS</h1>
+            <p class="text-[11px] text-slate-400 truncate">Auditoría de Suscripciones, Registrados y Pagos en Vivo</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" onclick="loadControlData(true)" class="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold flex items-center gap-1.5 transition-all" title="Actualizar datos ahora">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span class="hidden sm:inline">Actualizar</span>
+          </button>
+          <a href="/" target="_blank" class="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-extrabold flex items-center gap-1.5 transition-all">
+            <span>Abrir POS</span>
+            <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+          </a>
+          <button type="button" onclick="logoutAdmin()" class="p-2 rounded-xl text-slate-400 hover:text-rose-400" title="Cerrar sesión">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sub-navigation Tabs -->
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 flex gap-2 pb-3 overflow-x-auto text-xs">
+        <button type="button" onclick="switchCtrlTab('merchants')" id="ctab-merchants" class="px-4 py-2 rounded-xl font-extrabold bg-white text-slate-900 shrink-0">🏪 Comercios Registrados</button>
+        <button type="button" onclick="switchCtrlTab('payments')" id="ctab-payments" class="px-4 py-2 rounded-xl font-bold text-slate-300 hover:bg-white/10 shrink-0">💳 Historial de Abonos</button>
+        <button type="button" onclick="switchCtrlTab('config')" id="ctab-config" class="px-4 py-2 rounded-xl font-bold text-slate-300 hover:bg-white/10 shrink-0">⚙️ Ajustes de Cobro SaaS</button>
+      </div>
+    </header>
+
+    <main class="max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6 flex-1">
+
+      <!-- KPI EXECUTIVE CARDS -->
+      <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div class="bg-white rounded-3xl p-4 border border-slate-200 shadow-sm">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400 block">💰 Total Abonado</span>
+          <span id="kpi-revenue" class="text-xl sm:text-2xl font-black text-emerald-700 mt-1 block">$ 0</span>
+          <span id="kpi-total-merchants" class="text-[11px] text-slate-500 font-semibold">0 registrados</span>
+        </div>
+
+        <div onclick="setMerchantFilter('paid_active')" class="bg-emerald-50/70 hover:bg-emerald-50 cursor-pointer rounded-3xl p-4 border border-emerald-200 shadow-sm transition-all">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-800 block">💳 Abonaron Plan</span>
+          <span id="kpi-paid" class="text-xl sm:text-2xl font-black text-emerald-800 mt-1 block">0</span>
+          <span class="text-[11px] text-emerald-700 font-semibold">Con pago registrado</span>
+        </div>
+
+        <div onclick="setMerchantFilter('trial_unpaid')" class="bg-amber-50/70 hover:bg-amber-50 cursor-pointer rounded-3xl p-4 border border-amber-200 shadow-sm transition-all">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-amber-900 block">🎁 En Prueba Gratis</span>
+          <span id="kpi-trial" class="text-xl sm:text-2xl font-black text-amber-800 mt-1 block">0</span>
+          <span class="text-[11px] text-amber-700 font-semibold">Aún no abonaron</span>
+        </div>
+
+        <div onclick="setMerchantFilter('expired_unpaid')" class="bg-rose-50/70 hover:bg-rose-50 cursor-pointer rounded-3xl p-4 border border-rose-200 shadow-sm transition-all">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-rose-800 block">🔴 Sin Abonar / Venc.</span>
+          <span id="kpi-expired" class="text-xl sm:text-2xl font-black text-rose-700 mt-1 block">0</span>
+          <span class="text-[11px] text-rose-600 font-semibold">Para contactar</span>
+        </div>
+
+        <div onclick="setMerchantFilter('courtesy_active')" class="col-span-2 sm:col-span-1 bg-violet-50/70 hover:bg-violet-50 cursor-pointer rounded-3xl p-4 border border-violet-200 shadow-sm transition-all">
+          <span class="text-[11px] font-extrabold uppercase tracking-wider text-violet-800 block">👑 Full Cortesía</span>
+          <span id="kpi-courtesy" class="text-xl sm:text-2xl font-black text-violet-800 mt-1 block">0</span>
+          <span id="kpi-platform-orders" class="text-[11px] text-violet-700 font-semibold">0 pedidos globales</span>
+        </div>
+      </section>
+
+      <!-- ================= TAB 1: REGISTERED MERCHANTS ================= -->
+      <section id="csec-merchants" class="space-y-4">
+        <!-- Toolbar -->
+        <div class="bg-white rounded-3xl p-4 border border-slate-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 text-xs">
+            <button type="button" onclick="setMerchantFilter('all')" id="mf-all" class="px-3.5 py-2 rounded-xl font-extrabold bg-slate-900 text-white shrink-0">Todos</button>
+            <button type="button" onclick="setMerchantFilter('paid_active')" id="mf-paid_active" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-700 shrink-0">💳 Abonaron</button>
+            <button type="button" onclick="setMerchantFilter('unpaid_all')" id="mf-unpaid_all" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-700 shrink-0">⏳ No Abonaron (Prueba + Venc.)</button>
+            <button type="button" onclick="setMerchantFilter('trial_unpaid')" id="mf-trial_unpaid" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-700 shrink-0">🎁 En Prueba</button>
+            <button type="button" onclick="setMerchantFilter('expired_unpaid')" id="mf-expired_unpaid" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-700 shrink-0">🔴 Vencidos</button>
+            <button type="button" onclick="setMerchantFilter('courtesy_active')" id="mf-courtesy_active" class="px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-700 shrink-0">👑 Full Cortesía</button>
+          </div>
+
+          <div class="flex flex-wrap sm:flex-nowrap items-center gap-2">
+            <div class="relative flex-1 sm:w-64">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+              <input type="text" id="ctrl-search" oninput="renderMerchantsList()" placeholder="Buscar tienda, email, tel..." class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none">
+            </div>
+            <button type="button" onclick="exportMerchantsCSV()" class="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 font-extrabold rounded-xl text-xs shrink-0">
+              📥 Excel .CSV
+            </button>
+            <button type="button" onclick="openCreateFullModal()" class="px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:opacity-95 text-white font-extrabold rounded-xl text-xs shadow shrink-0">
+              ✨ + Crear Cuenta Full
+            </button>
+          </div>
+        </div>
+
+        <!-- Merchants Grid -->
+        <div id="ctrl-merchants-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </section>
+
+      <!-- ================= TAB 2: SUBSCRIPTION PAYMENTS LOG ================= -->
+      <section id="csec-payments" class="hidden bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h2 class="font-extrabold text-base text-slate-900">💳 Registro de Abonos y Activaciones</h2>
+            <p class="text-xs text-slate-500">Detalle cronológico de cobros por Mercado Pago y activaciones manuales</p>
+          </div>
+        </div>
+        <div id="ctrl-payments-list" class="divide-y divide-slate-100 text-xs sm:text-sm"></div>
+      </section>
+
+      <!-- ================= TAB 3: PLATFORM SAAS SETTINGS ================= -->
+      <section id="csec-config" class="hidden max-w-2xl space-y-5">
+        <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4 text-xs sm:text-sm">
+          <div>
+            <h2 class="font-extrabold text-base text-slate-900">⚙️ Configuración Global de Suscripciones ($10.000 / 90 días)</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Define tu cuenta de Mercado Pago donde recibes el dinero de los comercios que se suscriben.</p>
+          </div>
+
+          <div class="space-y-3">
+            <div>
+              <label class="text-xs font-bold text-slate-700 block mb-1">Tu Access Token de Producción Mercado Pago (Cifrado)</label>
+              <input type="password" id="cfg-mp-token" placeholder="APP_USR-xxxxxxxxxxxxxxxx (dejar vacío para mantener actual)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono">
+              <p id="cfg-mp-mask" class="text-[11px] text-emerald-700 font-bold mt-1"></p>
+            </div>
+            <div>
+              <label class="text-xs font-bold text-slate-700 block mb-1">O Link de Pago Directo Alternativo ($10.000)</label>
+              <input type="url" id="cfg-mp-link" placeholder="https://mpago.la/..." class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl">
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="sm:col-span-2">
+                <label class="text-xs font-bold text-slate-700 block mb-1">URL Pública Oficial</label>
+                <input type="text" id="cfg-base-url" placeholder="https://ventaflow-pos.onrender.com" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl">
+              </div>
+              <div>
+                <label class="text-xs font-bold text-slate-700 block mb-1">Días de Prueba Gratis</label>
+                <input type="number" id="cfg-trial-days" value="3" min="0" max="60" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-center">
+              </div>
+            </div>
+            <button type="button" onclick="saveCtrlConfig()" class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl shadow">
+              Guardar Configuración en PostgreSQL ✅
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: CREATE DIRECT FULL ACCOUNT -->
+  <div id="modal-create-full" class="hidden fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeCreateFullModal()">
+    <div class="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-4 text-xs sm:text-sm">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="font-extrabold text-base text-slate-900">✨ Crear Cuenta Full Lista para Usar</h3>
+          <p class="text-xs text-slate-500">Ideal para familiares, socios o clientes que abonaron por fuera</p>
+        </div>
+        <button type="button" onclick="closeCreateFullModal()" class="text-slate-400 hover:text-slate-700 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+
+      <form onsubmit="submitCreateFullAccount(event)" class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-slate-700 block mb-1">Nombre de la Tienda / Emprendimiento *</label>
+          <input type="text" id="cf-store" required placeholder="Ej: Tienda Hermana 1" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-semibold">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-700 block mb-1">Correo de Acceso *</label>
+          <input type="email" id="cf-email" required placeholder="ejemplo@correo.com" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-bold text-slate-700 block mb-1">Contraseña Inicial *</label>
+            <input type="text" id="cf-pw" required value="Tienda2026!" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold">
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-700 block mb-1">PIN Recuperación *</label>
+            <input type="text" id="cf-pin" required value="2580" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-bold text-slate-700 block mb-1">Duración Activa</label>
+            <select id="cf-days" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold">
+              <option value="90">90 días (Trimestre)</option>
+              <option value="365" selected>365 días (1 Año Full)</option>
+              <option value="1825">5 Años (Ilimitado VIP)</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-700 block mb-1">Tipo de Registro</label>
+            <select id="cf-courtesy" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold">
+              <option value="1" selected>👑 Cortesía ($0)</option>
+              <option value="0">💳 Abonó $10.000</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white font-extrabold rounded-2xl shadow-lg">
+          Crear y Activar Cuenta Ahora ✨
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const SESSION_KEY = 'comprobantes_pos_session_v1';
+    let token = localStorage.getItem(SESSION_KEY) || '';
+    let overviewData = { summary: {}, users: [], payments: [], config: {} };
+    let activeFilter = 'all';
+    let toastTimer = null;
+
+    function esc(s) {
+      return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function fmtMoney(n) {
+      return '$ ' + Number(n || 0).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      } catch (e) { return '—'; }
+    }
+
+    function showCtrlToast(msg) {
+      const el = document.getElementById('ctrl-toast');
+      document.getElementById('ctrl-toast-msg').innerText = msg;
+      el.classList.remove('opacity-0', '-translate-y-8');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.add('opacity-0', '-translate-y-8'), 2600);
+    }
+
+    async function ctrlApi(path, opts = {}) {
+      const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const r = await fetch(path, { ...opts, headers });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const err = new Error(data.error || `Error ${r.status}`);
+        err.status = r.status;
+        throw err;
+      }
+      return data;
+    }
+
+    async function submitAdminLogin(e) {
+      e.preventDefault();
+      const errBox = document.getElementById('adm-login-err');
+      errBox.classList.add('hidden');
+      try {
+        const res = await ctrlApi('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: document.getElementById('adm-login-email').value.trim(),
+            password: document.getElementById('adm-login-pw').value
+          })
+        });
+        if (!res.user || res.user.role !== 'admin') {
+          throw new Error('Esta cuenta es de comercio. Ingresa con tu correo de Administrador SaaS.');
+        }
+        token = res.token;
+        localStorage.setItem(SESSION_KEY, token);
+        await loadControlData();
+      } catch (err) {
+        errBox.innerText = err.message;
+        errBox.classList.remove('hidden');
+      }
+    }
+
+    async function logoutAdmin() {
+      try { await ctrlApi('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+      token = '';
+      localStorage.removeItem(SESSION_KEY);
+      document.getElementById('ctrl-app-view').classList.add('hidden');
+      document.getElementById('ctrl-login-view').classList.remove('hidden');
+    }
+
+    function switchCtrlTab(tab) {
+      ['merchants', 'payments', 'config'].forEach(t => {
+        document.getElementById(`csec-${t}`).classList.toggle('hidden', t !== tab);
+        const btn = document.getElementById(`ctab-${t}`);
+        btn.className = t === tab
+          ? 'px-4 py-2 rounded-xl font-extrabold bg-white text-slate-900 shrink-0'
+          : 'px-4 py-2 rounded-xl font-bold text-slate-300 hover:bg-white/10 shrink-0';
+      });
+      lucide.createIcons();
+    }
+
+    async function loadControlData(notify = false) {
+      if (!token) {
+        document.getElementById('ctrl-login-view').classList.remove('hidden');
+        document.getElementById('ctrl-app-view').classList.add('hidden');
+        return;
+      }
+      try {
+        const data = await ctrlApi('/api/admin/overview');
+        overviewData = data;
+        document.getElementById('ctrl-login-view').classList.add('hidden');
+        document.getElementById('ctrl-app-view').classList.remove('hidden');
+
+        const s = data.summary || {};
+        document.getElementById('kpi-revenue').innerText = fmtMoney(s.total_subscription_revenue || 0);
+        document.getElementById('kpi-total-merchants').innerText = `${s.total_merchants || 0} comercios registrados`;
+        document.getElementById('kpi-paid').innerText = String(s.paid_active_count || 0);
+        document.getElementById('kpi-trial').innerText = String(s.trial_unpaid_count || 0);
+        document.getElementById('kpi-expired').innerText = String(s.expired_unpaid_count || 0);
+        document.getElementById('kpi-courtesy').innerText = String(s.courtesy_active_count || 0);
+        document.getElementById('kpi-platform-orders').innerText = `${s.total_platform_orders || 0} pedidos totales`;
+
+        // Config fields
+        const cfg = data.config || {};
+        document.getElementById('cfg-mp-mask').innerText = cfg.mp_platform_configured
+          ? `✅ Token actual cifrado: ${cfg.mp_token_masked}`
+          : '⚠️ Sin Access Token configurado aún';
+        document.getElementById('cfg-mp-link').value = cfg.platform_mp_pay_link || '';
+        document.getElementById('cfg-base-url').value = cfg.public_base_url || window.location.origin;
+        document.getElementById('cfg-trial-days').value = cfg.trial_days ?? 3;
+
+        renderMerchantsList();
+        renderPaymentsList();
+        lucide.createIcons();
+        if (notify) showCtrlToast('Datos sincronizados en vivo ✅');
+      } catch (err) {
+        document.getElementById('ctrl-app-view').classList.add('hidden');
+        document.getElementById('ctrl-login-view').classList.remove('hidden');
+      }
+    }
+
+    function setMerchantFilter(f) {
+      activeFilter = f;
+      ['all', 'paid_active', 'unpaid_all', 'trial_unpaid', 'expired_unpaid', 'courtesy_active'].forEach(k => {
+        const b = document.getElementById(`mf-${k}`);
+        if (b) {
+          b.className = k === f
+            ? 'px-3.5 py-2 rounded-xl font-extrabold bg-slate-900 text-white shrink-0'
+            : 'px-3.5 py-2 rounded-xl font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 shrink-0';
+        }
+      });
+      switchCtrlTab('merchants');
+      renderMerchantsList();
+    }
+
+    function renderMerchantsList() {
+      const box = document.getElementById('ctrl-merchants-list');
+      const q = (document.getElementById('ctrl-search')?.value || '').toLowerCase().trim();
+      const list = (overviewData.users || []).filter(u => {
+        if (u.role === 'admin') return false;
+        if (activeFilter === 'paid_active' && u.billing_category !== 'paid_active') return false;
+        if (activeFilter === 'courtesy_active' && u.billing_category !== 'courtesy_active') return false;
+        if (activeFilter === 'trial_unpaid' && u.billing_category !== 'trial_unpaid') return false;
+        if (activeFilter === 'expired_unpaid' && u.billing_category !== 'expired_unpaid') return false;
+        if (activeFilter === 'unpaid_all' && !['trial_unpaid', 'expired_unpaid'].includes(u.billing_category)) return false;
+        if (q) {
+          const hay = [u.store_name, u.email, u.store_phone, u.store_slug].map(x => String(x || '').toLowerCase()).join(' ');
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+
+      if (!list.length) {
+        box.innerHTML = '<div class="col-span-full bg-white rounded-3xl p-10 text-center text-slate-400 border border-slate-200 text-sm">No hay comercios en este filtro.</div>';
+        return;
+      }
+
+      box.innerHTML = list.map(u => {
+        const cat = u.billing_category;
+        let badgeHtml = '';
+        if (cat === 'paid_active') {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-800">💳 ABONÓ (${esc(fmtMoney(u.sub_paid_total))} • ${Number(u.days_left)}d rest.)</span>`;
+        } else if (cat === 'courtesy_active') {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-violet-100 text-violet-800">👑 FULL CORTESÍA (${Number(u.days_left)}d rest.)</span>`;
+        } else if (cat === 'trial_unpaid') {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 text-amber-900">🎁 PRUEBA GRATIS • NO ABONÓ (${Number(u.days_left)}d rest.)</span>`;
+        } else {
+          badgeHtml = `<span class="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-rose-100 text-rose-800">🔴 VENCIDO / NO ABONÓ</span>`;
+        }
+
+        const cleanPhone = String(u.store_phone || '').replace(/\D/g, '');
+        const safeEmailJs = esc(String(u.email || '').replace(/'/g, ''));
+        const safeStoreJs = esc(String(u.store_name || '').replace(/'/g, ''));
+
+        return `
+          <article class="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm space-y-3.5 flex flex-col justify-between">
+            <div class="space-y-2.5">
+              <div class="flex items-start justify-between gap-2 flex-wrap">
+                <div class="min-w-0">
+                  <h3 class="font-extrabold text-base text-slate-900 truncate">${esc(u.store_name)}</h3>
+                  <p class="text-xs text-slate-500 font-medium truncate">${esc(u.email)}</p>
+                </div>
+                ${badgeHtml}
+              </div>
+
+              <div class="grid grid-cols-3 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 text-center text-xs">
+                <div>
+                  <span class="text-[10px] font-bold uppercase text-slate-400 block">Productos</span>
+                  <span class="font-extrabold text-slate-800">${Number(u.products_count || 0)}</span>
+                </div>
+                <div>
+                  <span class="text-[10px] font-bold uppercase text-slate-400 block">Pedidos</span>
+                  <span class="font-extrabold text-slate-800">${Number(u.orders_count || 0)}</span>
+                </div>
+                <div>
+                  <span class="text-[10px] font-bold uppercase text-slate-400 block">Vendido</span>
+                  <span class="font-extrabold text-violet-700">${esc(fmtMoney(u.sales_volume || 0))}</span>
+                </div>
+              </div>
+
+              <div class="text-xs text-slate-600 space-y-1">
+                <div class="flex justify-between"><span>📅 Fecha de Registro:</span><strong class="text-slate-800">${esc(fmtDate(u.created_at))}</strong></div>
+                <div class="flex justify-between"><span>⏳ Vencimiento Plan:</span><strong class="text-slate-800">${esc(fmtDate(u.subscription_expires_at))}</strong></div>
+                <div class="flex justify-between"><span>📱 WhatsApp / Red:</span><strong class="text-slate-800">${esc(u.store_phone || u.store_instagram || 'No cargado')}</strong></div>
+                ${u.store_slug ? `<div class="flex justify-between"><span>🌐 Tienda Web:</span><a href="/tienda/${encodeURIComponent(u.store_slug)}" target="_blank" class="font-mono font-bold text-violet-700 hover:underline">/tienda/${esc(u.store_slug)} ↗</a></div>` : ''}
+              </div>
+            </div>
+
+            <div class="flex flex-wrap gap-1.5 pt-3 border-t border-slate-100 text-xs">
+              <button type="button" onclick="ctrlActivate(${Number(u.id)}, 90, false)" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold">+90d Pago</button>
+              <button type="button" onclick="ctrlActivate(${Number(u.id)}, 365, true)" class="px-2.5 py-1.5 rounded-xl bg-violet-100 hover:bg-violet-200 text-violet-900 font-bold">+1 Año Cortesía</button>
+              <button type="button" onclick="ctrlResetPw(${Number(u.id)}, '${safeEmailJs}')" class="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold">🔑 Clave</button>
+              ${cleanPhone ? `<button type="button" onclick="ctrlWhatsApp('${cleanPhone}', '${safeStoreJs}', '${cat}', ${Number(u.days_left || 0)})" class="px-2.5 py-1.5 rounded-xl bg-green-100 hover:bg-green-200 text-green-900 font-bold">📲 WhatsApp</button>` : ''}
+              <button type="button" onclick="ctrlSuspend(${Number(u.id)})" class="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold ml-auto">Suspender</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function renderPaymentsList() {
+      const box = document.getElementById('ctrl-payments-list');
+      const arr = overviewData.payments || [];
+      if (!arr.length) {
+        box.innerHTML = '<p class="text-center py-8 text-slate-400">Todavía no hay abonos o activaciones registradas.</p>';
+        return;
+      }
+      box.innerHTML = arr.map(p => {
+        const isCourtesy = Number(p.amount || 0) <= 0 || String(p.mp_payment_id || '').startsWith('courtesy_');
+        return `
+          <div class="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <p class="font-extrabold text-slate-900">${esc(p.store_name)} <span class="text-xs font-normal text-slate-500">(${esc(p.email)})</span></p>
+              <p class="text-xs text-slate-400">Fecha: ${esc(fmtDate(p.created_at))} • Ref: <span class="font-mono">${esc(p.mp_payment_id)}</span></p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-xs font-extrabold self-start sm:self-center ${isCourtesy ? 'bg-violet-100 text-violet-800' : 'bg-emerald-100 text-emerald-800'}">
+              ${isCourtesy ? '👑 Cortesía ($0)' : `💳 Abonó ${fmtMoney(p.amount)}`}
+            </span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function ctrlActivate(uid, days, courtesy) {
+      const label = courtesy ? `${days} días de Cortesía ($0)` : `${days} días como Plan Abonado ($10.000)`;
+      if (!confirm(`¿Activar ${label} para este comercio?`)) return;
+      try {
+        await ctrlApi('/api/admin/activate-user', {
+          method: 'POST',
+          body: JSON.stringify({ user_id: uid, action: 'activate', days, courtesy })
+        });
+        showCtrlToast('Cuenta activada correctamente ✅');
+        await loadControlData();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function ctrlSuspend(uid) {
+      if (!confirm('¿Suspender el acceso activo de este comercio?')) return;
+      try {
+        await ctrlApi('/api/admin/activate-user', {
+          method: 'POST',
+          body: JSON.stringify({ user_id: uid, action: 'suspend' })
+        });
+        showCtrlToast('Comercio suspendido');
+        await loadControlData();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function ctrlResetPw(uid, email) {
+      const new_password = prompt(`Ingresa la nueva contraseña para ${email}:`);
+      if (!new_password) return;
+      try {
+        await ctrlApi('/api/admin/reset-user-password', {
+          method: 'POST',
+          body: JSON.stringify({ user_id: uid, new_password })
+        });
+        showCtrlToast(`Contraseña actualizada para ${email} 🔑`);
+      } catch (err) { alert(err.message); }
+    }
+
+    function ctrlWhatsApp(phone, storeName, cat, daysLeft) {
+      const msg = cat === 'expired_unpaid' || daysLeft <= 0
+        ? `¡Hola *${storeName}*! 👋 Vimos que te registraste en VentaFlow POS y tu periodo de prueba finalizó. ¿Necesitas ayuda para configurar tu tienda o activar tu trimestre ($10.000 por 90 días)?`
+        : `¡Hola *${storeName}*! 👋 ¿Cómo va todo con tu tienda en VentaFlow POS? Te quedan *${daysLeft} días* activos. Cualquier duda estamos a disposición.`;
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    }
+
+    function openCreateFullModal() {
+      document.getElementById('cf-store').value = '';
+      document.getElementById('cf-email').value = '';
+      document.getElementById('modal-create-full').classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeCreateFullModal() {
+      document.getElementById('modal-create-full').classList.add('hidden');
+    }
+
+    async function submitCreateFullAccount(e) {
+      e.preventDefault();
+      const store_name = document.getElementById('cf-store').value.trim();
+      const email = document.getElementById('cf-email').value.trim();
+      const password = document.getElementById('cf-pw').value.trim();
+      const recovery_pin = document.getElementById('cf-pin').value.trim();
+      const days = parseInt(document.getElementById('cf-days').value) || 365;
+      const courtesy = document.getElementById('cf-courtesy').value === '1';
+
+      try {
+        const res = await ctrlApi('/api/admin/create-account', {
+          method: 'POST',
+          body: JSON.stringify({ store_name, email, password, recovery_pin, days, courtesy })
+        });
+        closeCreateFullModal();
+        const acc = res.account;
+        const shareTxt = `🎁 Acceso Full VentaFlow POS\n• Panel: ${window.location.origin}\n• Tienda Web: ${window.location.origin}/tienda/${acc.slug}\n• Correo: ${email}\n• Clave: ${password}\n• PIN Recuperación: ${recovery_pin}`;
+        if (navigator.clipboard) navigator.clipboard.writeText(shareTxt).catch(() => {});
+        showCtrlToast('¡Cuenta Full creada y datos copiados al portapapeles! ✨');
+        await loadControlData();
+      } catch (err) { alert(err.message); }
+    }
+
+    async function saveCtrlConfig() {
+      try {
+        await ctrlApi('/api/admin/config', {
+          method: 'POST',
+          body: JSON.stringify({
+            platform_mp_token: document.getElementById('cfg-mp-token').value.trim(),
+            platform_mp_pay_link: document.getElementById('cfg-mp-link').value.trim(),
+            public_base_url: document.getElementById('cfg-base-url').value.trim(),
+            trial_days: parseInt(document.getElementById('cfg-trial-days').value || '3')
+          })
+        });
+        document.getElementById('cfg-mp-token').value = '';
+        showCtrlToast('Configuración SaaS guardada en PostgreSQL ✅');
+        await loadControlData();
+      } catch (err) { alert(err.message); }
+    }
+
+    function exportMerchantsCSV() {
+      const csvEsc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const rows = [[
+        'ID', 'Tienda', 'Email', 'WhatsApp', 'Estado_Suscripcion', 'Abono_Real_Total',
+        'Dias_Restantes', 'Fecha_Alta', 'Vencimiento', 'Productos', 'Pedidos', 'Volumen_Ventas', 'Link_Tienda'
+      ]];
+      (overviewData.users || []).filter(u => u.role !== 'admin').forEach(u => {
+        rows.push([
+          u.id, u.store_name, u.email, u.store_phone || '', u.billing_category,
+          Number(u.sub_paid_total || 0), Number(u.days_left || 0),
+          fmtDate(u.created_at), fmtDate(u.subscription_expires_at),
+          Number(u.products_count || 0), Number(u.orders_count || 0),
+          Number(u.sales_volume || 0), u.store_slug ? `${window.location.origin}/tienda/${u.store_slug}` : ''
+        ]);
+      });
+      const blob = new Blob(['\uFEFF' + rows.map(r => r.map(csvEsc).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Comercios_VentaFlow_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
+    }
+
+    loadControlData();
+    setInterval(() => { if (token && !document.hidden) loadControlData(); }, 30000);
+  </script>
+</body>
+</html>

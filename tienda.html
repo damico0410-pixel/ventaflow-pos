@@ -214,9 +214,10 @@
   <div id="product-detail-modal" class="hidden fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onclick="if(event.target===this) closeProductDetailModal()">
     <div class="bg-white w-full sm:max-w-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl max-h-[92vh] flex flex-col sm:flex-row">
       <!-- Image Half -->
-      <div class="sm:w-1/2 bg-slate-100 relative flex items-center justify-center min-h-[240px] sm:min-h-[360px]">
-        <img id="pdm-img" src="" alt="Producto" class="w-full h-64 sm:h-full object-cover hidden">
+      <div class="sm:w-1/2 bg-slate-100 relative flex flex-col items-center justify-center min-h-[240px] sm:min-h-[360px]">
+        <img id="pdm-img" src="" alt="Producto" class="w-full h-64 sm:h-80 object-cover hidden">
         <div id="pdm-placeholder" class="text-6xl py-12">🛍️</div>
+        <div id="pdm-thumbs" class="hidden w-full px-3 py-2 bg-white/90 border-t border-slate-200 flex items-center justify-center gap-2 overflow-x-auto"></div>
         <span id="pdm-sale-badge" class="hidden absolute top-3 left-3 bg-rose-600 text-white text-xs font-extrabold px-2.5 py-1 rounded-full shadow">OFERTA</span>
         <button type="button" onclick="closeProductDetailModal()" class="sm:hidden absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 text-slate-700 flex items-center justify-center shadow">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -233,10 +234,11 @@
             </button>
           </div>
           <h3 id="pdm-name" class="text-lg sm:text-xl font-extrabold text-slate-900 leading-snug">Producto</h3>
-          <div class="flex items-baseline gap-2.5">
+          <div class="flex items-baseline gap-2.5 flex-wrap">
             <span id="pdm-price" class="text-2xl font-black st-text">$ 0</span>
             <span id="pdm-compare" class="hidden text-sm text-slate-400 line-through font-semibold">$ 0</span>
           </div>
+          <div id="pdm-wholesale-badge" class="hidden inline-block px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-extrabold"></div>
           <p id="pdm-stock" class="text-xs font-bold text-emerald-700"></p>
           <p id="pdm-desc" class="text-sm text-slate-600 leading-relaxed"></p>
 
@@ -369,7 +371,7 @@
 
             <div>
               <label class="text-xs font-semibold text-slate-600 block mb-1">Provincia *</label>
-              <input type="text" id="co-province" maxlength="70" placeholder="Ej: Buenos Aires, Córdoba, Santa Fe..." class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-slate-500">
+              <input type="text" id="co-province" oninput="updateCartBar()" maxlength="70" placeholder="Ej: Buenos Aires, Córdoba, Santa Fe..." class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl focus:outline-none focus:border-slate-500">
             </div>
           </div>
 
@@ -386,9 +388,20 @@
           <p id="payment-explain-text" class="text-xs text-slate-600 bg-slate-100/80 px-3.5 py-2.5 rounded-xl"></p>
         </div>
 
+        <!-- Coupon Box (Shown only if store configured coupons) -->
+        <div id="coupon-box-wrap" class="hidden pt-3 border-t border-slate-200/80 space-y-2">
+          <label class="text-xs font-extrabold uppercase tracking-wider text-slate-700 block">🎟️ ¿Tienes un Cupón de Descuento?</label>
+          <div class="flex gap-2">
+            <input type="text" id="co-coupon-input" placeholder="Ingresa tu código..." class="flex-1 min-w-0 px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl uppercase font-mono font-bold">
+            <button type="button" onclick="applyStoreCoupon()" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs shrink-0">Aplicar</button>
+          </div>
+          <p id="co-coupon-msg" class="hidden text-xs font-bold"></p>
+        </div>
+
         <!-- Summary & Submit -->
         <div class="p-4 st-soft-bg rounded-2xl border border-slate-200 space-y-2 text-sm">
           <div class="flex justify-between text-slate-600"><span>Subtotal productos</span><span id="drawer-subtotal" class="font-bold text-slate-900">$ 0</span></div>
+          <div class="flex justify-between text-emerald-700 font-bold hidden" id="drawer-disc-row"><span id="drawer-disc-lbl">Descuento</span><span id="drawer-disc">-$ 0</span></div>
           <div class="flex justify-between text-slate-600" id="drawer-ship-row"><span>Envío</span><span id="drawer-ship" class="font-bold text-slate-900">$ 0</span></div>
           <div class="flex justify-between text-slate-600 hidden" id="drawer-tax-row"><span id="drawer-tax-lbl">Impuesto</span><span id="drawer-tax" class="font-bold text-slate-900">$ 0</span></div>
           <div class="flex justify-between items-baseline pt-2 border-t border-slate-300/70">
@@ -462,6 +475,7 @@
     let cart = [];
     let selectedDelivery = 'delivery';
     let selectedPayMethod = 'mercadopago';
+    let appliedCoupon = null;
 
     // Quick-View state
     let detailProduct = null;
@@ -658,6 +672,7 @@
         document.getElementById('lbl-rate-branch').innerText = hasBranch ? fmt(store.shipping_branch_rate) : '';
 
         restoreSavedBuyerInfo();
+        document.getElementById('coupon-box-wrap')?.classList.toggle('hidden', !store.has_coupons);
         setupPaymentMethods();
         setDeliveryMethod('delivery');
         renderCategories();
@@ -674,10 +689,12 @@
 
     function setupPaymentMethods() {
       const methods = [];
+      const trPct = Number(store.transfer_discount_pct || 0);
+      const trTag = trPct > 0 ? ` (-${trPct}% OFF)` : '';
       if (store.mp_enabled) methods.push({ id: 'mercadopago', label: '💳 Mercado Pago', sub: 'Tarjetas, dinero en cuenta', desc: 'Al confirmar te redirigimos automáticamente a Mercado Pago Seguro. Apenas abones, vuelves solo a tu seguimiento.' });
-      if (store.bank_alias) methods.push({ id: 'transfer', label: '🏦 Transferencia', sub: 'Alias / CBU bancario', desc: 'Al confirmar verás el Alias para copiar en 1 toque y podrás subir tu comprobante en el seguimiento.' });
+      if (store.bank_alias) methods.push({ id: 'transfer', label: `🏦 Transferencia${trTag}`, sub: trPct > 0 ? `¡Ahorras ${trPct}% automático!` : 'Alias / CBU bancario', desc: 'Al confirmar verás el Alias para copiar en 1 toque y podrás subir tu comprobante en el seguimiento.' });
       if (store.external_pay_link) methods.push({ id: 'external_link', label: '🔗 Pago Online', sub: 'Link directo', desc: 'Abonas mediante el link de cobro oficial de la tienda.' });
-      if (store.cash_on_delivery || methods.length === 0) methods.push({ id: 'cash', label: '💵 Efectivo / Acordar', sub: 'Al retirar o coordinar', desc: 'Coordinas el abono directamente al retirar o por WhatsApp con la tienda.' });
+      if (store.cash_on_delivery || methods.length === 0) methods.push({ id: 'cash', label: `💵 Efectivo / Acordar${trTag}`, sub: 'Al retirar o coordinar', desc: 'Coordinas el abono directamente al retirar o por WhatsApp con la tienda.' });
       selectedPayMethod = methods[0].id;
       window._storeMethods = methods;
       renderPaymentMethodButtons(methods);
@@ -702,6 +719,42 @@
     function selectPayMethod(id) {
       selectedPayMethod = id;
       renderPaymentMethodButtons();
+      updateCartBar();
+    }
+
+    async function applyStoreCoupon() {
+      const raw = (document.getElementById('co-coupon-input')?.value || '').trim().toUpperCase();
+      const msgEl = document.getElementById('co-coupon-msg');
+      if (!raw) {
+        appliedCoupon = null;
+        if (msgEl) msgEl.classList.add('hidden');
+        updateCartBar();
+        return;
+      }
+      try {
+        const resp = await fetch(`/api/public/store/${encodeURIComponent(store.slug)}/validate-coupon`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: raw })
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Cupón inválido');
+        appliedCoupon = data.coupon;
+        if (msgEl) {
+          msgEl.className = 'text-xs font-bold text-emerald-700';
+          msgEl.innerText = `🎉 Cupón ${appliedCoupon.code} activado: -${appliedCoupon.pct}% de descuento`;
+          msgEl.classList.remove('hidden');
+        }
+        updateCartBar();
+      } catch (err) {
+        appliedCoupon = null;
+        if (msgEl) {
+          msgEl.className = 'text-xs font-bold text-rose-600';
+          msgEl.innerText = err.message;
+          msgEl.classList.remove('hidden');
+        }
+        updateCartBar();
+      }
     }
 
     function setDeliveryMethod(mode) {
@@ -841,6 +894,7 @@
                   <span class="font-black text-base sm:text-lg st-text">${esc(fmt(price))}</span>
                   ${hasSale ? `<span class="text-xs text-slate-400 line-through">${esc(fmt(comp))}</span>` : ''}
                 </div>
+                ${Number(p.wholesale_min_qty) > 0 && Number(p.wholesale_price) > 0 ? `<span class="inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-200">📦 ${Number(p.wholesale_min_qty)}+ unid.: ${esc(fmt(p.wholesale_price))} c/u</span>` : ''}
 
                 ${out ? `
                   <button type="button" disabled class="w-full py-2.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-xs cursor-not-allowed">Sin Stock</button>
@@ -876,13 +930,24 @@
 
       const img = document.getElementById('pdm-img');
       const ph = document.getElementById('pdm-placeholder');
-      if (p.image_url) {
-        img.src = p.image_url;
+      const thumbsBox = document.getElementById('pdm-thumbs');
+      const allPhotos = [p.image_url, ...(Array.isArray(p.gallery) ? p.gallery : [])].filter(Boolean);
+      if (allPhotos.length) {
+        img.src = allPhotos[0];
         img.classList.remove('hidden');
         ph.classList.add('hidden');
       } else {
         img.classList.add('hidden');
         ph.classList.remove('hidden');
+      }
+      if (allPhotos.length > 1) {
+        window._pdmPhotos = allPhotos;
+        thumbsBox.innerHTML = allPhotos.map((src, idx) =>
+          `<button type="button" onclick="selectPdmPhoto(${idx})" class="w-12 h-12 rounded-xl overflow-hidden border-2 border-slate-200 hover:border-slate-800 shrink-0"><img src="${esc(src)}" class="w-full h-full object-cover"></button>`
+        ).join('');
+        thumbsBox.classList.remove('hidden');
+      } else {
+        thumbsBox.classList.add('hidden');
       }
 
       const comp = Number(p.compare_price || 0);
@@ -898,6 +963,13 @@
         compEl.classList.remove('hidden');
       } else {
         compEl.classList.add('hidden');
+      }
+      const wbEl = document.getElementById('pdm-wholesale-badge');
+      if (Number(p.wholesale_min_qty) > 0 && Number(p.wholesale_price) > 0) {
+        wbEl.innerText = `📦 Precio por cantidad (${p.wholesale_min_qty}+ unid.): ${fmt(p.wholesale_price)} c/u`;
+        wbEl.classList.remove('hidden');
+      } else {
+        wbEl.classList.add('hidden');
       }
 
       const out = Number(p.stock) <= 0;
@@ -961,9 +1033,17 @@
       syncPdmAddButtonPrice();
     }
 
+    function selectPdmPhoto(idx) {
+      const photos = window._pdmPhotos || [];
+      if (photos[idx]) document.getElementById('pdm-img').src = photos[idx];
+    }
+
     function syncPdmAddButtonPrice() {
       if (!detailProduct || Number(detailProduct.stock) <= 0) return;
-      document.getElementById('pdm-add-btn').innerText = `🛒 Agregar al Carrito • ${fmt(Number(detailProduct.price) * detailQty)}`;
+      const wMin = Number(detailProduct.wholesale_min_qty || 0);
+      const wPrice = Number(detailProduct.wholesale_price || 0);
+      const unitP = (wMin > 0 && wPrice > 0 && detailQty >= wMin) ? wPrice : Number(detailProduct.price);
+      document.getElementById('pdm-add-btn').innerText = `🛒 Agregar al Carrito • ${fmt(unitP * detailQty)}`;
     }
 
     function closeProductDetailModal() {
@@ -1010,6 +1090,8 @@
           image_url: p.image_url || '',
           variant_name: vname,
           price: Number(p.price),
+          wholesale_min_qty: Number(p.wholesale_min_qty || 0),
+          wholesale_price: Number(p.wholesale_price || 0),
           quantity: Math.min(qtyToAdd, maxStock),
           maxStock
         });
@@ -1033,20 +1115,66 @@
       if (!cart.length) closeCheckoutDrawer();
     }
 
-    function computeTotals() {
-      const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
+    function getEffectiveUnitPrice(item) {
+      const wMin = Number(item.wholesale_min_qty || 0);
+      const wPrice = Number(item.wholesale_price || 0);
+      if (wMin > 0 && wPrice > 0 && item.quantity >= wMin) return wPrice;
+      return Number(item.price || 0);
+    }
+
+    function normalizeZoneStr(s) {
+      return String(s || '').toLowerCase()
+        .replace(/á/g,'a').replace(/é/g,'e').replace(/í/g,'i').replace(/ó/g,'o').replace(/ú/g,'u')
+        .replace(/[^a-z0-9]+/g, ' ').trim();
+    }
+
+    function computeZoneDeliveryRate() {
+      if (selectedDelivery === 'pickup') return 0;
+      if (selectedDelivery === 'branch') return Number(store?.shipping_branch_rate || 0);
       const flat = Number(store?.shipping_flat_rate || 0);
-      const branch = Number(store?.shipping_branch_rate || 0);
+      const localR = Number(store?.shipping_local_rate || 0);
+      const regR = Number(store?.shipping_regional_rate || 0);
+      if (localR <= 0 && regR <= 0) return flat;
+      const prov = normalizeZoneStr(document.getElementById('co-province')?.value || '');
+      const orig = normalizeZoneStr(store?.origin_province || '');
+      if (!prov) return flat;
+      const cabaGba = ['caba', 'capital federal', 'ciudad autonoma de buenos aires', 'amba', 'gba'];
+      if (localR > 0) {
+        if (orig && (prov === orig || (cabaGba.includes(prov) && [...cabaGba, 'buenos aires'].includes(orig)))) return localR;
+        if (!orig && cabaGba.includes(prov)) return localR;
+      }
+      if (regR > 0) {
+        const regSet = [...cabaGba, 'buenos aires', 'cordoba', 'santa fe', 'entre rios', 'la pampa', 'mendoza', 'san luis'];
+        if (regSet.includes(prov)) return regR;
+      }
+      return flat;
+    }
+
+    function computeTotals() {
+      const subtotal = cart.reduce((s, i) => s + getEffectiveUnitPrice(i) * i.quantity, 0);
+      let disc = 0;
+      const discParts = [];
+      if (appliedCoupon && Number(appliedCoupon.pct) > 0) {
+        const cAmt = Math.round(subtotal * (Number(appliedCoupon.pct) / 100) * 100) / 100;
+        disc += cAmt;
+        discParts.push(`Cupón ${appliedCoupon.code}`);
+      }
+      const afterCoupon = Math.max(0, subtotal - disc);
+      const trPct = Number(store?.transfer_discount_pct || 0);
+      if ((selectedPayMethod === 'transfer' || selectedPayMethod === 'cash') && trPct > 0) {
+        const tAmt = Math.round(afterCoupon * (trPct / 100) * 100) / 100;
+        disc = Math.round((disc + tAmt) * 100) / 100;
+        discParts.push(`-${trPct}% Transf.`);
+      }
+      const netMerch = Math.max(0, subtotal - disc);
       const freeMin = Number(store?.free_shipping_min || 0);
       let ship = 0;
-      if (selectedDelivery === 'delivery') {
-        ship = (freeMin > 0 && subtotal >= freeMin) ? 0 : flat;
-      } else if (selectedDelivery === 'branch') {
-        ship = (freeMin > 0 && subtotal >= freeMin) ? 0 : branch;
+      if (selectedDelivery !== 'pickup') {
+        ship = (freeMin > 0 && netMerch >= freeMin) ? 0 : computeZoneDeliveryRate();
       }
       const taxRate = Number(store?.tax_rate || 0);
-      const tax = taxRate > 0 ? Math.round(subtotal * (taxRate / 100) * 100) / 100 : 0;
-      return { subtotal, ship, tax, total: subtotal + ship + tax };
+      const tax = taxRate > 0 ? Math.round(netMerch * (taxRate / 100) * 100) / 100 : 0;
+      return { subtotal, disc, discLabel: discParts.join(' + '), netMerch, ship, tax, total: netMerch + ship + tax };
     }
 
     function updateCartBar() {
@@ -1067,6 +1195,16 @@
       }
 
       document.getElementById('drawer-subtotal').innerText = fmt(t.subtotal);
+      const discRow = document.getElementById('drawer-disc-row');
+      if (discRow) {
+        if (t.disc > 0) {
+          discRow.classList.remove('hidden');
+          document.getElementById('drawer-disc-lbl').innerText = t.discLabel || 'Descuento';
+          document.getElementById('drawer-disc').innerText = `-${fmt(t.disc)}`;
+        } else {
+          discRow.classList.add('hidden');
+        }
+      }
       document.getElementById('drawer-ship').innerText = t.ship <= 0 ? '¡GRATIS!' : fmt(t.ship);
       const taxRow = document.getElementById('drawer-tax-row');
       if (t.tax > 0) {
@@ -1110,7 +1248,10 @@
     }
 
     function renderDrawerItems() {
-      document.getElementById('cart-items-list').innerHTML = cart.map((i, idx) => `
+      document.getElementById('cart-items-list').innerHTML = cart.map((i, idx) => {
+        const effPrice = getEffectiveUnitPrice(i);
+        const isWh = effPrice < i.price;
+        return `
         <div class="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
           <div class="flex items-center gap-3 min-w-0">
             ${i.image_url
@@ -1119,7 +1260,7 @@
             <div class="min-w-0">
               <p class="font-extrabold text-sm text-slate-900 truncate">${esc(i.name)}</p>
               ${i.variant_name ? `<span class="inline-block text-[11px] font-bold px-2 py-0.5 rounded-md st-soft-bg st-text">${esc(i.variant_name)}</span>` : ''}
-              <p class="text-xs text-slate-500 mt-0.5">${esc(fmt(i.price))} c/u</p>
+              <p class="text-xs text-slate-500 mt-0.5">${esc(fmt(effPrice))} c/u ${isWh ? '<span class="text-amber-800 font-bold">(Mayorista)</span>' : ''}</p>
             </div>
           </div>
           <div class="flex items-center gap-2 shrink-0 bg-white px-2 py-1 rounded-xl border border-slate-200">
@@ -1128,7 +1269,7 @@
             <button type="button" onclick="changeQty(${idx}, 1)" class="w-7 h-7 rounded-lg hover:bg-slate-100 font-extrabold st-text">+</button>
           </div>
         </div>
-      `).join('');
+      `;}).join('');
     }
 
     function copyBankAlias() {
@@ -1171,6 +1312,7 @@
             branch_name: document.getElementById('co-branch-name').value.trim(),
             delivery_method: selectedDelivery,
             payment_method: selectedPayMethod,
+            coupon_code: appliedCoupon ? appliedCoupon.code : '',
             notes: document.getElementById('co-notes').value.trim(),
             items: cart.map(i => ({ product_id: i.product_id, variant_name: i.variant_name, quantity: i.quantity }))
           })
