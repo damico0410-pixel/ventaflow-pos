@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -78,6 +78,11 @@
     body.hide-help-tips .vf-help-tip {
       display: none !important;
     }
+    /* Prevent iOS Safari auto-zoom on mobile inputs while keeping crisp desktop sizing */
+    input, select, textarea { font-size: 16px; }
+    @media (min-width: 640px) {
+      input, select, textarea { font-size: 13px; }
+    }
     details.vf-section > summary {
       list-style: none;
       cursor: pointer;
@@ -135,6 +140,12 @@
   </style>
 </head>
 <body class="antialiased flex flex-col items-center">
+
+  <!-- QUICK FEEDBACK TOAST -->
+  <div id="quick-action-toast" class="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-[75] px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs font-extrabold shadow-2xl flex items-center gap-2 pointer-events-none transition-all duration-300 opacity-0 translate-y-6 no-print">
+    <span id="quick-toast-icon">✅</span>
+    <span id="quick-toast-msg">Listo</span>
+  </div>
 
   <!-- TOAST NOTIFICATION -->
   <div id="live-alert-toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[70] w-[92%] max-w-md pointer-events-none transition-all duration-500 transform -translate-y-36 opacity-0">
@@ -283,11 +294,12 @@
     </div>
   </div>
 
-  <!-- ================= MAIN APP CONTAINER ================= -->
-  <div id="app-container" class="w-full max-w-md min-h-screen flex flex-col relative pb-20 hidden">
+  <!-- ================= MAIN APP CONTAINER (RESPONSIVE MOBILE + DESKTOP SAAS) ================= -->
+  <div id="app-container" class="w-full max-w-md md:max-w-4xl lg:max-w-5xl min-h-screen flex flex-col relative pb-20 md:pb-8 hidden">
 
     <!-- Header -->
-    <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-lg border-b border-purple-100 px-4 py-3 flex items-center justify-between no-print">
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-lg border-b border-purple-100 px-4 sm:px-6 py-3 no-print">
+      <div class="flex items-center justify-between gap-2">
       <div class="flex items-center gap-2.5 min-w-0">
         <div id="header-logo-wrap" class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-white shadow-md shadow-purple-500/25 overflow-hidden shrink-0">
           <img id="header-logo-img" src="" class="w-full h-full object-cover hidden">
@@ -326,10 +338,36 @@
           <i data-lucide="log-out" class="w-4 h-4"></i>
         </button>
       </div>
+      </div>
+
+      <!-- Desktop Horizontal SaaS Navigation Bar -->
+      <div id="desktop-nav" class="hidden md:flex items-center gap-2 pt-3 mt-2.5 border-t border-purple-50 text-xs">
+        <button type="button" onclick="switchTab('sale')" id="dnav-btn-sale" class="px-4 py-2 rounded-xl font-extrabold bg-purple-100 text-purple-900 flex items-center gap-2 transition-all">
+          <i data-lucide="shopping-bag" class="w-4 h-4"></i>
+          <span>Nuevo Pedido</span>
+        </button>
+        <button type="button" onclick="switchTab('dispatches')" id="dnav-btn-dispatches" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-purple-50 flex items-center gap-2 transition-all">
+          <i data-lucide="truck" class="w-4 h-4"></i>
+          <span>Despachos &amp; Correo</span>
+          <span id="dsk-dispatch-badge" class="hidden px-2 py-0.5 rounded-full bg-rose-600 text-white text-[10px] font-black">0</span>
+        </button>
+        <button type="button" onclick="switchTab('catalog')" id="dnav-btn-catalog" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-purple-50 flex items-center gap-2 transition-all">
+          <i data-lucide="tag" class="w-4 h-4"></i>
+          <span>Catálogo &amp; Ofertas</span>
+        </button>
+        <button type="button" onclick="switchTab('audit')" id="dnav-btn-audit" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-purple-50 flex items-center gap-2 transition-all">
+          <i data-lucide="bar-chart-2" class="w-4 h-4"></i>
+          <span>Resumen &amp; Ganancias</span>
+        </button>
+        <button type="button" onclick="switchTab('settings')" id="dnav-btn-settings" class="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-purple-50 flex items-center gap-2 transition-all">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          <span>Configuración Tienda</span>
+        </button>
+      </div>
     </header>
 
     <!-- APP CONTENT BODY -->
-    <main id="app-body" class="flex-1 px-4 pt-3 pb-6 space-y-3.5">
+    <main id="app-body" class="flex-1 px-4 sm:px-6 pt-4 pb-6 space-y-4">
 
       <!-- Banner Instalar como App Nativa (Oculto si ya está en modo standalone) -->
       <div id="install-app-banner" class="hidden bg-gradient-to-r from-slate-900 to-purple-950 text-white rounded-2xl p-3 flex items-center justify-between gap-2 shadow-md no-print">
@@ -613,7 +651,7 @@
           <button onclick="setDispatchFilter('cancelled')" id="df-cancelled" class="px-2.5 py-1.5 rounded-xl font-bold bg-slate-100 text-slate-600 shrink-0">❌ Anulados</button>
         </div>
 
-        <div id="dispatches-list" class="space-y-2.5"></div>
+        <div id="dispatches-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
       </div>
 
       <!-- TAB 3: CATÁLOGO DE PRODUCTOS -->
@@ -673,7 +711,7 @@
           </div>
         </div>
 
-        <div id="catalog-products-list" class="space-y-2"></div>
+        <div id="catalog-products-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
       </div>
 
       <!-- TAB 4: AUDITORÍA, GANANCIAS, GASTOS & REPOSICIÓN -->
@@ -1155,14 +1193,15 @@
 
     </main>
 
-    <!-- Bottom Navigation -->
-    <nav class="fixed bottom-0 max-w-md w-full h-16 bg-white/95 backdrop-blur-lg border-t border-purple-100 px-2 flex justify-around items-center text-center z-40 shadow-lg no-print">
+    <!-- Bottom Navigation (Mobile) -->
+    <nav class="md:hidden fixed bottom-0 max-w-md w-full h-16 bg-white/95 backdrop-blur-lg border-t border-purple-100 px-2 flex justify-around items-center text-center z-40 shadow-lg no-print">
       <button onclick="switchTab('sale')" id="nav-btn-sale" class="flex flex-col items-center gap-1 text-purple-600 flex-1 py-1">
         <i data-lucide="shopping-bag" class="w-5 h-5"></i>
         <span class="text-[9px] font-bold">Pedido</span>
       </button>
-      <button onclick="switchTab('dispatches')" id="nav-btn-dispatches" class="flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
+      <button onclick="switchTab('dispatches')" id="nav-btn-dispatches" class="relative flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
         <i data-lucide="truck" class="w-5 h-5"></i>
+        <span id="nav-dispatch-badge" class="hidden absolute top-0.5 right-3 min-w-[16px] h-4 px-1 rounded-full bg-rose-600 text-white text-[9px] font-black flex items-center justify-center">0</span>
         <span class="text-[9px] font-bold">Despachos</span>
       </button>
       <button onclick="switchTab('catalog')" id="nav-btn-catalog" class="flex flex-col items-center gap-1 text-slate-400 flex-1 py-1">
@@ -1199,6 +1238,10 @@
         <button id="btn-master-whatsapp" onclick="sendReceiptImageToWhatsApp()" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold rounded-2xl shadow-xl flex items-center justify-center gap-2 text-sm active:scale-[0.98] transition-all">
           <i data-lucide="image" class="w-5 h-5"></i>
           <span id="btn-master-whatsapp-label">ENVIAR SOLO IMAGEN A WHATSAPP</span>
+        </button>
+
+        <button type="button" onclick="shareOrderPortalWhatsApp()" class="w-full py-2.5 px-4 bg-sky-500 hover:bg-sky-600 text-white font-extrabold rounded-2xl shadow flex items-center justify-center gap-2 text-xs transition-all">
+          <span>📲 Enviar Página de Pago y Seguimiento en Vivo al Cliente</span>
         </button>
 
         <div class="grid grid-cols-4 gap-1.5 text-[11px]">
@@ -1444,14 +1487,22 @@
         <label class="font-bold text-slate-700 block">Nombre del Producto *</label>
         <input type="text" id="prod-name" class="w-full min-w-0 mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold">
       </div>
-      <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label class="font-bold text-slate-700 block">Descripción breve para Tienda Online (Opcional)</label>
+        <textarea id="prod-description" rows="2" placeholder="Detalles, tela, medidas o beneficios para el cliente..." class="w-full min-w-0 mt-1 px-3 py-1.5 bg-purple-50/40 border border-purple-200 rounded-xl text-xs"></textarea>
+      </div>
+      <div class="grid grid-cols-3 gap-1.5">
         <div>
-          <label class="font-bold text-slate-700 block">Precio Costo</label>
-          <input type="number" id="prod-cost" oninput="updateProductProfitPreview()" placeholder="0" class="w-full min-w-0 mt-1 px-3 py-2 bg-slate-50 border border-purple-200 rounded-xl font-bold text-slate-700">
+          <label class="font-bold text-slate-700 block text-[10px]">Precio Costo</label>
+          <input type="number" id="prod-cost" oninput="updateProductProfitPreview()" placeholder="0" class="w-full min-w-0 mt-1 px-2.5 py-2 bg-slate-50 border border-purple-200 rounded-xl font-bold text-slate-700">
         </div>
         <div>
-          <label class="font-bold text-slate-700 block">Precio Venta *</label>
-          <input type="number" id="prod-price" oninput="updateProductProfitPreview()" placeholder="0" class="w-full min-w-0 mt-1 px-3 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-800">
+          <label class="font-bold text-slate-700 block text-[10px]">Precio Venta *</label>
+          <input type="number" id="prod-price" oninput="updateProductProfitPreview()" placeholder="0" class="w-full min-w-0 mt-1 px-2.5 py-2 bg-purple-50/40 border border-purple-200 rounded-xl font-bold text-purple-800">
+        </div>
+        <div>
+          <label class="font-bold text-rose-700 block text-[10px]" title="Si pones un valor mayor al Precio Venta, en la tienda se verá tachado con cartel de % OFF">Antes (Oferta)</label>
+          <input type="number" id="prod-compare-price" placeholder="Opc." class="w-full min-w-0 mt-1 px-2.5 py-2 bg-rose-50/50 border border-rose-200 rounded-xl font-bold text-rose-700">
         </div>
       </div>
       <div id="prod-profit-preview" class="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] font-bold text-emerald-800 text-center">
@@ -2418,6 +2469,7 @@
         const incomingIds = new Set(res.orders.map(o => o.id));
         const olderOrders = state.orders.filter(o => !incomingIds.has(o.id));
         state.orders = [...res.orders, ...olderOrders];
+        updatePendingDispatchBadge();
 
         if (newlyPaidSet.size > 0) {
           const firstPaidId = [...newlyPaidSet][0];
@@ -2473,6 +2525,31 @@
       }
     }
 
+    let quickToastTimer = null;
+    function showQuickToast(msg, icon = '✅') {
+      const el = document.getElementById('quick-action-toast');
+      if (!el) return;
+      document.getElementById('quick-toast-icon').innerText = icon;
+      document.getElementById('quick-toast-msg').innerText = msg;
+      el.classList.remove('opacity-0', 'translate-y-6');
+      clearTimeout(quickToastTimer);
+      quickToastTimer = setTimeout(() => el.classList.add('opacity-0', 'translate-y-6'), 2600);
+    }
+
+    function updatePendingDispatchBadge() {
+      const pendingCount = (state.orders || []).filter(o => o.dispatch_status === 'to_prepare').length;
+      const mobB = document.getElementById('nav-dispatch-badge');
+      const dskB = document.getElementById('dsk-dispatch-badge');
+      if (mobB) {
+        mobB.innerText = String(pendingCount);
+        mobB.classList.toggle('hidden', pendingCount <= 0);
+      }
+      if (dskB) {
+        dskB.innerText = String(pendingCount);
+        dskB.classList.toggle('hidden', pendingCount <= 0);
+      }
+    }
+
     function getPublicStoreFullUrl() {
       const slug = (document.getElementById('setting-slug')?.value.trim() || state.profile.slug || '').trim();
       return slug ? `${window.location.origin}/tienda/${slug}` : `${window.location.origin}/tienda`;
@@ -2487,7 +2564,7 @@
     function copyPublicStoreUrl() {
       const url = getPublicStoreFullUrl();
       if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => {});
-      alert(`¡Link de tu Tienda Online copiado! 🌐\n\n${url}`);
+      showQuickToast(`Link de tu Tienda copiado: ${url}`, '🌐');
     }
 
     function openPublicStoreUrl() {
@@ -2546,6 +2623,8 @@
       document.getElementById('mp-status-pill').classList.toggle('hidden', isStaff);
       document.getElementById('nav-btn-audit').classList.toggle('hidden', isStaff);
       document.getElementById('nav-btn-settings').classList.toggle('hidden', isStaff);
+      document.getElementById('dnav-btn-audit')?.classList.toggle('hidden', isStaff);
+      document.getElementById('dnav-btn-settings')?.classList.toggle('hidden', isStaff);
       document.getElementById('btn-new-product')?.classList.toggle('hidden', isStaff);
       document.getElementById('catalog-owner-actions')?.classList.toggle('hidden', isStaff);
       document.getElementById('missing-pin-banner')?.classList.toggle('hidden', isStaff || !!currentUser.has_recovery_pin);
@@ -2565,6 +2644,7 @@
       }
       renderCart();
       updateTotals();
+      updatePendingDispatchBadge();
       showScreen('app');
       startLiveOrderRadar();
       setTimeout(() => openOnboardingTour(false), 350);
@@ -3058,6 +3138,7 @@
 
         playChimeSound();
         clearSaleDraftForm();
+        updatePendingDispatchBadge();
         document.getElementById('label-next-folio').innerText = 'Pedido #' + String(state.profile.next_folio_number).padStart(6, '0');
         openReceiptModal(order);
       } catch (err) {
@@ -3183,6 +3264,19 @@
     }
 
     function closeReceiptModal() { document.getElementById('modal-receipt').classList.add('hidden'); }
+
+    function shareOrderPortalWhatsApp() {
+      const order = state.activeSaleForReceipt;
+      if (!order) return;
+      const trackUrl = `${window.location.origin}/seguimiento.html?code=${encodeURIComponent(order.tracking_code)}`;
+      if (navigator.clipboard) navigator.clipboard.writeText(trackUrl).catch(() => {});
+      const isPaid = order.payment_status === 'paid';
+      const msg = isPaid
+        ? `¡Hola *${order.customer_name}*! 👋 Aquí tienes el comprobante digital y seguimiento en tiempo real de tu Pedido *${order.folio_number}* en *${state.profile.name || 'nuestra tienda'}*:\n\n🚚 ${trackUrl}`
+        : `¡Hola *${order.customer_name}*! 👋 Ya armamos tu Pedido *${order.folio_number}* por *${formatCurrency(order.total)}* en *${state.profile.name || 'nuestra tienda'}*.\n\n💳 Entra aquí para abonar de forma segura, confirmar tu envío y seguir tu paquete en vivo:\n👉 ${trackUrl}`;
+      const phone = String(order.customer_phone || '').replace(/\D/g, '');
+      window.open(phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+    }
 
     async function generateOrderMPLinkFromModal() {
       const order = state.activeSaleForReceipt;
@@ -3880,7 +3974,7 @@
       });
 
       if (!filtered.length) {
-        container.innerHTML = '<div class="text-center py-8 bg-white rounded-3xl border border-purple-100 text-slate-400">No hay pedidos en esta categoría.</div>';
+        container.innerHTML = '<div class="col-span-full text-center py-8 bg-white rounded-3xl border border-purple-100 text-slate-400">No hay pedidos en esta categoría.</div>';
         return;
       }
 
@@ -3972,7 +4066,7 @@
         `Referencia Pedido: ${o.folio_number} (${o.tracking_code})`
       ].filter(Boolean).join('\n');
       if (navigator.clipboard) navigator.clipboard.writeText(lines).catch(() => {});
-      alert(`📋 ¡Datos listos y copiados para Correo Argentino!\n\n${lines}`);
+      showQuickToast(`Datos de ${o.customer_name} copiados para Correo Argentino`, '📋');
     }
 
     function exportMiCorreoCSV() {
@@ -4146,9 +4240,10 @@
           body: JSON.stringify({ order_ids: checked })
         });
         if (Array.isArray(res.orders)) state.orders = res.orders;
+        updatePendingDispatchBadge();
         closeMergeOrdersModal();
         renderDispatchesList();
-        alert('🛍️ ¡Pedidos unificados con éxito en 1 solo paquete y 1 solo costo de envío!');
+        showQuickToast('Pedidos unificados en 1 solo envío', '🛍️');
       } catch (err) {
         alert(err.message);
       }
@@ -4163,9 +4258,11 @@
         const idx = state.orders.findIndex(x => x.id === orderId);
         if (idx >= 0 && res.order) state.orders[idx] = res.order;
         if (Array.isArray(res.products)) state.products = res.products;
+        updatePendingDispatchBadge();
         renderDispatchesList();
         if (state.activeTab === 'catalog') renderCatalogList();
         if (state.activeTab === 'audit') renderAuditModule();
+        showQuickToast('Pedido anulado y stock devuelto', '↩️');
       } catch (err) {
         alert(err.message);
       }
@@ -4269,6 +4366,7 @@
         const res = await api(`/api/orders/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
         const idx = state.orders.findIndex(o => o.id === id);
         if (idx >= 0 && res.order) state.orders[idx] = res.order;
+        updatePendingDispatchBadge();
         renderDispatchesList();
       } catch (err) { alert(err.message); }
     }
@@ -4403,7 +4501,7 @@
         return true;
       });
       if (!filtered.length) {
-        container.innerHTML = '<div class="text-center py-8 bg-white rounded-3xl border border-purple-100 text-slate-400">No hay productos. Agrega uno nuevo o carga ejemplos.</div>';
+        container.innerHTML = '<div class="col-span-full text-center py-8 bg-white rounded-3xl border border-purple-100 text-slate-400">No hay productos. Agrega uno nuevo o carga ejemplos.</div>';
         return;
       }
       container.innerHTML = filtered.map(p => {
@@ -4564,8 +4662,10 @@
       productVariantsDraft = [];
       document.getElementById('prod-modal-title').innerText = 'Añadir Producto';
       document.getElementById('prod-name').value = '';
+      if (document.getElementById('prod-description')) document.getElementById('prod-description').value = '';
       document.getElementById('prod-cost').value = '';
       document.getElementById('prod-price').value = '';
+      if (document.getElementById('prod-compare-price')) document.getElementById('prod-compare-price').value = '';
       document.getElementById('prod-category').value = '';
       document.getElementById('prod-stock').value = '10';
       document.getElementById('prod-min-stock').value = '3';
@@ -4585,8 +4685,10 @@
       productVariantsDraft = parseProductVariants(p).map(v => ({ name: v.name, stock: Number(v.stock) || 0 }));
       document.getElementById('prod-modal-title').innerText = 'Editar Producto';
       document.getElementById('prod-name').value = p.name || '';
+      if (document.getElementById('prod-description')) document.getElementById('prod-description').value = p.description || '';
       document.getElementById('prod-cost').value = p.cost_price || 0;
       document.getElementById('prod-price').value = p.price || 0;
+      if (document.getElementById('prod-compare-price')) document.getElementById('prod-compare-price').value = p.compare_price || '';
       document.getElementById('prod-category').value = p.category || '';
       document.getElementById('prod-stock').value = p.stock ?? 0;
       document.getElementById('prod-min-stock').value = p.min_stock ?? 3;
@@ -4625,6 +4727,8 @@
 
       const payload = {
         name, price, cost_price,
+        description: document.getElementById('prod-description')?.value.trim() || '',
+        compare_price: parseFloat(document.getElementById('prod-compare-price')?.value) || 0,
         category: document.getElementById('prod-category').value.trim() || 'General',
         stock: parseInt(document.getElementById('prod-stock').value) || 0,
         min_stock: parseInt(document.getElementById('prod-min-stock').value) || 3,
@@ -5248,7 +5352,7 @@
         updateHeaderLogo();
         refreshPublicStoreLinks();
         updateTotals();
-        alert('¡Configuración guardada y protegida en la nube! 💖');
+        showQuickToast('Configuración guardada en la nube', '💖');
       } catch (err) { alert(err.message); }
     }
 
@@ -5473,6 +5577,12 @@
         document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
         const b = document.getElementById(`nav-btn-${t}`);
         if (b) { b.classList.toggle('text-purple-600', t === tab); b.classList.toggle('text-slate-400', t !== tab); }
+        const db = document.getElementById(`dnav-btn-${t}`);
+        if (db && !db.classList.contains('hidden')) {
+          db.className = t === tab
+            ? 'px-4 py-2 rounded-xl font-extrabold bg-purple-100 text-purple-900 flex items-center gap-2 transition-all'
+            : 'px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-purple-50 flex items-center gap-2 transition-all';
+        }
       });
       if (tab === 'dispatches') renderDispatchesList();
       if (tab === 'catalog') renderCatalogList();

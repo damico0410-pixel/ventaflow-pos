@@ -2,188 +2,340 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Seguimiento de Pedido en Vivo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Estado de tu Pedido y Comprobante</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
-    html, body { overflow-x: hidden; max-width: 100%; }
-    body { background: linear-gradient(135deg, #F5F3FF 0%, #FDF4FF 50%, #F3E8FF 100%); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; }
+    html, body {
+      overflow-x: hidden;
+      max-width: 100%;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+    :root {
+      --st-bg: #F8FAFC;
+      --st-soft: #F3E8FF;
+      --st-grad: linear-gradient(135deg, #7C3AED 0%, #C026D3 60%, #6D28D9 100%);
+      --st-accent: #7C3AED;
+    }
+    body {
+      background: var(--st-bg);
+      color: #0F172A;
+      min-height: 100vh;
+    }
+    .st-grad { background: var(--st-grad) !important; }
+    .st-text { color: var(--st-accent) !important; }
+    .st-soft-bg { background: var(--st-soft) !important; }
+    .st-border { border-color: var(--st-accent) !important; }
+    input, select, textarea { font-size: 16px; }
+    @media (min-width: 640px) {
+      input, select, textarea { font-size: 14px; }
+    }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: #ffffff !important; }
+    }
   </style>
 </head>
-<body class="flex flex-col items-center justify-center p-4 py-6">
-  <div class="w-full max-w-md bg-white rounded-[32px] p-5 sm:p-6 shadow-2xl border border-purple-100 space-y-4">
-    <div id="loading-box" class="text-center py-8 text-sm text-purple-600 font-bold">Conectando con tu pedido en tiempo real... ⏳</div>
+<body class="flex flex-col min-h-screen">
 
-    <div id="error-box" class="hidden text-center py-6 space-y-2">
-      <span class="text-3xl block">🔍</span>
-      <h2 class="font-bold text-slate-800">Pedido no encontrado</h2>
-      <p class="text-xs text-slate-500">Ingresa el código de seguimiento que recibiste (ej. PED-XXXXXX).</p>
-      <div class="flex gap-2 pt-2">
-        <input type="text" id="manual-code" placeholder="Ej: PED-A1B2C3" class="flex-1 min-w-0 px-3 py-2 border border-purple-200 rounded-xl text-xs uppercase font-mono">
-        <button onclick="searchManual()" class="px-4 py-2 bg-purple-600 text-white font-bold rounded-xl text-xs shrink-0">Buscar</button>
-      </div>
-    </div>
-
-    <div id="order-box" class="hidden space-y-4 text-xs">
-      <!-- Banner de Regreso Exitoso de Mercado Pago -->
-      <div id="mp-approved-banner" class="hidden p-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-2xl text-emerald-900 space-y-1 text-center">
-        <p class="font-extrabold text-sm">🎉 ¡Tu pago fue acreditado con éxito!</p>
-        <p class="text-[11px] text-emerald-800">La tienda ya recibió tu pedido abonado y tus datos de envío para empaquetarlo y despacharlo.</p>
-      </div>
-
-      <!-- Encabezado Tienda + Live Pulse -->
-      <div class="text-center space-y-1 border-b border-purple-100 pb-3">
-        <div class="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full mb-1">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-          <span>Estado en Vivo • Actualización Automática</span>
-        </div>
-        <img id="store-logo" src="" class="h-12 mx-auto object-contain hidden mb-1 rounded-xl">
-        <span id="store-icon" class="text-3xl block">🛍️</span>
-        <h1 id="store-name" class="font-bold text-lg text-slate-900" style="font-family:'Playfair Display',serif">Mi Comercio</h1>
-        <p id="store-contact" class="text-[11px] text-slate-400"></p>
-      </div>
-
-      <!-- Folio y Estado de Pago -->
-      <div class="flex items-center justify-between bg-purple-50/70 p-3.5 rounded-2xl border border-purple-100">
-        <div>
-          <span class="text-[10px] font-bold uppercase text-purple-600 block">Tu Comprobante</span>
-          <span id="ord-folio" class="font-mono font-black text-base text-purple-900">#001001</span>
-          <span id="ord-code" class="text-[10px] font-mono text-slate-500 block"></span>
-        </div>
-        <div class="text-right space-y-1">
-          <span id="ord-pay-badge" class="text-xs font-extrabold px-3 py-1 rounded-full inline-block"></span>
-          <span id="ord-proof-badge" class="hidden text-[10px] font-bold text-violet-700 block">🧾 Comprobante en revisión</span>
-        </div>
-      </div>
-
-      <!-- Barra de Etapas del Envío + Explicación Clara -->
-      <div class="space-y-2.5">
-        <div class="flex items-center justify-between">
-          <span class="font-bold text-slate-800">Progreso de tu Paquete</span>
-          <span id="ord-delivery-badge" class="text-[10px] font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full"></span>
-        </div>
-        <div class="grid grid-cols-4 gap-1 text-center text-[10px] font-bold">
-          <div id="step-to_prepare" class="p-2 rounded-xl border">📦<br>Preparando</div>
-          <div id="step-packed" class="p-2 rounded-xl border">🎁<br>Empacado</div>
-          <div id="step-dispatched" class="p-2 rounded-xl border">🚚<br>En Camino</div>
-          <div id="step-delivered" class="p-2 rounded-xl border">✅<br>Entregado</div>
-        </div>
-        <div id="stage-explanation-box" class="p-2.5 bg-purple-50/50 border border-purple-100 rounded-xl text-[11px] text-purple-950 font-semibold text-center"></div>
-
-        <!-- Tarjeta Especial Inteligente para Correo Argentino y Transportes -->
-        <div id="shipping-info" class="hidden p-3.5 bg-sky-50 border border-sky-200 rounded-2xl text-sky-950 space-y-2">
-          <div class="flex items-start justify-between gap-2">
-            <div class="min-w-0">
-              <span id="carrier-badge-label" class="text-[10px] font-black uppercase text-sky-700 block">🚚 Transporte Oficial</span>
-              <p id="shipping-detail" class="font-extrabold text-sm font-mono text-slate-900 break-all mt-0.5"></p>
-              <p id="ca-helper-note" class="hidden text-[10px] text-sky-800 mt-0.5 leading-snug"></p>
-            </div>
-            <button type="button" id="btn-copy-guide" onclick="copyTrackingGuide()" class="hidden px-2.5 py-1.5 bg-white border border-sky-300 text-sky-900 rounded-xl font-bold text-[10px] shrink-0 shadow-sm">📋 Copiar</button>
-          </div>
-          <button type="button" id="btn-carrier-official" onclick="openOfficialCarrierAndCopy()" class="hidden w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-xl text-center block shadow">
-            🔎 Copiar Código y Abrir Seguimiento Oficial ↗
-          </button>
-          <button type="button" id="btn-confirm-received" onclick="confirmPackageReceived()" class="hidden w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-[11px] shadow-sm">
-            📦 ¡Ya recibí mi paquete conforme!
-          </button>
-        </div>
-
-        <!-- Línea de Tiempo con Fecha y Hora Exacta -->
-        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
-          <span class="text-[10px] font-black uppercase tracking-wider text-slate-500 block">🕒 Movimientos Registrados</span>
-          <div id="timeline-list" class="space-y-2"></div>
-        </div>
-      </div>
-
-      <!-- Autogestión de Dirección y Código Postal (Si aún no fue despachado) -->
-      <div id="self-address-card" class="hidden p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-2">
-        <div class="flex items-center justify-between gap-2">
-          <div class="min-w-0">
-            <span class="text-[10px] font-black uppercase text-amber-800 block">📍 Destino de Entrega</span>
-            <p id="current-addr-text" class="text-[11px] text-slate-700 font-semibold truncate"></p>
-          </div>
-          <button type="button" onclick="toggleAddressForm()" class="px-2.5 py-1 bg-white border border-amber-300 text-amber-900 font-bold rounded-xl text-[10px] shrink-0">✏️ Corregir</button>
-        </div>
-
-        <form id="self-address-form" onsubmit="submitSelfAddress(event)" class="hidden space-y-2 pt-2 border-t border-amber-200/70">
-          <p class="text-[10px] text-slate-600">Verifica o completa tus datos exactos para el rótulo de Correo Argentino:</p>
-          <input type="text" id="sa-street" placeholder="Calle, Altura, Piso y Depto *" class="w-full min-w-0 px-3 py-2 bg-white border border-amber-200 rounded-xl font-semibold">
-          <div class="grid grid-cols-3 gap-1.5">
-            <input type="text" id="sa-cp" placeholder="Cód. Postal *" class="w-full min-w-0 px-2.5 py-2 bg-white border border-amber-200 rounded-xl font-mono font-bold">
-            <input type="text" id="sa-city" placeholder="Localidad *" class="w-full min-w-0 px-2.5 py-2 bg-white border border-amber-200 rounded-xl">
-            <input type="text" id="sa-prov" placeholder="Provincia *" class="w-full min-w-0 px-2.5 py-2 bg-white border border-amber-200 rounded-xl">
-          </div>
-          <input type="text" id="sa-branch" placeholder="Sucursal Correo (solo si retiras en sucursal)" class="w-full min-w-0 px-3 py-2 bg-white border border-amber-200 rounded-xl">
-          <button type="submit" class="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl">Guardar Datos de Envío ✅</button>
-        </form>
-      </div>
-
-      <!-- Detalle de Productos y Totales -->
-      <div class="space-y-1.5 border-t border-purple-100 pt-3">
-        <span class="font-bold text-slate-700 block">Resumen de tu Compra:</span>
-        <div id="ord-items" class="space-y-1 text-slate-600"></div>
-        <div id="ord-extra-rows" class="space-y-1 pt-1 border-t border-slate-100 text-slate-500"></div>
-        <div class="flex justify-between items-baseline pt-2 border-t border-purple-50 font-black text-base text-purple-800">
-          <span>TOTAL</span>
-          <span id="ord-total">$ 0</span>
-        </div>
-      </div>
-
-      <!-- Medios de Abono y Subida de Comprobante de Transferencia -->
-      <div id="unpaid-actions" class="hidden space-y-2.5 pt-2 border-t border-purple-100">
-        <a id="btn-pay-mp" href="#" class="hidden w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-2xl text-center text-xs shadow-lg block">
-          💳 ABONAR AHORA CON MERCADO PAGO
-        </a>
-        <a id="btn-pay-ext" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3 bg-indigo-600 text-white font-extrabold rounded-2xl text-center text-xs shadow block">
-          🔗 IR AL LINK DE PAGO ONLINE
-        </a>
-        <div id="bank-box" class="hidden p-3.5 bg-purple-50 border border-purple-200 rounded-2xl space-y-2">
-          <span class="text-[10px] font-black uppercase text-purple-700 block">🏦 Pago por Transferencia Bancaria</span>
-          <p id="bank-holder" class="text-[11px] text-slate-600"></p>
-          <div class="flex items-center justify-between gap-2 bg-white px-2.5 py-1.5 rounded-xl border border-purple-200">
-            <span id="bank-alias" class="font-mono font-bold text-slate-900 truncate"></span>
-            <button type="button" onclick="copyBank()" class="px-2 py-1 bg-purple-600 text-white font-bold rounded-lg text-[10px] shrink-0">📋 Copiar</button>
-          </div>
-
-          <div class="pt-1.5 border-t border-purple-200/60 space-y-1.5">
-            <p class="text-[10px] text-slate-600 font-semibold">¿Ya transferiste? Adjunta aquí la foto/captura del comprobante:</p>
-            <div class="flex gap-1.5">
-              <input type="text" id="proof-ref" placeholder="Nº operación / Titular (opc.)" class="flex-1 min-w-0 px-2.5 py-1.5 bg-white border border-purple-200 rounded-xl text-[11px]">
-              <button type="button" onclick="document.getElementById('proof-file-input').click()" id="btn-upload-proof" class="px-3 py-1.5 bg-purple-700 text-white font-bold rounded-xl text-[11px] shrink-0">
-                📎 Subir Captura
-              </button>
-              <input type="file" id="proof-file-input" accept="image/*" class="hidden" onchange="handleProofUpload(event)">
-            </div>
-            <p id="proof-upload-msg" class="hidden text-[11px] font-bold text-emerald-700"></p>
-          </div>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-2 gap-2 pt-1">
-        <a id="btn-store-link" href="#" class="hidden py-2.5 bg-purple-50 text-purple-800 font-bold rounded-xl text-center border border-purple-200">← Volver a la Tienda</a>
-        <a id="btn-wa-store" href="#" target="_blank" rel="noopener noreferrer" class="hidden py-2.5 bg-emerald-50 text-emerald-800 font-bold rounded-xl text-center border border-emerald-200">💬 Consultar WA</a>
-      </div>
-    </div>
+  <!-- TOAST -->
+  <div id="trk-toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-[80] px-4 py-2.5 rounded-2xl bg-slate-900 text-white text-xs sm:text-sm font-bold shadow-2xl flex items-center gap-2 pointer-events-none transition-all duration-300 opacity-0 -translate-y-8 no-print">
+    <span id="trk-toast-msg">Listo</span>
   </div>
 
+  <!-- TOP HEADER BAR -->
+  <header class="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-sm no-print">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <img id="store-logo" src="" alt="Logo" class="w-10 h-10 object-contain rounded-2xl border border-slate-200 bg-white p-1 hidden shrink-0">
+        <div id="store-icon" class="w-10 h-10 rounded-2xl st-grad text-white flex items-center justify-center text-xl shrink-0">🛍️</div>
+        <div class="min-w-0">
+          <h1 id="store-name" class="font-extrabold text-base sm:text-lg text-slate-900 truncate leading-tight">Portal de Pedido</h1>
+          <div class="flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+            <span>Actualización en Vivo</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <a id="btn-store-link" href="#" class="hidden px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm transition-all">
+          ← Ir a la Tienda
+        </a>
+        <a id="btn-wa-store" href="#" target="_blank" rel="noopener noreferrer" class="hidden px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition-all">
+          <i data-lucide="message-circle" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">WhatsApp</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-4xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1">
+
+    <!-- LOADING -->
+    <div id="loading-box" class="bg-white rounded-3xl p-12 border border-slate-200 shadow-sm text-center space-y-3">
+      <div class="w-14 h-14 mx-auto rounded-2xl st-soft-bg flex items-center justify-center text-2xl animate-pulse">📦</div>
+      <p class="text-sm font-bold text-slate-700">Buscando información actualizada de tu pedido...</p>
+    </div>
+
+    <!-- SEARCH / NOT FOUND -->
+    <div id="error-box" class="hidden max-w-lg mx-auto bg-white rounded-3xl p-7 sm:p-8 border border-slate-200 shadow-sm text-center space-y-4">
+      <div class="w-16 h-16 mx-auto rounded-3xl st-soft-bg flex items-center justify-center text-3xl">🔎</div>
+      <div class="space-y-1">
+        <h2 class="font-extrabold text-xl text-slate-900" style="font-family:'Playfair Display',serif">Consultar Seguimiento de Pedido</h2>
+        <p class="text-sm text-slate-500">Ingresa el código que figura en tu comprobante (ej. <span class="font-mono font-bold text-slate-800">PED-A1B2C3</span>).</p>
+      </div>
+      <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
+        <input type="text" id="manual-code" placeholder="Ej: PED-A1B2C3" class="flex-1 min-w-0 px-4 py-3 bg-slate-50 border border-slate-300 rounded-2xl uppercase font-mono font-bold text-slate-900 focus:bg-white focus:outline-none">
+        <button type="button" onclick="searchManual()" class="px-6 py-3 st-grad text-white font-extrabold rounded-2xl shadow-md shrink-0">Buscar Pedido</button>
+      </div>
+    </div>
+
+    <!-- ORDER PORTAL CONTENT -->
+    <div id="order-box" class="hidden space-y-6">
+
+      <!-- Celebration Banner on Return from Mercado Pago -->
+      <div id="mp-approved-banner" class="hidden p-4 sm:p-5 bg-emerald-50 border-2 border-emerald-300 rounded-3xl text-emerald-950 flex items-center gap-3.5 shadow-sm">
+        <span class="text-3xl shrink-0">🎉</span>
+        <div>
+          <p class="font-extrabold text-sm sm:text-base">¡Tu pago fue acreditado con éxito!</p>
+          <p class="text-xs sm:text-sm text-emerald-800">La tienda ya recibió la confirmación automática y tu pedido pasó a preparación.</p>
+        </div>
+      </div>
+
+      <!-- ACTION-FIRST PAYMENT CARD (SHOWN RIGHT AT THE TOP WHEN UNPAID!) -->
+      <section id="unpaid-actions" class="hidden bg-white rounded-3xl p-5 sm:p-6 border-2 border-amber-300 shadow-md space-y-4 no-print">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-100 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl shrink-0">💳</span>
+            <div>
+              <h2 class="font-extrabold text-base text-slate-900">Completar Pago de tu Pedido</h2>
+              <p class="text-xs text-slate-500">Abona de forma automática para que tu paquete pase directo a despacho</p>
+            </div>
+          </div>
+          <span id="unpaid-total-pill" class="font-black text-xl st-text">$ 0</span>
+        </div>
+
+        <div class="space-y-3">
+          <button type="button" id="btn-pay-mp" onclick="payNowWithMercadoPago()" class="hidden w-full py-4 px-5 bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-95 text-white font-extrabold rounded-2xl text-sm sm:text-base shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.99]">
+            <i data-lucide="credit-card" class="w-5 h-5"></i>
+            <span id="btn-pay-mp-label">Pagar Ahora con Mercado Pago</span>
+          </button>
+
+          <a id="btn-pay-ext" href="#" target="_blank" rel="noopener noreferrer" class="hidden w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-center text-sm shadow block">
+            🔗 Abonar desde Link de Pago Online
+          </a>
+
+          <div id="bank-box" class="hidden p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-xs font-extrabold uppercase st-text block">🏦 Transferencia Bancaria / Alias</span>
+                <p id="bank-holder" class="text-xs text-slate-600 mt-0.5"></p>
+              </div>
+              <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-slate-200">
+                <span id="bank-alias" class="font-mono font-bold text-sm text-slate-900 select-all"></span>
+                <button type="button" onclick="copyBank()" class="px-3 py-1.5 st-grad text-white font-bold rounded-lg text-xs shrink-0">📋 Copiar</button>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-200/80 space-y-2">
+              <label class="text-xs font-bold text-slate-700 block">¿Ya realizaste la transferencia? Adjunta aquí la foto o captura del comprobante:</label>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="proof-ref" placeholder="Nº de operación o nombre del titular (opcional)" class="flex-1 min-w-0 px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl">
+                <button type="button" onclick="document.getElementById('proof-file-input').click()" id="btn-upload-proof" class="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-xl text-xs sm:text-sm shrink-0">
+                  📎 Subir Comprobante
+                </button>
+                <input type="file" id="proof-file-input" accept="image/*" class="hidden" onchange="handleProofUpload(event)">
+              </div>
+              <p id="proof-upload-msg" class="hidden text-xs font-bold text-emerald-700"></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- HERO STATUS & VISUAL STEPPER CARD -->
+      <section class="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200 shadow-sm space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div>
+            <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400 block">Comprobante Oficial</span>
+            <div class="flex items-center gap-2 mt-0.5">
+              <span id="ord-folio" class="font-mono font-black text-xl sm:text-2xl text-slate-900">#001001</span>
+              <button type="button" onclick="copyOrderCode()" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 font-mono font-bold text-xs text-slate-700 flex items-center gap-1 no-print" title="Copiar código">
+                <span id="ord-code">PED-000000</span>
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="ord-delivery-badge" class="text-xs font-bold px-3 py-1.5 rounded-full st-soft-bg st-text"></span>
+            <span id="ord-pay-badge" class="text-xs font-extrabold px-3.5 py-1.5 rounded-full"></span>
+            <span id="ord-proof-badge" class="hidden text-xs font-bold px-3 py-1.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">🧾 Comprobante enviado</span>
+          </div>
+        </div>
+
+        <!-- 4-Step Visual Progress -->
+        <div class="grid grid-cols-4 gap-2 sm:gap-3 text-center">
+          <div id="step-to_prepare" class="p-3 rounded-2xl border transition-all">
+            <span class="text-xl sm:text-2xl block mb-1">📦</span>
+            <span class="text-[11px] sm:text-xs font-extrabold block">Preparando</span>
+          </div>
+          <div id="step-packed" class="p-3 rounded-2xl border transition-all">
+            <span class="text-xl sm:text-2xl block mb-1">🎁</span>
+            <span class="text-[11px] sm:text-xs font-extrabold block">Empacado</span>
+          </div>
+          <div id="step-dispatched" class="p-3 rounded-2xl border transition-all">
+            <span class="text-xl sm:text-2xl block mb-1">🚚</span>
+            <span class="text-[11px] sm:text-xs font-extrabold block">En Camino</span>
+          </div>
+          <div id="step-delivered" class="p-3 rounded-2xl border transition-all">
+            <span class="text-xl sm:text-2xl block mb-1">✅</span>
+            <span class="text-[11px] sm:text-xs font-extrabold block">Entregado</span>
+          </div>
+        </div>
+
+        <div id="stage-explanation-box" class="p-3.5 st-soft-bg rounded-2xl text-xs sm:text-sm font-bold text-slate-800 text-center"></div>
+      </section>
+
+      <!-- RESPONSIVE 2-COLUMN DETAILS GRID -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT COLUMN (7 cols): Carrier Tracking, Address Self-Service & Timeline -->
+        <div class="lg:col-span-7 space-y-6">
+
+          <!-- Smart Carrier / Correo Argentino Card -->
+          <section id="shipping-info" class="hidden bg-sky-50 border-2 border-sky-200 rounded-3xl p-5 sm:p-6 space-y-3.5">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <span id="carrier-badge-label" class="text-xs font-extrabold uppercase tracking-wider text-sky-700 block">🚚 Transporte Oficial Asignado</span>
+                <p id="shipping-detail" class="font-mono font-black text-lg sm:text-xl text-slate-900 break-all mt-1"></p>
+                <p id="ca-helper-note" class="hidden text-xs text-sky-900 mt-1.5 leading-relaxed"></p>
+              </div>
+              <button type="button" id="btn-copy-guide" onclick="copyTrackingGuide()" class="px-3 py-2 bg-white hover:bg-sky-100 border border-sky-300 text-sky-950 rounded-xl font-extrabold text-xs shrink-0 shadow-sm no-print">
+                📋 Copiar Guía
+              </button>
+            </div>
+
+            <button type="button" id="btn-carrier-official" onclick="openOfficialCarrierAndCopy()" class="hidden w-full py-3.5 bg-sky-600 hover:bg-sky-700 text-white font-extrabold rounded-2xl text-sm shadow-md transition-all no-print">
+              🔎 Copiar Guía y Abrir Seguimiento Oficial ↗
+            </button>
+
+            <button type="button" id="btn-confirm-received" onclick="confirmPackageReceived()" class="hidden w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-xs sm:text-sm shadow-sm transition-all no-print">
+              📦 ¡Ya recibí mi paquete conforme!
+            </button>
+          </section>
+
+          <!-- Spacious Address & Postal Code Card -->
+          <section id="self-address-card" class="hidden bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <span class="text-xs font-extrabold uppercase tracking-wider text-slate-400 block">📍 Dirección de Entrega</span>
+                <p id="current-addr-text" class="text-sm font-bold text-slate-800 mt-1 leading-snug"></p>
+              </div>
+              <button type="button" onclick="toggleAddressForm()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs shrink-0 no-print">
+                ✏️ Modificar
+              </button>
+            </div>
+
+            <form id="self-address-form" onsubmit="submitSelfAddress(event)" class="hidden space-y-3 pt-3 border-t border-slate-100 no-print">
+              <p class="text-xs text-slate-500">Verifica o corrige tus datos exactos antes de que se imprima la etiqueta de despacho:</p>
+              <div>
+                <label class="text-xs font-semibold text-slate-600 block mb-1">Calle, Altura, Piso y Depto *</label>
+                <input type="text" id="sa-street" placeholder="Ej: Av. Belgrano 1240, 2B" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl font-medium">
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-semibold text-slate-600 block mb-1">Código Postal *</label>
+                  <input type="text" id="sa-cp" placeholder="Ej: 1425" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl font-mono font-bold">
+                </div>
+                <div>
+                  <label class="text-xs font-semibold text-slate-600 block mb-1">Localidad / Ciudad *</label>
+                  <input type="text" id="sa-city" placeholder="Ej: CABA / Córdoba" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl">
+                </div>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="text-xs font-semibold text-slate-600 block mb-1">Provincia *</label>
+                  <input type="text" id="sa-prov" placeholder="Ej: Buenos Aires" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl">
+                </div>
+                <div>
+                  <label class="text-xs font-semibold text-slate-600 block mb-1">Sucursal Correo (si aplica)</label>
+                  <input type="text" id="sa-branch" placeholder="Solo retiro en sucursal" class="w-full px-3.5 py-2.5 bg-slate-50 focus:bg-white border border-slate-300 rounded-xl">
+                </div>
+              </div>
+              <button type="submit" class="w-full py-3 st-grad text-white font-extrabold rounded-2xl text-sm shadow">
+                Guardar Dirección Actualizada ✅
+              </button>
+            </form>
+          </section>
+
+          <!-- Movement History Timeline -->
+          <section class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+            <h3 class="text-xs font-extrabold uppercase tracking-wider text-slate-400">🕒 Historial de Movimientos</h3>
+            <div id="timeline-list" class="space-y-3"></div>
+          </section>
+        </div>
+
+        <!-- RIGHT COLUMN (5 cols): Order Summary Receipt Card -->
+        <div class="lg:col-span-5 space-y-4">
+          <section class="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 class="font-extrabold text-sm text-slate-900 uppercase tracking-wider">Detalle de Compra</h3>
+              <button type="button" onclick="window.print()" class="text-xs font-bold st-text hover:underline flex items-center gap-1 no-print">
+                <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                <span>Imprimir</span>
+              </button>
+            </div>
+
+            <div id="ord-items" class="divide-y divide-slate-100 text-sm"></div>
+
+            <div id="ord-extra-rows" class="space-y-1.5 pt-3 border-t border-slate-200 text-xs sm:text-sm text-slate-600"></div>
+
+            <div class="flex justify-between items-baseline pt-3 border-t-2 border-slate-900/10">
+              <span class="font-extrabold text-base text-slate-900">TOTAL</span>
+              <span id="ord-total" class="font-black text-2xl st-text">$ 0</span>
+            </div>
+
+            <p id="store-footer-note" class="hidden text-xs italic text-slate-500 text-center pt-3 border-t border-dashed border-slate-200"></p>
+            <p id="store-contact" class="text-[11px] text-slate-400 text-center"></p>
+          </section>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
   <script>
+    const PALETTES = {
+      violet: { bg: '#F8F7FF', soft: '#F3E8FF', grad: 'linear-gradient(135deg, #7C3AED 0%, #C026D3 60%, #6D28D9 100%)', accent: '#7C3AED' },
+      rose:   { bg: '#FFF8F9', soft: '#FFE4E6', grad: 'linear-gradient(135deg, #F43F5E 0%, #EC4899 60%, #BE185D 100%)', accent: '#E11D48' },
+      emerald:{ bg: '#F6FEF9', soft: '#D1FAE5', grad: 'linear-gradient(135deg, #059669 0%, #10B981 60%, #047857 100%)', accent: '#059669' },
+      blue:   { bg: '#F8FAFC', soft: '#DBEAFE', grad: 'linear-gradient(135deg, #2563EB 0%, #0284C7 60%, #1D4ED8 100%)', accent: '#2563EB' },
+      dark:   { bg: '#F8FAFC', soft: '#E2E8F0', grad: 'linear-gradient(135deg, #0F172A 0%, #334155 60%, #1E293B 100%)', accent: '#0F172A' }
+    };
+
     const STEPS = ['to_prepare', 'packed', 'dispatched', 'delivered'];
     const STAGE_EXPLANATIONS = {
       to_prepare: '📦 Tu pedido está registrado en la tienda y en fila de preparación.',
-      packed: '🎁 ¡Tus productos ya fueron controlados, empacados y rotulados para salir!',
-      dispatched: '🚚 ¡Tu paquete ya salió! Abajo tienes tu código de seguimiento oficial.',
-      delivered: '✅ Paquete entregado. ¡Muchas gracias por tu compra!',
-      cancelled: '⚠️ Este pedido figura como anulado. Ante cualquier duda contacta a la tienda.'
+      packed: '🎁 ¡Tus productos ya fueron controlados, empacados y etiquetados para salir!',
+      dispatched: '🚚 ¡Tu paquete ya está en manos del correo! Usa tu guía abajo para ver el recorrido.',
+      delivered: '✅ Paquete entregado con éxito. ¡Muchas gracias por tu compra!',
+      cancelled: '⚠️ Este pedido figura como anulado. Ante cualquier consulta escríbenos por WhatsApp.'
     };
 
     let activeTrackingCode = '';
+    let currentMpLink = '';
     let currentGuide = '';
     let currentOfficialUrl = '';
     let currentAlias = '';
     let celebratedOnce = false;
+    let toastTimer = null;
 
     function esc(str) {
       return String(str ?? '')
@@ -192,6 +344,30 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    function showToast(msg) {
+      const el = document.getElementById('trk-toast');
+      document.getElementById('trk-toast-msg').innerText = msg;
+      el.classList.remove('opacity-0', '-translate-y-8');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.add('opacity-0', '-translate-y-8'), 2500);
+    }
+
+    function applyTheme(palette, customHex) {
+      const root = document.documentElement;
+      if (palette === 'custom' && /^#[0-9A-Fa-f]{6}$/.test(customHex || '')) {
+        root.style.setProperty('--st-bg', '#F8FAFC');
+        root.style.setProperty('--st-soft', `${customHex}16`);
+        root.style.setProperty('--st-grad', `linear-gradient(135deg, ${customHex} 0%, ${customHex}DD 100%)`);
+        root.style.setProperty('--st-accent', customHex);
+      } else {
+        const p = PALETTES[palette] || PALETTES.violet;
+        root.style.setProperty('--st-bg', p.bg);
+        root.style.setProperty('--st-soft', p.soft);
+        root.style.setProperty('--st-grad', p.grad);
+        root.style.setProperty('--st-accent', p.accent);
+      }
     }
 
     function formatDateTime(iso) {
@@ -216,13 +392,13 @@
           return {
             url: 'https://www.correoargentino.com.ar/formularios/ondnc',
             copyValue: s10[2],
-            helper: `Código Nacional: elige letras "${s10[1]}" y pega los números "${s10[2]}" (se copian solos al tocar el botón azul).`
+            helper: `Código Nacional: elige las letras "${s10[1]}" y pega los números "${s10[2]}" (se copian solos al tocar el botón azul).`
           };
         }
         return {
           url: 'https://www.correoargentino.com.ar/formularios/e-commerce',
           copyValue: raw,
-          helper: raw ? 'Al tocar el botón azul copiamos tu código automáticamente para que solo lo pegues en la web de Correo Argentino.' : ''
+          helper: raw ? 'Al tocar el botón azul copiamos tu guía automáticamente para que solo la pegues en la página de Correo Argentino.' : ''
         };
       }
       if (c.includes('andreani')) return { url: raw ? `https://www.andreani.com/#!/informacionEnvio/${t}` : 'https://www.andreani.com/', copyValue: raw, helper: '' };
@@ -231,7 +407,6 @@
       if (c.includes('dhl')) return { url: `https://www.dhl.com/global-en/home/tracking.html?tracking-id=${t}`, copyValue: raw, helper: '' };
       if (c.includes('fedex')) return { url: `https://www.fedex.com/fedextrack/?trknbr=${t}`, copyValue: raw, helper: '' };
       if (c.includes('ups')) return { url: `https://www.ups.com/track?tracknum=${t}`, copyValue: raw, helper: '' };
-      if (c.includes('usps')) return { url: `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`, copyValue: raw, helper: '' };
       if (c.includes('estafeta')) return { url: 'https://www.estafeta.com/Herramientas/Rastreo', copyValue: raw, helper: '' };
       if (c.includes('chilexpress')) return { url: 'https://www.chilexpress.cl/', copyValue: raw, helper: '' };
       if (c.includes('blue express') || c.includes('bluexpress')) return { url: 'https://www.blue.cl/seguimiento/', copyValue: raw, helper: '' };
@@ -246,16 +421,24 @@
       if (code) window.location.href = `/seguimiento.html?code=${encodeURIComponent(code)}`;
     }
 
+    function copyOrderCode() {
+      if (activeTrackingCode && navigator.clipboard) {
+        navigator.clipboard.writeText(activeTrackingCode).catch(() => {});
+        showToast(`Código ${activeTrackingCode} copiado 📋`);
+      }
+    }
+
     function copyTrackingGuide() {
       if (currentGuide && navigator.clipboard) {
         navigator.clipboard.writeText(currentGuide).catch(() => {});
-        alert(`¡Código ${currentGuide} copiado! 📋`);
+        showToast(`Guía ${currentGuide} copiada al portapapeles 📋`);
       }
     }
 
     function openOfficialCarrierAndCopy() {
       if (currentGuide && navigator.clipboard) {
         navigator.clipboard.writeText(currentGuide).catch(() => {});
+        showToast(`Guía ${currentGuide} copiada • Abriendo correo...`);
       }
       if (currentOfficialUrl) {
         window.open(currentOfficialUrl, '_blank', 'noopener');
@@ -265,7 +448,32 @@
     function copyBank() {
       if (currentAlias && navigator.clipboard) {
         navigator.clipboard.writeText(currentAlias).catch(() => {});
-        alert('¡Alias / Cuenta copiada! 📋');
+        showToast('Alias / CBU copiado al portapapeles 📋');
+      }
+    }
+
+    async function payNowWithMercadoPago() {
+      if (currentMpLink) {
+        window.location.assign(currentMpLink);
+        return;
+      }
+      if (!activeTrackingCode) return;
+      const lbl = document.getElementById('btn-pay-mp-label');
+      const prev = lbl.innerText;
+      lbl.innerText = 'Conectando con Mercado Pago... ⏳';
+      try {
+        const resp = await fetch(`/api/public/track/${encodeURIComponent(activeTrackingCode)}/create-payment-link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}'
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.payment_link) throw new Error(data.error || 'No se pudo iniciar Mercado Pago');
+        currentMpLink = data.payment_link;
+        window.location.assign(currentMpLink);
+      } catch (err) {
+        showToast(err.message);
+        lbl.innerText = prev;
       }
     }
 
@@ -298,9 +506,9 @@
         if (!resp.ok) throw new Error(data.error || 'No se pudo actualizar');
         document.getElementById('self-address-form').classList.add('hidden');
         await loadOrder();
-        alert('¡Datos de envío y Código Postal confirmados! ✅');
+        showToast('¡Dirección y Código Postal actualizados! ✅');
       } catch (err) {
-        alert(err.message);
+        showToast(err.message);
       }
     }
 
@@ -335,13 +543,14 @@
             const data = await resp.json();
             if (!resp.ok) throw new Error(data.error || 'Error al subir');
             const msg = document.getElementById('proof-upload-msg');
-            msg.innerText = '✅ ¡Comprobante recibido! La tienda verificará tu pago en breve.';
+            msg.innerText = '✅ ¡Comprobante recibido! La tienda verificará tu pago a la brevedad.';
             msg.classList.remove('hidden');
+            showToast('Comprobante enviado correctamente ✅');
             await loadOrder();
           } catch (err) {
-            alert(err.message);
+            showToast(err.message);
           } finally {
-            btn.innerText = '📎 Subir Captura';
+            btn.innerText = '📎 Subir Comprobante';
           }
         };
         img.src = ev.target.result;
@@ -351,14 +560,17 @@
 
     async function confirmPackageReceived() {
       if (!activeTrackingCode) return;
-      if (!confirm('¿Confirmas que ya recibiste tu paquete correctamente?')) return;
+      if (!confirm('¿Confirmas que ya recibiste tu paquete en buenas condiciones?')) return;
       try {
         const resp = await fetch(`/api/public/track/${encodeURIComponent(activeTrackingCode)}/confirm-received`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: '{}'
         });
-        if (resp.ok) await loadOrder();
+        if (resp.ok) {
+          showToast('¡Gracias por confirmar la recepción! 🎉');
+          await loadOrder();
+        }
       } catch (e) {}
     }
 
@@ -371,6 +583,7 @@
       if (!code) {
         document.getElementById('loading-box').classList.add('hidden');
         document.getElementById('error-box').classList.remove('hidden');
+        lucide.createIcons();
         return;
       }
       activeTrackingCode = code.trim().toUpperCase();
@@ -382,13 +595,15 @@
         const data = await resp.json();
         const o = data.order;
         const s = data.store || {};
+        applyTheme(s.app_palette, s.custom_color);
+
         const sym = s.currency_symbol || '$';
         const fmt = n => `${sym} ${Number(n || 0).toLocaleString('es-AR')}`;
 
         if ((retStatus === 'approved' || o.payment_status === 'paid') && retPaymentId && !celebratedOnce) {
           celebratedOnce = true;
           document.getElementById('mp-approved-banner').classList.remove('hidden');
-          if (typeof confetti === 'function') confetti({ particleCount: 80, spread: 70 });
+          if (typeof confetti === 'function') confetti({ particleCount: 85, spread: 75 });
           window.history.replaceState({}, '', `/seguimiento.html?code=${encodeURIComponent(activeTrackingCode)}`);
         }
 
@@ -399,8 +614,15 @@
         } else {
           document.getElementById('store-icon').innerText = s.store_icon || '🛍️';
         }
-        document.getElementById('store-name').innerText = s.name || 'Comercio';
-        document.getElementById('store-contact').innerText = [s.phone, s.instagram].filter(Boolean).join(' • ');
+        document.getElementById('store-name').innerText = s.name || 'Comercio Oficial';
+        document.title = `Pedido ${o.folio_number} — ${s.name || 'Seguimiento'}`;
+        document.getElementById('store-contact').innerText = [s.phone, s.instagram, s.address].filter(Boolean).join(' • ');
+        if (s.receipt_footer_message) {
+          const fn = document.getElementById('store-footer-note');
+          fn.innerText = s.receipt_footer_message;
+          fn.classList.remove('hidden');
+        }
+
         document.getElementById('ord-folio').innerText = o.folio_number;
         document.getElementById('ord-code').innerText = o.tracking_code;
 
@@ -411,13 +633,13 @@
 
         const badge = document.getElementById('ord-pay-badge');
         if (o.payment_status === 'paid') {
-          badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800';
+          badge.className = 'text-xs font-extrabold px-3.5 py-1.5 rounded-full bg-emerald-100 text-emerald-800';
           badge.innerText = 'Abonado ✅';
         } else if (o.payment_status === 'cancelled') {
-          badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-rose-100 text-rose-800';
+          badge.className = 'text-xs font-extrabold px-3.5 py-1.5 rounded-full bg-rose-100 text-rose-800';
           badge.innerText = 'Anulado';
         } else {
-          badge.className = 'text-xs font-extrabold px-3 py-1 rounded-full bg-amber-100 text-amber-800';
+          badge.className = 'text-xs font-extrabold px-3.5 py-1.5 rounded-full bg-amber-100 text-amber-900';
           badge.innerText = 'Pendiente de Abono ⏳';
         }
         document.getElementById('ord-proof-badge').classList.toggle('hidden', !o.has_transfer_proof || o.payment_status === 'paid');
@@ -425,17 +647,20 @@
         const currIdx = Math.max(0, STEPS.indexOf(o.dispatch_status));
         STEPS.forEach((st, idx) => {
           const el = document.getElementById(`step-${st}`);
-          if (idx <= currIdx && o.dispatch_status !== 'cancelled') el.className = 'p-2 rounded-xl border-2 border-purple-600 bg-purple-100 text-purple-900';
-          else el.className = 'p-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-400';
+          if (idx <= currIdx && o.dispatch_status !== 'cancelled') {
+            el.className = 'p-3 rounded-2xl border-2 st-border st-soft-bg text-slate-900 shadow-sm transition-all';
+          } else {
+            el.className = 'p-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-400 transition-all';
+          }
         });
         document.getElementById('stage-explanation-box').innerText = STAGE_EXPLANATIONS[o.dispatch_status] || STAGE_EXPLANATIONS.to_prepare;
 
-        // Transporte y Guía
+        // Carrier & Guide
         const shipBox = document.getElementById('shipping-info');
         if (o.shipping_carrier || o.shipping_tracking) {
           shipBox.classList.remove('hidden');
-          document.getElementById('carrier-badge-label').innerText = `🚚 ${o.shipping_carrier || 'Transporte Asignado'}`;
-          document.getElementById('shipping-detail').innerText = o.shipping_tracking ? `Código: ${o.shipping_tracking}` : 'Guía en preparación';
+          document.getElementById('carrier-badge-label').innerText = `🚚 ${o.shipping_carrier || 'Transporte Oficial'}`;
+          document.getElementById('shipping-detail').innerText = o.shipping_tracking || 'Guía en preparación';
           const info = analyzeCarrierAndGuide(o.shipping_carrier, o.shipping_tracking);
           currentGuide = info.copyValue || o.shipping_tracking || '';
           currentOfficialUrl = info.url || '';
@@ -461,29 +686,29 @@
           shipBox.classList.add('hidden');
         }
 
-        // Timeline con fecha y hora
+        // Timeline
         const tlArr = Array.isArray(o.timeline) ? [...o.timeline].reverse() : [];
         document.getElementById('timeline-list').innerHTML = tlArr.map((ev, i) => `
-          <div class="flex items-start gap-2.5">
-            <div class="w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${i === 0 ? 'bg-purple-600 ring-4 ring-purple-100' : 'bg-slate-300'}"></div>
-            <div class="min-w-0 flex-1">
+          <div class="flex items-start gap-3">
+            <div class="w-3 h-3 rounded-full mt-1.5 shrink-0 ${i === 0 ? 'st-grad ring-4 ring-purple-100' : 'bg-slate-300'}"></div>
+            <div class="min-w-0 flex-1 pb-2 border-b border-slate-100 last:border-0">
               <div class="flex items-center justify-between gap-2">
-                <p class="font-bold ${i === 0 ? 'text-slate-900' : 'text-slate-600'}">${esc(ev.title)}</p>
-                <span class="text-[10px] text-slate-400 shrink-0">${esc(formatDateTime(ev.at))}</span>
+                <p class="font-bold text-sm ${i === 0 ? 'text-slate-900' : 'text-slate-600'}">${esc(ev.title)}</p>
+                <span class="text-xs text-slate-400 shrink-0">${esc(formatDateTime(ev.at))}</span>
               </div>
-              ${ev.detail ? `<p class="text-[10px] text-slate-500">${esc(ev.detail)}</p>` : ''}
+              ${ev.detail ? `<p class="text-xs text-slate-500 mt-0.5">${esc(ev.detail)}</p>` : ''}
             </div>
           </div>
         `).join('');
 
-        // Autogestión de dirección si aún no fue despachado
+        // Address Self-Service
         const saCard = document.getElementById('self-address-card');
         if (o.dispatch_status === 'to_prepare' || o.dispatch_status === 'packed') {
           saCard.classList.remove('hidden');
           const missingAddr = !o.customer_address || (!o.customer_postal_code && o.delivery_method !== 'pickup');
           document.getElementById('current-addr-text').innerText = o.customer_address
             ? `${o.customer_address}${o.customer_postal_code && !o.customer_address.includes(o.customer_postal_code) ? ' (CP ' + o.customer_postal_code + ')' : ''}`
-            : '⚠️ Falta completar tu dirección y Código Postal';
+            : '⚠️ Falta confirmar tu calle/altura y Código Postal para el envío';
           document.getElementById('sa-cp').value = o.customer_postal_code || '';
           document.getElementById('sa-city').value = o.customer_city || '';
           document.getElementById('sa-prov').value = o.customer_province || '';
@@ -495,37 +720,57 @@
           saCard.classList.add('hidden');
         }
 
+        // Items Receipt
         document.getElementById('ord-items').innerHTML = (o.items || []).map(i => `
-          <div class="flex justify-between gap-2"><span class="truncate">${Number(i.quantity)}x ${esc(i.productName)}</span><span class="font-bold shrink-0">${esc(fmt(i.subtotal))}</span></div>
+          <div class="py-2.5 flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-bold text-slate-900 leading-snug"><span class="st-text font-extrabold">${Number(i.quantity)}x</span> ${esc(i.productName)}</p>
+              ${i.unitPrice ? `<p class="text-xs text-slate-400">${esc(fmt(i.unitPrice))} c/u</p>` : ''}
+            </div>
+            <span class="font-extrabold text-slate-900 shrink-0">${esc(fmt(i.subtotal))}</span>
+          </div>
         `).join('');
 
         const extras = [];
-        if (Number(o.discount_amount) > 0) extras.push(`<div class="flex justify-between text-fuchsia-600 font-semibold"><span>${esc(o.discount_label || 'Descuento')}</span><span>-${esc(fmt(o.discount_amount))}</span></div>`);
-        if (Number(o.shipping_cost) > 0) extras.push(`<div class="flex justify-between"><span>Costo de Envío</span><span>${esc(fmt(o.shipping_cost))}</span></div>`);
-        if (Number(o.tax_amount) > 0) extras.push(`<div class="flex justify-between"><span>${esc(s.tax_label || 'Impuestos')}</span><span>${esc(fmt(o.tax_amount))}</span></div>`);
+        extras.push(`<div class="flex justify-between"><span>Subtotal productos</span><span class="font-semibold">${esc(fmt(o.subtotal))}</span></div>`);
+        if (Number(o.discount_amount) > 0) extras.push(`<div class="flex justify-between text-rose-600 font-bold"><span>${esc(o.discount_label || 'Descuento')}</span><span>-${esc(fmt(o.discount_amount))}</span></div>`);
+        if (Number(o.shipping_cost) > 0) extras.push(`<div class="flex justify-between"><span>Costo de envío</span><span class="font-semibold">${esc(fmt(o.shipping_cost))}</span></div>`);
+        else if (o.delivery_method !== 'pickup') extras.push(`<div class="flex justify-between text-emerald-700 font-bold"><span>Envío</span><span>¡GRATIS!</span></div>`);
+        if (Number(o.tax_amount) > 0) extras.push(`<div class="flex justify-between"><span>${esc(s.tax_label || 'Impuestos')}</span><span class="font-semibold">${esc(fmt(o.tax_amount))}</span></div>`);
         document.getElementById('ord-extra-rows').innerHTML = extras.join('');
         document.getElementById('ord-total').innerText = fmt(o.total);
+        document.getElementById('unpaid-total-pill').innerText = fmt(o.total);
 
+        // Action-First Payment Options
+        currentMpLink = o.mp_payment_link || '';
         if (o.payment_status !== 'paid' && o.payment_status !== 'cancelled') {
           let anyPay = false;
-          if (o.mp_payment_link) {
-            const btn = document.getElementById('btn-pay-mp');
-            btn.href = o.mp_payment_link;
-            btn.classList.remove('hidden');
+          const mpBtn = document.getElementById('btn-pay-mp');
+          if (currentMpLink || s.mp_enabled) {
+            mpBtn.classList.remove('hidden');
             anyPay = true;
+          } else {
+            mpBtn.classList.add('hidden');
           }
+
+          const eBtn = document.getElementById('btn-pay-ext');
           if (s.external_pay_link) {
-            const eBtn = document.getElementById('btn-pay-ext');
             eBtn.href = s.external_pay_link;
             eBtn.classList.remove('hidden');
             anyPay = true;
+          } else {
+            eBtn.classList.add('hidden');
           }
+
+          const bBox = document.getElementById('bank-box');
           if (s.bank_alias) {
             currentAlias = s.bank_alias;
             document.getElementById('bank-alias').innerText = s.bank_alias;
-            document.getElementById('bank-holder').innerText = s.bank_holder ? `Titular: ${s.bank_holder}` : '';
-            document.getElementById('bank-box').classList.remove('hidden');
+            document.getElementById('bank-holder').innerText = s.bank_holder ? `Titular / Entidad: ${s.bank_holder}` : '';
+            bBox.classList.remove('hidden');
             anyPay = true;
+          } else {
+            bBox.classList.add('hidden');
           }
           document.getElementById('unpaid-actions').classList.toggle('hidden', !anyPay);
         } else {
@@ -540,15 +785,17 @@
         const cleanPhone = String(s.phone || '').replace(/\D/g, '');
         if (cleanPhone) {
           const waBtn = document.getElementById('btn-wa-store');
-          waBtn.href = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`¡Hola! Consulto por mi pedido ${o.folio_number} (${o.tracking_code}).`)}`;
+          waBtn.href = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`¡Hola! Te escribo por mi Pedido ${o.folio_number} (${o.tracking_code}).`)}`;
           waBtn.classList.remove('hidden');
         }
 
         document.getElementById('loading-box').classList.add('hidden');
         document.getElementById('order-box').classList.remove('hidden');
+        lucide.createIcons();
       } catch (e) {
         document.getElementById('loading-box').classList.add('hidden');
         document.getElementById('error-box').classList.remove('hidden');
+        lucide.createIcons();
       }
     }
 

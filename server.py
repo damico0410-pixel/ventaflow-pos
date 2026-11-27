@@ -650,7 +650,9 @@ def init_db():
             id TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
             name TEXT NOT NULL,
+            description TEXT DEFAULT '',
             price REAL NOT NULL,
+            compare_price REAL DEFAULT 0,
             cost_price REAL DEFAULT 0,
             category TEXT DEFAULT 'General',
             stock INTEGER DEFAULT 10,
@@ -747,6 +749,8 @@ def init_db():
         "ALTER TABLE users ADD COLUMN is_trial INTEGER DEFAULT 0",
         "ALTER TABLE sessions ADD COLUMN scope TEXT DEFAULT 'owner'",
         "ALTER TABLE products ADD COLUMN cost_price REAL DEFAULT 0",
+        "ALTER TABLE products ADD COLUMN description TEXT DEFAULT ''",
+        "ALTER TABLE products ADD COLUMN compare_price REAL DEFAULT 0",
         "ALTER TABLE products ADD COLUMN image_url TEXT DEFAULT ''",
         "ALTER TABLE products ADD COLUMN variants_json TEXT DEFAULT '[]'",
         "ALTER TABLE customers ADD COLUMN postal_code TEXT DEFAULT ''",
@@ -1002,7 +1006,7 @@ class PayloadTooLargeError(Exception):
 
 
 class SaaSHandler(http.server.BaseHTTPRequestHandler):
-    server_version = "VentaFlowSecure/5.0"
+    server_version = "VentaFlowSecure/6.0"
     sys_version = ""
 
     def setup(self):
@@ -1043,6 +1047,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com data:; "
             "img-src 'self' data: blob: https:; "
+            "worker-src 'self' blob:; "
             "connect-src 'self' https://api.mercadopago.com; "
             "frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
         )
@@ -1193,7 +1198,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 trial_days = int(cfg.get('TRIAL_DAYS') or DEFAULT_TRIAL_DAYS)
                 self.send_json(200, {
                     'ok': True,
-                    'version': '5.0-autopilot',
+                    'version': '6.0-pro',
                     'database': 'postgresql' if IS_POSTGRES else 'sqlite',
                     'mp_platform_configured': bool(cfg.get('PLATFORM_MP_ACCESS_TOKEN') or cfg.get('PLATFORM_MP_PAY_LINK')),
                     'smtp_configured': bool(cfg.get('SMTP_HOST') and cfg.get('SMTP_USER')),
@@ -1470,12 +1475,15 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                             pass
 
                 profile = conn.execute(
-                    '''SELECT name, slug, store_icon, logo_data_url, phone, address, instagram,
+                    '''SELECT name, slug, store_icon, logo_data_url, app_palette, custom_color,
+                              phone, address, instagram, receipt_footer_message,
                               currency_symbol, currency_code, bank_alias, bank_holder, external_pay_link,
                               tax_label, shipping_flat_rate, shipping_branch_rate, free_shipping_min, allow_pickup
                        FROM store_profiles WHERE user_id = ?''',
                     (order['user_id'],)
                 ).fetchone()
+                store_out = dict(profile) if profile else {}
+                store_out['mp_enabled'] = bool(decrypt_secret(profile_full['mp_access_token'], conn)) if profile_full else False
                 try:
                     tl = json.loads(order['timeline_json'] or '[]')
                 except Exception:
@@ -1513,7 +1521,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         'notes': order['notes'],
                         'created_at': order['created_at']
                     },
-                    'store': dict(profile) if profile else {}
+                    'store': store_out
                 })
             finally:
                 conn.close()
@@ -1537,7 +1545,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     return
 
                 products = conn.execute(
-                    'SELECT id, name, price, category, stock, image_url, variants_json FROM products WHERE user_id = ? ORDER BY category ASC, name ASC',
+                    'SELECT id, name, description, price, compare_price, category, stock, image_url, variants_json FROM products WHERE user_id = ? ORDER BY category ASC, name ASC',
                     (owner['id'],)
                 ).fetchall()
                 pub_prods = []
@@ -2157,12 +2165,14 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 if variants:
                     stock_val = sum(max(0, int(v.get('stock') or 0)) for v in variants)
                 conn.execute(
-                    '''INSERT INTO products (id, user_id, name, price, cost_price, category, stock, min_stock, barcode, sku, image_url, variants_json, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    '''INSERT INTO products (id, user_id, name, description, price, compare_price, cost_price, category, stock, min_stock, barcode, sku, image_url, variants_json, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (
                         pid, user['id'],
                         (body.get('name') or '').strip()[:140],
+                        (body.get('description') or '').strip()[:600],
                         max(0.0, float(body.get('price') or 0)),
+                        max(0.0, float(body.get('compare_price') or 0)),
                         max(0.0, float(body.get('cost_price') or 0)),
                         (body.get('category') or 'General').strip()[:60],
                         stock_val,
@@ -2226,19 +2236,19 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 if not user:
                     return
                 samples = [
-                    ("Crema Hidratante Facial Glow", 12500, 6800, "Cuidado Facial", 14, 3, "77910001"),
-                    ("Set 5 Organizadores de Viaje", 15900, 8500, "Hogar & Viaje", 9, 3, "77910002"),
-                    ("Termo Acero Inoxidable 750ml", 18500, 10200, "Bazar", 6, 3, "77910003"),
-                    ("Serum Vitamina C 30ml", 11200, 5900, "Cuidado Facial", 2, 3, "77910004"),
-                    ("Auriculares Inalámbricos Mini", 24900, 14500, "Tecnología", 0, 2, "77910005"),
+                    ("Crema Hidratante Facial Glow", "Fórmula ligera con ácido hialurónico y vitamina E. Hidratación profunda 24 hs para todo tipo de piel.", 12500, 15500, 6800, "Cuidado Facial", 14, 3, "77910001"),
+                    ("Set 5 Organizadores de Viaje", "Set impermeable premium con cierre reforzado para valija y equipaje de mano.", 15900, 18900, 8500, "Hogar & Viaje", 9, 3, "77910002"),
+                    ("Termo Acero Inoxidable 750ml", "Doble capa térmica frío/calor hasta 18 hs con pico cebador antiderrame.", 18500, 0, 10200, "Bazar", 6, 3, "77910003"),
+                    ("Serum Vitamina C 30ml", "Concentrado antioxidante iluminador con gotero dosificador.", 11200, 13900, 5900, "Cuidado Facial", 2, 3, "77910004"),
+                    ("Auriculares Inalámbricos Mini", "Bluetooth 5.3 con estuche cargador magnético y cancelación de ruido en llamadas.", 24900, 29900, 14500, "Tecnología", 0, 2, "77910005"),
                 ]
                 now_iso = utc_now().isoformat()
-                for name, price, cost, cat, st, min_st, bar in samples:
+                for name, desc, price, comp, cost, cat, st, min_st, bar in samples:
                     pid = 'prod_' + secrets.token_hex(6)
                     conn.execute(
-                        '''INSERT INTO products (id, user_id, name, price, cost_price, category, stock, min_stock, barcode, sku, created_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                        (pid, user['id'], name, price, cost, cat, st, min_st, bar, bar, now_iso)
+                        '''INSERT INTO products (id, user_id, name, description, price, compare_price, cost_price, category, stock, min_stock, barcode, sku, created_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                        (pid, user['id'], name, desc, price, comp, cost, cat, st, min_st, bar, bar, now_iso)
                     )
                 conn.commit()
                 products = conn.execute('SELECT * FROM products WHERE user_id = ? ORDER BY created_at DESC', (user['id'],)).fetchall()
@@ -2315,7 +2325,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json(400, {'error': 'Agrega al menos un producto al pedido.'})
                     return
 
-                profile = conn.execute('SELECT next_folio_number, tax_rate FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
+                profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (user['id'],)).fetchone()
                 folio_num = (profile['next_folio_number'] if profile else 1001)
                 folio_str = '#' + str(folio_num).zfill(6)
                 oid = 'ord_' + secrets.token_hex(6)
@@ -2378,14 +2388,43 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 if pay_status == 'paid':
                     tl_json = append_timeline_event(tl_json, 'paid', 'Abono confirmado', '')
 
+                mp_link_auto = ''
+                if pay_status != 'paid' and profile and order_total > 0:
+                    mp_tok_pos = decrypt_secret(profile['mp_access_token'], conn)
+                    if mp_tok_pos:
+                        base_url = self.get_base_url(conn)
+                        pref_payload = {
+                            "items": [{
+                                "id": tracking_code,
+                                "title": f"Pedido {folio_str} - {profile['name']}",
+                                "quantity": 1,
+                                "currency_id": resolve_mp_currency(profile),
+                                "unit_price": float(order_total)
+                            }],
+                            "external_reference": f"order_{oid}",
+                            "back_urls": {
+                                "success": f"{base_url}/seguimiento.html?code={tracking_code}",
+                                "failure": f"{base_url}/seguimiento.html?code={tracking_code}",
+                                "pending": f"{base_url}/seguimiento.html?code={tracking_code}"
+                            },
+                            "auto_return": "approved"
+                        }
+                        if base_url.startswith('https://'):
+                            pref_payload["notification_url"] = f"{base_url}/api/webhooks/mp-order/{user['id']}"
+                        try:
+                            _, pref = mp_api_request('POST', '/checkout/preferences', mp_tok_pos, pref_payload)
+                            mp_link_auto = pref.get('init_point') or pref.get('sandbox_init_point') or ''
+                        except Exception:
+                            mp_link_auto = ''
+
                 conn.execute(
                     '''INSERT INTO orders (
                            id, user_id, tracking_code, folio_number, customer_name, customer_phone,
                            customer_address, customer_postal_code, customer_city, customer_province, branch_name,
                            customer_handle, items_json, subtotal, discount_amount,
                            discount_label, shipping_cost, tax_amount, total, total_cost, net_profit,
-                           payment_status, payment_method, delivery_method, dispatch_status, timeline_json, notes, source, created_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pos', ?)''',
+                           payment_status, payment_method, mp_payment_link, delivery_method, dispatch_status, timeline_json, notes, source, created_at
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pos', ?)''',
                     (
                         oid, user['id'], tracking_code, folio_str, cname, cphone,
                         caddr, ccp, ccity, cprov, branch_name, chandle,
@@ -2400,6 +2439,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         net_profit,
                         pay_status,
                         payment_method,
+                        mp_link_auto,
                         delivery_method,
                         body.get('dispatch_status') or 'to_prepare',
                         tl_json,
@@ -2591,6 +2631,66 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 conn.close()
             return
 
+        # Generación de link de pago Mercado Pago bajo demanda desde seguimiento.html para el cliente
+        if path.startswith('/api/public/track/') and path.endswith('/create-payment-link'):
+            if not SHIELD.check_rate('track_mp_link', ip, limit=8, window_sec=60):
+                self.send_json(429, {'error': 'Demasiadas solicitudes. Aguarda unos segundos.'})
+                return
+            tcode = re.sub(r'[^A-Z0-9\-]', '', path.split('/')[4].strip().upper())[:24]
+            conn = get_db()
+            try:
+                order = conn.execute('SELECT * FROM orders WHERE tracking_code = ?', (tcode,)).fetchone()
+                if not order:
+                    self.send_json(404, {'error': 'Pedido no encontrado'})
+                    return
+                if order['payment_status'] == 'paid':
+                    self.send_json(400, {'error': 'Este pedido ya figura como abonado.'})
+                    return
+                if order['mp_payment_link']:
+                    self.send_json(200, {'payment_link': order['mp_payment_link']})
+                    return
+                profile = conn.execute('SELECT * FROM store_profiles WHERE user_id = ?', (order['user_id'],)).fetchone()
+                mp_token = decrypt_secret(profile['mp_access_token'], conn) if profile else ''
+                if not mp_token:
+                    if profile and profile['external_pay_link']:
+                        self.send_json(200, {'payment_link': profile['external_pay_link']})
+                        return
+                    self.send_json(400, {'error': 'La tienda aún no tiene Mercado Pago vinculado para cobro automático.'})
+                    return
+                base_url = self.get_base_url(conn)
+                pref_payload = {
+                    "items": [{
+                        "id": order['tracking_code'],
+                        "title": f"Pedido {order['folio_number']} - {profile['name']}",
+                        "quantity": 1,
+                        "currency_id": resolve_mp_currency(profile),
+                        "unit_price": float(order['total'])
+                    }],
+                    "external_reference": f"order_{order['id']}",
+                    "back_urls": {
+                        "success": f"{base_url}/seguimiento.html?code={order['tracking_code']}",
+                        "failure": f"{base_url}/seguimiento.html?code={order['tracking_code']}",
+                        "pending": f"{base_url}/seguimiento.html?code={order['tracking_code']}"
+                    },
+                    "auto_return": "approved"
+                }
+                if base_url.startswith('https://'):
+                    pref_payload["notification_url"] = f"{base_url}/api/webhooks/mp-order/{order['user_id']}"
+                try:
+                    _, pref = mp_api_request('POST', '/checkout/preferences', mp_token, pref_payload)
+                    link = pref.get('init_point') or pref.get('sandbox_init_point') or ''
+                    if not link:
+                        self.send_json(502, {'error': 'Mercado Pago no devolvió un enlace válido. Verifica el Access Token de la tienda.'})
+                        return
+                    conn.execute('UPDATE orders SET mp_payment_link = ? WHERE id = ?', (link, order['id']))
+                    conn.commit()
+                    self.send_json(200, {'payment_link': link})
+                except Exception:
+                    self.send_json(502, {'error': 'No se pudo conectar con Mercado Pago en este momento. Verifica el Access Token configurado en la tienda.'})
+            finally:
+                conn.close()
+            return
+
         # Confirmación de recepción del paquete por el comprador
         if path.startswith('/api/public/track/') and path.endswith('/confirm-received'):
             if not SHIELD.check_rate('track_recv', ip, limit=6, window_sec=60):
@@ -2740,6 +2840,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 net_profit = subtotal - total_cost
 
                 mp_link = ''
+                mp_warning = ''
                 mp_token = decrypt_secret(profile['mp_access_token'], conn)
                 if mp_token:
                     base_url = self.get_base_url(conn)
@@ -2766,6 +2867,8 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         mp_link = pref.get('init_point') or pref.get('sandbox_init_point') or ''
                     except Exception:
                         mp_link = ''
+                        if payment_method == 'mercadopago':
+                            mp_warning = 'El pedido quedó registrado, pero el link de Mercado Pago no pudo generarse automáticamente (revisa el Access Token de la tienda o abona por otro medio en tu seguimiento).'
 
                 tl_json = append_timeline_event('[]', 'created', 'Pedido recibido desde Tienda Online', f"Folio {folio_str}")
 
@@ -2799,6 +2902,7 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                         'total': grand_total
                     },
                     'payment_link': mp_link,
+                    'mp_warning': mp_warning,
                     'external_pay_link': profile['external_pay_link'] or '',
                     'bank_alias': profile['bank_alias'] or '',
                     'bank_holder': profile['bank_holder'] or '',
@@ -3013,21 +3117,25 @@ class SaaSHandler(http.server.BaseHTTPRequestHandler):
                 if variants is not None and len(variants) > 0:
                     stock_val = sum(max(0, int(v.get('stock') or 0)) for v in variants)
 
-                existing = conn.execute('SELECT image_url, variants_json FROM products WHERE id = ? AND user_id = ?', (pid, user['id'])).fetchone()
+                existing = conn.execute('SELECT description, compare_price, image_url, variants_json FROM products WHERE id = ? AND user_id = ?', (pid, user['id'])).fetchone()
                 if not existing:
                     self.send_json(404, {'error': 'Producto no encontrado'})
                     return
 
                 img_url = body.get('image_url') if 'image_url' in body else existing['image_url']
                 var_json = json.dumps(variants, ensure_ascii=False) if variants is not None else existing['variants_json']
+                desc_val = (body.get('description') or '').strip()[:600] if 'description' in body else (existing['description'] or '')
+                comp_val = max(0.0, float(body.get('compare_price') or 0)) if 'compare_price' in body else float(existing['compare_price'] or 0)
 
                 conn.execute(
                     '''UPDATE products
-                       SET name = ?, price = ?, cost_price = ?, category = ?, stock = ?, min_stock = ?, barcode = ?, sku = ?, image_url = ?, variants_json = ?
+                       SET name = ?, description = ?, price = ?, compare_price = ?, cost_price = ?, category = ?, stock = ?, min_stock = ?, barcode = ?, sku = ?, image_url = ?, variants_json = ?
                        WHERE id = ? AND user_id = ?''',
                     (
                         (body.get('name') or '').strip()[:140],
+                        desc_val,
                         max(0.0, float(body.get('price') or 0)),
+                        comp_val,
                         max(0.0, float(body.get('cost_price') or 0)),
                         (body.get('category') or 'General').strip()[:60],
                         stock_val,
