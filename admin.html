@@ -33,7 +33,7 @@
 
   <!-- ================= ADMIN LOGIN VIEW ================= -->
   <div id="ctrl-login-view" class="hidden flex-1 flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 space-y-5">
+    <div class="w-full max-w-full px-4 md:px-6 lg:px-8 bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200 space-y-5">
       <div class="flex items-center gap-3">
         <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-900 to-violet-800 text-white flex items-center justify-center text-2xl shadow-md">👑</div>
         <div>
@@ -67,7 +67,7 @@
 
     <!-- Top Executive Navbar -->
     <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-lg">
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex items-center justify-between gap-3">
+      <div class="max-w-full mx-auto px-4 md:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
           <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-violet-600 to-fuchsia-500 flex items-center justify-center text-lg shadow shrink-0">👑</div>
           <div class="min-w-0">
@@ -92,14 +92,14 @@
       </div>
 
       <!-- Sub-navigation Tabs -->
-      <div class="max-w-6xl mx-auto px-4 sm:px-6 flex gap-2 pb-3 overflow-x-auto text-xs">
+      <div class="max-w-full mx-auto px-4 md:px-6 lg:px-8 flex gap-2 pb-3 overflow-x-auto text-xs">
         <button type="button" onclick="switchCtrlTab('merchants')" id="ctab-merchants" class="px-4 py-2 rounded-xl font-extrabold bg-white text-slate-900 shrink-0">🏪 Comercios Registrados</button>
         <button type="button" onclick="switchCtrlTab('payments')" id="ctab-payments" class="px-4 py-2 rounded-xl font-bold text-slate-300 hover:bg-white/10 shrink-0">💳 Historial de Abonos</button>
         <button type="button" onclick="switchCtrlTab('config')" id="ctab-config" class="px-4 py-2 rounded-xl font-bold text-slate-300 hover:bg-white/10 shrink-0">⚙️ Ajustes de Cobro SaaS</button>
       </div>
     </header>
 
-    <main class="max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6 flex-1">
+    <main class="max-w-full w-full mx-auto px-4 md:px-6 lg:px-8 py-6 space-y-6 flex-1">
 
       <!-- KPI EXECUTIVE CARDS -->
       <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
